@@ -35,6 +35,29 @@ The AI builds the bridge between spec and test, and then writes the software to 
 the test. Intent is the human's; the translation from intent to test, and from test to
 code, is the AI's; and the test is the contract that keeps all three honest.
 
+And this is the deeper reason the design is shaped the way it is: **making alignment
+cheap is close to the whole of how you get the most out of an AI.** The scarce resource
+is not the model's intelligence — it is its attention. And there is a division of labour
+in that: **building the attention — the raw intelligence — is the model provider's job;
+making the most of that attention is the job of everyone building on top.** An
+application takes the model as given and competes on one thing — how well it lays out the
+context it feeds in. Every token the model reads should carry accurate, useful signal,
+and every token spent reconstructing context that a better layout would have made obvious
+is wasted. OpenTDD lives entirely on that second side. It does not promise a machine can
+prove the claim and the code mean the same thing — no build step can. What it promises is
+to
+put the claim and its proof in one place, so the one judgement that matters — *does this
+test do what it says?* — costs an AI almost nothing to make. Cheap alignment is not a
+convenience; it is how the whole arrangement pays off.
+
+This is also why the approach does not age against the model. A tool that fills a gap in
+today's model — "it can't yet do X, so we do X" — is a **pillar**: the next model does X
+and walks straight through it. A tool that only makes the context better is a **boat**:
+as the model's attention grows more capable and more precious, laying it out well matters
+*more*, not less. OpenTDD is a boat. It never competes with the model — only on how
+cheaply it can align intent, test, and code, and that is worth more with every model, not
+less.
+
 ## Requirements
 
 ### Requirement: Behavior lives as Gherkin above the test that proves it
