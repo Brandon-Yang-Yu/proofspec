@@ -172,8 +172,12 @@ person or an AI reading the co-located claim can supply it:
 - that scenarios sharing a test really share its GIVEN/WHEN, rather than having been
   folded together to save an expensive setup.
 
-Opt-in: a capability is enforced (rules 2, 3) simply by having a capability `.md`.
-Older suites are not forced to retag all at once.
+Opt-in: a capability is enforced (rules 2, 3) once a test first tags it — not merely by
+having a `.md`. A spec is authored before its tests, so a file with no tags yet is planned,
+not built, and must not fail the build; the first tag switches enforcement on. Older suites
+are not forced to retag all at once, and a tag whose capability has no file is left alone
+too (the mirror case). *Earlier draft said "simply by having a `.md`", which would fail
+every spec written ahead of its tests — see guard.md.*
 
 ## 8. Relationship to OpenSpec
 
@@ -483,10 +487,33 @@ reverting is a one-file change.
 - **Real starting point** — decide where OpenTDD lands relative to the reference repo
   (the earlier `worktree-turn-route` spec-binding work is a stale snapshot; main has
   moved on). Verify before building.
-- **Then**: write the requirements for `test-scan` and `spec-tree` first (they fix the
-  grain), then build parser → capability-file writer → guard, TDD, using OpenTDD on
-  itself. The bootstrap is manual: the first tests carry hand-written tags and are only
-  verified once `guard` runs.
+- **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
+  `test-scan` is the first capability built this way — 24 scenarios, the scanner on
+  `oxc-parser` (§14), green. Its `<!-- scenarios: generated -->` blocks are hand-filled
+  for now; the bootstrap tags are verified by hand (an AST script cross-checks titles and
+  files) until `guard` can verify them by machine. `spec-tree` is next: it turns the
+  `ProofSite[]` into the stable tree and is what lets `guard` close that loop.
+
+## 16. The build pipeline
+
+How a capability gets built, recorded as the `ship` skill so the steps never have to be
+respelled. It is OpenTDD's own — not the reference repo's: no UI (this is a CLI library), no OpenSpec
+(retired for our own build, §8; planning happens in Claude Code's plan mode instead).
+
+The steps: **plan** (plan mode — the behavior gate, where a human confirms the scenarios
+are the intent) → **tests, red** → **build to green** → **guideline review** (a fresh
+subagent audits the diff against `docs/typescript-style.md`; it reports, the builder
+fixes) → **completion check** (a fresh subagent confirms the code satisfies every
+requirement and each test really pins its claim) → **archive the plan** (the *why* into
+this record) → **wait for the human to say commit**.
+
+The load-bearing idea is the same one the two review gates in the reference repo's `ship` carry: a
+builder is a poor judge of their own fresh work, so the review hands off to a reader who
+never watched the code get written. Building `test-scan` this way earned its keep — the
+guideline pass caught a real double-reporting bug, and the completion pass found three
+load-bearing behaviors (the lone-tag no-site rule, the own-line comment strictness, an AND
+inside a block) that had no scenario until it named them.
 
 *Closed since the first draft:* the missing tool requirement (now `spec.md` R5 and R6);
-the proof-site syntax (§13); the parser choice (§14).
+the proof-site syntax (§13); the parser choice (§14); the build pipeline (§16); and
+`test-scan`, the first capability built under it.

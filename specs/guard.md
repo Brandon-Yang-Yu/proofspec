@@ -84,14 +84,21 @@ the scenario needs splitting — or the two sites are the same claim written twi
 <!-- scenarios: generated -->
 <!-- /scenarios -->
 
-### Requirement: A capability is enforced by having a file
+### Requirement: A capability is enforced once a test tags it
 
-The guard SHALL apply the requirement rules only to capabilities that have a committed
-file.
+The guard SHALL apply the requirement rules to a capability only once at least one test
+tags it.
 
-Tests tagged with a capability nobody has written a file for are left alone. An existing
-suite can therefore adopt OpenTDD one capability at a time, instead of having to retag
-everything before the build goes green again.
+A capability file that no test tags yet is planned, not built. The guard leaves its
+requirements alone until the first test arrives, so a spec written ahead of its tests does
+not fail the build. This is what OpenTDD's own workflow needs: the spec is authored first,
+then the tests, then the code. Writing every test red before the code is what then holds
+the capability whole — each red test still carries its tag, so no declared requirement
+reads as uncovered just because its code is not written yet.
+
+Tags naming a capability that has no file are the mirror case. The scan reports them as
+unresolved, and the guard leaves them alone too, so an existing suite can adopt OpenTDD one
+capability at a time instead of retagging everything before the build goes green.
 
 <!-- scenarios: generated -->
 <!-- /scenarios -->
