@@ -3,7 +3,7 @@
 #
 # Runs in the background with `fast` mode (no similarity/semantic edges) so it
 # never delays the commit. If the indexer binary is absent, this is a no-op.
-# Output goes to .git/codebase-memory-index.log for debugging.
+# Output goes to codebase-memory-index.log inside the git directory.
 #
 # This hook only reads the repo and writes to an external index; it never
 # touches the working tree, so it is always safe to run.
@@ -13,8 +13,15 @@ set -euo pipefail
 BIN="${CODEBASE_MEMORY_BIN:-$HOME/.local/bin/codebase-memory-mcp}"
 [ -x "$BIN" ] || exit 0
 
+# The index tracks the main checkout, so a linked worktree refreshes nothing.
+# Indexing one would register its path as a project of its own, and that project
+# outlives the worktree: removing the directory leaves an entry pointing nowhere.
+# Work landing on the main checkout is what refreshes the index.
+[ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ] || exit 0
+
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-LOG="$REPO_ROOT/.git/codebase-memory-index.log"
+# Not "$REPO_ROOT/.git": in a worktree that path is a file, not a directory.
+LOG="$(git rev-parse --absolute-git-dir)/codebase-memory-index.log"
 
 # Detach so the commit returns immediately; the refresh runs on its own.
 nohup "$BIN" cli index_repository \
