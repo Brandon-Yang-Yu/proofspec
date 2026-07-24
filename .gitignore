@@ -1,2 +1,5 @@
 node_modules/
 *.tsbuildinfo
+
+# Claude Code worktrees live here; the skills beside them are committed.
+.claude/worktrees/
