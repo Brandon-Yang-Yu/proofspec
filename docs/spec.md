@@ -60,6 +60,13 @@ less.
 
 ## Requirements
 
+These are the promises the *method* makes — what OpenTDD asks of a project that adopts
+it. They are authored for people to read, and they are deliberately not a capability
+file: their scenarios describe a repo that uses OpenTDD, not code that can be run, so
+they carry their Gherkin here rather than above a test and the guard does not read this
+file. The requirements of the *tool* — the code that can be run, and is — live in
+`specs/`, one file per capability, and each of those is under the guard.
+
 ### Requirement: A scenario is identified by its action and its outcome
 
 A scenario's identity SHALL be `(GIVEN, WHEN) + one THEN`. Two claims that observe the
