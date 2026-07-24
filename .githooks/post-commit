@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Post-commit hook: refresh the codebase-memory index after each commit.
+#
+# Runs in the background with `fast` mode (no similarity/semantic edges) so it
+# never delays the commit. If the indexer binary is absent, this is a no-op.
+# Output goes to .git/codebase-memory-index.log for debugging.
+#
+# This hook only reads the repo and writes to an external index; it never
+# touches the working tree, so it is always safe to run.
+
+set -euo pipefail
+
+BIN="${CODEBASE_MEMORY_BIN:-$HOME/.local/bin/codebase-memory-mcp}"
+[ -x "$BIN" ] || exit 0
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOG="$REPO_ROOT/.git/codebase-memory-index.log"
+
+# Detach so the commit returns immediately; the refresh runs on its own.
+nohup "$BIN" cli index_repository \
+  --repo-path "$REPO_ROOT" \
+  --mode fast \
+  >"$LOG" 2>&1 &
+
+exit 0
