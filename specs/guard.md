@@ -18,13 +18,22 @@ person or an AI reading the co-located claim can supply it:
 The guard SHALL rebuild the tree from the tests, compare it against the committed
 capability files, and fail when the two differ.
 
-The report SHALL name each difference: a scenario added, removed, renamed, or moved to
-another file, under the capability and requirement it belongs to.
+The report SHALL name each difference: a scenario added, removed, or moved to another
+file, under the capability and requirement it belongs to.
+
+A renamed scenario reads as one removed and one added. The title is the scenario's
+identity, so a changed title is a different scenario, and no comparison of two trees can
+tell a rename from one deletion and one unrelated addition.
 
 Line numbers take no part in the comparison. Inserting lines above a tagged test shifts
 every position in the file and SHALL still compare clean.
 
 <!-- scenarios: generated -->
+- "A scenario proven in another file fails the build" → tests/guard/drift.test.ts
+- "A scenario the committed file does not record fails the build" → tests/guard/drift.test.ts
+- "A scenario the tests no longer prove fails the build" → tests/guard/drift.test.ts
+- "A test that moved down its file compares clean" → tests/guard/drift.test.ts
+- "Tests matching the committed files pass" → tests/guard/drift.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Every tag names a requirement that exists
@@ -36,6 +45,7 @@ This catches a requirement renamed or deleted in the file while the tests went o
 pointing at the old name.
 
 <!-- scenarios: generated -->
+- "A tag naming a requirement its capability does not declare fails the build" → tests/guard/tags.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Every declared requirement has something proving it
@@ -47,6 +57,7 @@ This catches a feature that was written and never proven. It is the direction th
 the tree a coverage claim and not just an index.
 
 <!-- scenarios: generated -->
+- "A declared requirement no test proves fails the build" → tests/guard/coverage.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A proof site the tree cannot hold fails the build
@@ -71,6 +82,9 @@ yields no proof site, so its requirement reads as uncovered, or its scenario rea
 missing from the regenerated tree.
 
 <!-- scenarios: generated -->
+- "A tagged site in a file that declares no capability fails the build" → tests/guard/unreadable.test.ts
+- "A tagged site with no Gherkin steps is a warning" → tests/guard/unreadable.test.ts
+- "Anything the scan could not read fails the build" → tests/guard/unreadable.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A scenario claimed by two proof sites fails the build
@@ -82,6 +96,7 @@ One scenario has one proof. Two proofs mean the action was not the same after al
 the scenario needs splitting — or the two sites are the same claim written twice.
 
 <!-- scenarios: generated -->
+- "The same scenario at two proof sites fails the build" → tests/guard/collision.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A capability is enforced once a test tags it
@@ -97,21 +112,48 @@ the capability whole — each red test still carries its tag, so no declared req
 reads as uncovered just because its code is not written yet.
 
 Tags naming a capability that has no file are the mirror case. The scan reports them as
-unresolved, and the guard leaves them alone too, so an existing suite can adopt OpenTDD one
-capability at a time instead of retagging everything before the build goes green.
+unresolved, and the guard applies neither requirement rule to them and leaves them out of
+its comparison, so an existing suite can adopt OpenTDD one capability at a time instead of
+retagging everything before the build goes green.
+
+What still applies to them is what the tags say on their own. A scenario claimed at two
+proof sites fails wherever it is tagged, because a broken bijection is a fault in the tests
+themselves and not a claim about a capability file.
 
 <!-- scenarios: generated -->
+- "A capability file no test tags yet does not fail the build" → tests/guard/enforcement.test.ts
+- "A tag naming a capability with no file does not fail the build" → tests/guard/enforcement.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A failure says what to do about it
 
-Every failure SHALL name the capability, the requirement, the scenario, and the file and
-line of the site that caused it.
+Every failure SHALL name what it is about and where to look: the capability, the
+requirement and the scenario it concerns, and the file and line of the proof site that
+caused it.
 
 A message that says only "the spec and the tests disagree" hands the reader the whole
 search back. The point of putting a claim next to its proof is that the distance between
 knowing something is wrong and seeing it is short, and a diagnostic that omits the
 location throws that away.
 
+Some failures have no proof site to name, and they SHALL name what they do have. A
+requirement nothing proves has no site by definition. A scenario the tests no longer prove
+has none either, so it names the file it was recorded against. Something the scan could
+not read is known by its position and by what the scan said about it.
+
 <!-- scenarios: generated -->
+- "A failure caused by a proof site names the site" → tests/guard/diagnostics.test.ts
+- "A failure with no proof site names what it is about" → tests/guard/diagnostics.test.ts
+<!-- /scenarios -->
+
+### Requirement: Two runs over the same tests report the same findings
+
+The findings SHALL come in a fixed order, whatever order the tests were scanned in.
+
+A report whose order changes from run to run cannot be diffed, so a reader who has already
+seen it has to read it again from the top to find what is new. The order is the tool's to
+choose, not the file walk's.
+
+<!-- scenarios: generated -->
+- "Findings come in a fixed order whatever order the tests were scanned" → tests/guard/order.test.ts
 <!-- /scenarios -->

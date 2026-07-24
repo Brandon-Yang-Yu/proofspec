@@ -1,6 +1,6 @@
 import type { ProofSite } from '../test-scan/index.ts'
 import { identityKey } from './identity.ts'
-import { compareStrings } from './order.ts'
+import { compareStrings } from '../order.ts'
 import type {
   CapabilityNode,
   Collision,

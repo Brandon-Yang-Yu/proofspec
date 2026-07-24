@@ -1,5 +1,5 @@
 import { identityKey } from './identity.ts'
-import { compareStrings } from './order.ts'
+import { compareStrings } from '../order.ts'
 import type { ScenarioIdentity, SpecTree, TreeChange, TreeDiff } from './types.ts'
 
 /**
