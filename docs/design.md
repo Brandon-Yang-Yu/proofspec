@@ -489,12 +489,14 @@ reverting is a one-file change.
   moved on). Verify before building.
 - **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
   `test-scan` is the first capability built this way — 24 scenarios, the scanner on
-  `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green. The
-  `<!-- scenarios: generated -->` blocks of both are hand-filled for now; the bootstrap
-  tags are cross-checked by a script that scans the tests and builds the tree, then
-  compares it against the committed blocks — 38 proof sites, no collision, none unplaced —
-  until `guard` can do it as a build step. **`guard` is next**: it has both halves it
-  needs now, so the rules of §7 become exit codes over a `TreeBuild` and a `TreeDiff`.
+  `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green.
+  `guard` is the third — 16 scenarios, §18, green. The `<!-- scenarios: generated -->`
+  blocks of all three are hand-filled for now; the bootstrap tags are cross-checked by a
+  script that scans the tests and builds the tree, then compares it against the committed
+  blocks — 54 proof sites, no collision, none unplaced. **`spec-file` is next**: it is the
+  one piece between `guard` and running on itself, since nothing yet reads a capability
+  `.md`. Then `cli`, which wires the four together and turns a `GuardReport` into an exit
+  code a build can act on.
 
 ## 16. The build pipeline
 
@@ -561,3 +563,79 @@ could have drifted into a tree and a comparison that disagreed. The completion p
 four determinism holes that no test defended, the load-bearing one being the file chosen
 for a collided scenario: the code was right, but a one-line edit to "first site scanned"
 would have passed every test while making the committed tree differ between machines.
+
+## 18. The guard
+
+`guard` turns the rules of §7 into a verdict. It takes the scan and the committed tree and
+returns a `GuardReport` — a `status` of `pass` or `fail`, and a list of findings, each
+naming what is wrong and where to look. One function, `guard({ scans, committed })`.
+
+**The verdict, not an exit code.** §12 assigns "exit codes" to this capability, and the
+first build took that literally: the report carried `exitCode: 0 | 1`. A number a process
+exits with is not a fact about a spec tree, and the type that holds it says two lines above
+that the CLI chooses the output. So what this capability owns is the verdict an exit code
+is made from, and the CLI turns it into a number at the boundary where processes live.
+
+**It reads no files.** `spec-file` is not built yet, and when it is it should stay the one
+place that knows the Markdown format, so the guard takes the committed capability files as
+a `SpecTree` rather than as paths. This is the same cut `spec-tree` took: pure data in,
+pure data out. The alternative — give the guard a small Markdown reader of its own to make
+it runnable sooner — was rejected for the reason §17 rejected two tree builders: two
+readers of one format drift, and then the tool that writes a file and the tool that
+verifies it disagree about the same bytes.
+
+**One input carries both halves of a capability file.** The guard needs to know what a file
+*declares* (for the coverage rules) and what it *records* (for the comparison). A
+requirement declared and not yet proven is simply a `RequirementNode` with no scenarios, so
+a single `SpecTree` says both and no second input is needed.
+
+**Opt-in has a narrower scope than "leave the capability alone".** §7 says a capability is
+enforced once a test tags it. Read too broadly that would mean a capability file whose
+tests were all deleted passes silently, which is the exact drift the guard exists to catch.
+So the gate is cut three ways: the *comparison* applies to every capability that has a
+file, because a file with recorded entries is built and not planned; the *requirement
+rules* wait for the first tag; and a capability with no file at all is dropped from the
+regenerated tree before the comparison, so its scenarios do not all read as added. The
+bijection rule sits outside the gate entirely — a scenario claimed twice is a fault in the
+tests themselves, not a claim about a capability file, so it fails wherever it is tagged.
+
+**A rename came out of this spec too.** `specs/guard.md` still asked the report to name a
+difference as "renamed", written before §17 settled that a rename is not derivable. Left
+in, it would have forced a heuristic pairing one removal with one addition and presenting
+the guess as a fact. Three kinds, and a rename reads as one removed and one added.
+
+**Every failure carries a line except the ones that cannot.** The first build had
+`scenario-added` and `scenario-moved` carrying only a file, because the tree it compares
+deliberately holds no line. But the *site* is right there in the scan, so the guard joins
+the difference back to the proof site that caused it. What is left without a line is left
+without one honestly: a requirement nothing proves has no site by definition, and a
+scenario the tests no longer prove has none either. Requirement 7's sentence was widened to
+say that, since it had claimed a line for failures that can never have one.
+
+**Determinism became a requirement rather than an unrequested feature.** The report sorts
+its findings, which nothing in the spec had asked for — the same shape of hole §17 records
+in `spec-tree`, but the other way round: there the code was required and untested, here it
+was neither. Deleting the sort was the wrong fix, because without it the order follows
+whatever order the CLI walked the files, and a report that reorders itself run to run
+cannot be diffed. So the promise is now written down and proven, and the rank of each kind
+is a `Record` over the union — adding a finding kind without ranking it is a compile error.
+
+What the two review gates (§16) earned this time. The guideline pass found seven
+deviations, the load-bearing one an ordering key built by stringifying a whole finding:
+the report's order depended on the property order of six object literals, so reordering
+fields in one of them would have silently changed the output. The completion pass found the
+missing lines above, the undeclared determinism, and a rule the code had invented — it was
+suppressing the "no Gherkin above this site" warning for sites the tree could not place,
+which no requirement asked for and no test defended. It also found something no fix
+applies to, worth recording: because "declared" means "present in the committed tree", a
+tag naming an undeclared requirement *always* also produces an added-scenario difference,
+so that rule can never be the sole cause of a failed build. Its whole value is the
+diagnostic — "this tag names a requirement the file does not declare" instead of "this
+scenario is not recorded" — which is exactly the reason §7 lists it separately.
+
+Two more came out of the human's read of the borderline calls the guideline pass raised.
+The exit code above, and a `Map.get` returning `undefined` that meant two different things
+in one file: "this capability has no committed file" in one rule and "no test tags this
+capability yet" in the other. Both are states the rules turn on, not absences, so both are
+named now — `hasCommittedFile` for the first, and a `Coverage` union whose `untagged` case
+*is* the opt-in switch for the second.
