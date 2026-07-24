@@ -49,13 +49,12 @@ the tree a coverage claim and not just an index.
 <!-- scenarios: generated -->
 <!-- /scenarios -->
 
-### Requirement: An incomplete tag fails the build
+### Requirement: A proof site the tree cannot hold fails the build
 
-The guard SHALL fail when a proof site carries a `// Requirement:` without a
-`// Scenario:`, or a `// Scenario:` without a `// Requirement:`, or when tagged sites sit
-in a file that declares no capability.
+The guard SHALL fail when a tagged site sits in a file that declares no capability.
 
-Half a tag is not a smaller claim. It is a claim that cannot be placed in the tree.
+The site has no parent, so there is nowhere in the tree to put it. The scan reports it as
+unresolved rather than as an error, and leaves the decision here.
 
 A tagged site with no GIVEN, WHEN or THEN above it SHALL be reported as a warning. It is
 co-location in name only: there is a tag, but no claim to judge the test against.
@@ -64,6 +63,12 @@ Anything else the scan could not read SHALL fail the build as well — an AND wh
 keyword belongs, a test using both tag placements at once, a file declaring two
 capabilities. The scan reports what it found. Deciding that a build cannot proceed is
 this capability's job.
+
+A tag without its pair is not checked here. The skill that applies a change writes the
+two tags together, so a lone tag is prevented where it would be written rather than
+caught afterwards. One that appears anyway still fails the build, under another rule: it
+yields no proof site, so its requirement reads as uncovered, or its scenario reads as
+missing from the regenerated tree.
 
 <!-- scenarios: generated -->
 <!-- /scenarios -->

@@ -38,5 +38,6 @@ project spec (expressed by tests)
 
 ## Status
 
-Design stage — no code yet. The full decision record is in
-[`docs/design.md`](docs/design.md).
+Bootstrapping. The `test-scan` capability's tests are written and red; the scanner they
+describe is the next thing to build. The full decision record is in
+[`docs/design.md`](docs/design.md), the capability specs in [`specs/`](specs).
