@@ -208,3 +208,25 @@ ${declaration}
   expect(site.scenario).toBe('A stale capability file fails the build')
   expect(site.line).toBe(lineOf(source, declaration))
 })
+
+// Requirement: A tag pair's layer decides the proof site
+// Scenario: A lone tag makes no proof site
+// GIVEN a test tagged with a `// Requirement:` but no `// Scenario:`, or the reverse
+// WHEN the file is scanned
+// THEN no proof site is reported for it, because a proof site needs a whole tag pair —
+//      guard catches the lone tag as an uncovered requirement or a missing scenario
+it.each([
+  { half: 'a requirement with no scenario', tag: '// Requirement: The guard fails the build on drift' },
+  { half: 'a scenario with no requirement', tag: '// Scenario: A stale capability file fails the build' },
+])('reports no site for $half', ({ tag }) => {
+  const source = `${tag}
+// THEN the guard fails
+it('half tagged', () => {
+  expect(guard(tree)).toBe('fail')
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(scan.sites).toEqual([])
+})

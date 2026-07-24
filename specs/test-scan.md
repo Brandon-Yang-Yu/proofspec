@@ -27,6 +27,7 @@ written inside a string or a comment is not a test.
 
 <!-- scenarios: generated -->
 - "A block ends at the statement before the next tagged one" → tests/test-scan/proof-site.test.ts
+- "A lone tag makes no proof site" → tests/test-scan/proof-site.test.ts
 - "A parameterised test is one proof site however many rows it has" → tests/test-scan/proof-site.test.ts
 - "A tag pair above a test makes the whole test one proof site" → tests/test-scan/proof-site.test.ts
 - "A test declared with any alias or modifier is found" → tests/test-scan/proof-site.test.ts
@@ -54,6 +55,7 @@ them. The author writes them once. The scan delivers them on every block.
 - "A block comment is not read as a step" → tests/test-scan/steps.test.ts
 - "A comment line with no keyword continues the step above it" → tests/test-scan/steps.test.ts
 - "A comment separated by a blank line is not read as a step" → tests/test-scan/steps.test.ts
+- "A comment sharing a code line is not read as a step" → tests/test-scan/steps.test.ts
 - "A shared GIVEN and WHEN are delivered on every block in the test" → tests/test-scan/steps.test.ts
 - "AND is reported as an error" → tests/test-scan/steps.test.ts
 - "The steps above a test are read in order" → tests/test-scan/steps.test.ts
@@ -70,6 +72,7 @@ A proof site in a file with no capability tag is reported as unresolved. The sca
 what it found. `guard` decides whether that fails the build.
 
 <!-- scenarios: generated -->
+- "A capability tag sharing a code line is not read" → tests/test-scan/capability-tag.test.ts
 - "A proof site in a file with no capability tag is unresolved" → tests/test-scan/capability-tag.test.ts
 - "A second capability tag is reported as an error" → tests/test-scan/capability-tag.test.ts
 - "Every proof site in the file carries the file's capability" → tests/test-scan/capability-tag.test.ts

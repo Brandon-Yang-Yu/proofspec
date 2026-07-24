@@ -80,3 +80,26 @@ it('fails on a stale capability file', () => {
   expect(onlySite(scan).capability).toBeUndefined()
   expect(scan.errors).toEqual([])
 })
+
+// Requirement: A capability tag governs the file it heads
+// Scenario: A capability tag sharing a code line is not read
+// GIVEN a `// Capability:` note trailing a line of code, not on its own line
+// WHEN the file is scanned
+// THEN it is not read as the file's capability, the same own-line rule the steps follow,
+//      so the proof site is left unresolved
+it('ignores a capability tag that shares a code line', () => {
+  const source = `const config = load() // Capability: guard
+
+// Requirement: The guard fails the build on drift
+// Scenario: A stale capability file fails the build
+// THEN the guard fails
+it('fails on a stale capability file', () => {
+  expect(guard(tree)).toBe('fail')
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(scan.capability).toBeUndefined()
+  expect(onlySite(scan).capability).toBeUndefined()
+})

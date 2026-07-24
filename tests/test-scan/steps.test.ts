@@ -61,25 +61,39 @@ it('fails on a stale capability file', () => {
 
 // Requirement: Gherkin steps are read exactly as written
 // Scenario: AND is reported as an error
-// GIVEN a THEN followed by an AND
+// GIVEN an AND where a step keyword belongs, whether above a test or inside a block
 // WHEN the file is scanned
-// THEN the scan reports an error naming the AND's line, because a second outcome under
-//      one THEN is a second scenario
-it('rejects an AND where a step keyword belongs', () => {
-  const source = `// Requirement: The guard fails the build on drift
+// THEN the scan reports one and-step error naming the AND's line, because a second
+//      outcome under one THEN is a second scenario, wherever the AND sits
+it.each([
+  {
+    where: 'above a test',
+    source: `// Requirement: The guard fails the build on drift
 // Scenario: A stale capability file fails the build
 // THEN the guard fails
 // AND it names the file that went stale
 it('fails on a stale capability file', () => {
   expect(guard(tree)).toBe('fail')
 })
-`
-
+`,
+  },
+  {
+    where: 'inside a block',
+    source: `it('posting a turn', async () => {
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream
+  // AND the status is 200
+  expect.soft(res.status).toBe(200)
+})
+`,
+  },
+])('rejects an AND $where', ({ source }) => {
   const scan = scanSource(source, { file: FILE })
 
   const error = onlyError(scan)
   expect(error.kind).toBe('and-step')
-  expect(error.line).toBe(lineOf(source, '// AND it names the file'))
+  expect(error.line).toBe(lineOf(source, '// AND'))
 })
 
 // Requirement: Gherkin steps are read exactly as written
@@ -163,5 +177,28 @@ it('posting a turn', async () => {
     { keyword: 'GIVEN', text: 'a document with one version' },
     { keyword: 'WHEN', text: 'a turn is posted' },
     { keyword: 'THEN', text: 'exactly one new version is appended' },
+  ])
+})
+
+// Requirement: Gherkin steps are read exactly as written
+// Scenario: A comment sharing a code line is not read as a step
+// GIVEN a `//` comment that shares a line with code, sitting above a tagged test
+// WHEN the file is scanned
+// THEN it is not read as a step, because only a comment that owns its line leads the
+//      test, so a note trailing a line of code never becomes a claim
+it('ignores a comment that shares a code line', () => {
+  const source = `const setup = prepare() // GIVEN a stale committed file
+// Requirement: The guard fails the build on drift
+// Scenario: A stale capability file fails the build
+// WHEN the tree is regenerated
+it('fails on a stale capability file', () => {
+  expect(guard(tree)).toBe('fail')
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(stepsOf(onlySite(scan))).toEqual([
+    { keyword: 'WHEN', text: 'the tree is regenerated' },
   ])
 })
