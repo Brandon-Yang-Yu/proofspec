@@ -9,6 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
+    "prepare": "git config core.hooksPath .githooks",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },

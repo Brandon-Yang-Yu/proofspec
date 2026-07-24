@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Pre-commit guard for staged changes.
+
+Two checks, on newly added lines only (pre-existing
+text is never flagged):
+  1. English-only: reject CJK (Chinese/Japanese/Korean) in code, comments and
+     config. Markdown (*.md) and test files are exempt - OpenTDD's tests carry
+     foreign-language fixtures on purpose (a spec written in any language is still
+     a spec), so CJK inside a *.test.ts fixture is expected, not a mistake.
+  2. No debug logs: reject console.debug / logger.debug / log.debug in TS/JS.
+
+Bypass in a real emergency with: git commit --no-verify
+"""
+import re
+import subprocess
+import sys
+
+CJK_PATTERN = re.compile(
+    "["
+    "\u3000-\u303f"   # CJK symbols and punctuation
+    "\u3040-\u30ff"   # Hiragana and Katakana
+    "\u3400-\u4dbf"   # CJK extension A
+    "\u4e00-\u9fff"   # CJK unified ideographs (Han)
+    "\uac00-\ud7af"   # Hangul
+    "\uf900-\ufaff"   # CJK compatibility ideographs
+    "\uff00-\uffef"   # fullwidth and halfwidth forms
+    "]"
+)
+
+DEBUG_PATTERN = re.compile(r"\b(?:console|logger|log)\.debug\s*\(")
+CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+# Files where fixtures and tooling live: exempt from both the CJK and debug checks.
+EXEMPT = re.compile(r"(\.test\.|\.spec\.|__tests__|__mocks__|/scripts/|\.config\.)")
+
+
+def git(*args):
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def staged_files():
+    out = git("diff", "--cached", "--name-only", "--diff-filter=ACM")
+    return [f for f in out.splitlines() if f and not f.endswith(".md")]
+
+
+def added_lines(path):
+    """Yield (line_number, text) for each added line in the staged diff."""
+    out = git("diff", "--cached", "--unified=0", "--", path)
+    line_no = None
+    for line in out.splitlines():
+        if line.startswith("@@"):
+            match = re.search(r"\+(\d+)", line)
+            line_no = int(match.group(1)) if match else None
+        elif line.startswith("+") and not line.startswith("+++"):
+            yield line_no, line[1:]
+            if line_no is not None:
+                line_no += 1
+
+
+def is_code_file(path):
+    return path.endswith(CODE_SUFFIXES) and not EXEMPT.search(path)
+
+
+def main():
+    cjk_hits = []
+    debug_hits = []
+    for path in staged_files():
+        exempt = bool(EXEMPT.search(path))
+        code = is_code_file(path)
+        for line_no, text in added_lines(path):
+            if not exempt:
+                found = CJK_PATTERN.search(text)
+                if found:
+                    cjk_hits.append((path, line_no, found.group(), text.strip()))
+            if code and DEBUG_PATTERN.search(text):
+                debug_hits.append((path, line_no, text.strip()))
+
+    if not cjk_hits and not debug_hits:
+        return
+
+    if cjk_hits:
+        sys.stderr.write("Commit rejected: non-English (CJK) text outside Markdown and tests.\n")
+        sys.stderr.write("Code, comments and config must be English; CJK is allowed in *.md and test fixtures.\n")
+        for path, line_no, char, text in cjk_hits:
+            sys.stderr.write(f"  {path}:{line_no}  found '{char}'  ->  {text}\n")
+        sys.stderr.write("\n")
+
+    if debug_hits:
+        sys.stderr.write("Commit rejected: debug logs in staged code.\n")
+        sys.stderr.write("Remove console.debug / logger.debug / log.debug before committing.\n")
+        for path, line_no, text in debug_hits:
+            sys.stderr.write(f"  {path}:{line_no}  {text}\n")
+        sys.stderr.write("\n")
+
+    sys.stderr.write("Bypass in an emergency with: git commit --no-verify\n")
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
