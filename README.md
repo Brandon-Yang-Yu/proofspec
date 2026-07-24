@@ -21,12 +21,15 @@ tests and the build fails when they disagree.
 project spec (expressed by tests)
 └── capability          e.g. agent-chat
     └── requirement      a high-level promise (one SHALL sentence)
-        └── scenario     one detailed condition, written as Gherkin above its test
-            └── test      exactly one test proves it
+        └── scenario     one detailed condition, written as Gherkin by its proof
+            └── proof     exactly one place proves it
 ```
 
-- **One scenario ↔ one test** (a bijection). Different layers (api / component / e2e)
-  phrase the scenario differently, so "one scenario, many tests" never really exists.
+- **A scenario is `(GIVEN, WHEN) + one THEN`.** Same action, same outcome → the same
+  scenario. Inputs that differ only in data are one scenario with a table, not many.
+- **One scenario ↔ one proof site** (a bijection). A proof site is a whole test, or —
+  when one action proves several scenarios — a block of assertions inside one, with each
+  THEN written on the assertion that checks it.
 - **Behavior text lives only in the test.** A requirement's file records *where* its
   scenarios are — not a second copy of them.
 - **Line numbers are delivered, never stored.** The file keeps stable identity
