@@ -141,6 +141,8 @@ A single script (`opentdd`), in the spirit of an MCP resolver:
    do **not** enter this comparison, so line shifts never false-alarm.
 3. **Write back** — refresh the `<!-- scenarios -->` blocks from the latest scan.
 
+§12 cuts these three jobs into the capabilities that carry them.
+
 ## 7. Build-fail rules
 
 `index`/capability `.md` is committed; the guard regenerates the stable tree and
@@ -155,10 +157,12 @@ compares. Rules:
 | 5 | Missing capability — a file has Requirement/Scenario tags but no `// Capability:` | unlocatable | FAIL |
 | 6 | Duplicate scenario — the same (capability, requirement, scenario) tagged at 2+ proof sites | bijection broken; the action was not the same after all | FAIL |
 | 7 | Empty behavior — `// Scenario:` with no GIVEN/WHEN/THEN beneath before the assertion | co-location in name only | WARN (may become FAIL) |
+| 8 | Mixed site — one `it` carries a Requirement/Scenario pair above it **and** tagged blocks inside it | the proof-site count is ambiguous | FAIL |
 
 A proof site is a whole test, or a tagged block of assertions inside one — rules 4-7
 apply to each site, not to each `it(`. A parameterised test (`it.each`) is one site
-however many rows its table has.
+however many rows its table has. Rule 8 is the exception: it applies to the `it` as a
+whole, because it is the rule that decides *which* of the two layouts in §13 is in play.
 
 Two things the guard deliberately does **not** check, because they need judgement and a
 person or an AI reading the co-located claim can supply it:
@@ -297,22 +301,192 @@ currently written in **three** places — `openspec/specs/agent-chat/spec.md`, a
 Gherkin `Feature` block in `docs/behaviors/agent-chat.md`, and a prose summary at the top
 of the test file. That is the first thing worth migrating.
 
-## 12. Open questions / next steps
+## 12. The tool's capabilities
 
-- **A tool requirement is still missing** — a requirement that says "the tool
-  delivers current locations and fails the build on drift; line numbers are computed,
-  not stored." Add it below the top-level one.
-- **Proof-site syntax** — a scenario tagged above an `it` is settled; a scenario tagged
-  on a block of assertions inside one needs its comment shape pinned down (and the
-  parser needs to know where a block ends — the next tag, or the end of the `it`).
+§6 lists the tool's jobs as a flat list. Cut along the data flow, they become six
+capabilities — the top of OpenTDD's own tree, each able to carry its own requirements
+and be proven by its own tests:
+
+| Capability | Holds | Serves which of `spec.md`'s requirements |
+|---|---|---|
+| `test-scan` | test sources → `ProofSite[]`: tag extraction, Gherkin step parsing, proof-site boundaries, `it.each` as one site | R2, R3, the machine-checkable half of R1 |
+| `spec-file` | the committed `.md`: section-tree read, and a write-back that replaces only the generated block | R4, R5 |
+| `spec-tree` | scan result → the stable tree (line numbers stripped, sorted, duplicates detected), plus tree diff | R1, R3, R6 |
+| `guard` | the rules of §7, their diagnostics, exit codes, opt-in enforcement | R6 |
+| `locate` | current `file:line` computed on demand; rendering the tree | R5 |
+| `cli` | commands, config, output formats | — |
+
+Three notes on the cut:
+
+- **`spec-tree` stays separate from `guard`** even though it looks like plumbing. It is
+  the only place the stable-identity rule (§3.2) actually lands, and both `guard` and
+  the write-back depend on it behaving identically. Fold it into `guard` and the two
+  paths drift.
+- **Language knowledge is confined to `test-scan`.** Everything downstream consumes
+  `ProofSite[]` and never learns that TypeScript exists. That contract — not the
+  parsing technique — is what keeps the core language-agnostic. v1 supports TypeScript
+  only; a second language is a second scanner behind the same contract.
+- **Delivery is CLI-only in v1.** `locate` ships as `opentdd where <scenario>` and
+  `opentdd tree [--json]`. An MCP server is v2; `--json` is the seam it will sit on.
+
+Two things deliberately *outside* the capabilities: the judgement checks named at the
+end of §7 (they belong to a person or an AI reading the co-located claim), and the
+plan-time `propose` flow (that stays with the `openspec` CLI, per §8).
+
+**A capability requirement states behavior, never implementation.** The test is whether
+it can be falsified by observing what the tool produces. "The scanner SHALL NOT read
+`tsconfig.json`" fails it — you could only check that by reading the source or spying on
+the filesystem, and it would still be satisfied by a tool that got the answer wrong. The
+behavior hiding behind it is "a file whose types do not check SHALL yield the same proof
+sites", which a test can hold to account. Implementation choices — the parser of §14, the
+syntax of §13 — are recorded here in the design record, not as requirements. A drafted
+requirement that names a library, a file format the tool reads for its own configuration,
+or a performance target is nearly always an implementation detail wearing a SHALL.
+
+**And it is written in plain English.** The whole method is a bet that a claim can be
+made cheap to judge. Prose that has to be read twice spends exactly what the bet is
+trying to save, so density is not a stylistic preference here — it is the thing failing.
+The rules: one claim per sentence; the claim before its reason; a list written as a list;
+no clause stacked behind an em-dash or a semicolon. Lead each requirement with one SHALL
+sentence carrying the promise, then plain sentences for the detail. If a sentence needs a
+second pass, it is two sentences.
+
+## 13. Proof-site syntax
+
+Settles the open question of how a scenario tagged on a block of assertions is written.
+One rule:
+
+> **The layer at which a `Requirement` + `Scenario` tag pair appears is the layer of the
+> proof site.**
+
+Above an `it` → the whole test is the proof site. On a statement inside an `it` → each
+such statement opens a block proof site. Rule 8 of §7 forbids both at once.
+
+**Layout A — one scenario, everything above the test.** The common case.
+
+```ts
+// Requirement: The guard fails the build on drift
+// Scenario: A stale capability file fails the build
+// GIVEN a committed capability file
+// WHEN the tree regenerated from the tests differs from it
+// THEN the guard fails and reports the difference, naming both the
+//      requirement and the scenario that moved
+it('fails on a stale capability file', () => { ... })
+```
+
+**Layout B — a shared action (§11 decision B).** Above the `it` sits only the shared
+GIVEN/WHEN, carrying no identity; identity moves down to each block.
+
+```ts
+// GIVEN a document with one version
+// WHEN a turn is posted
+it('posting a turn', async () => {
+  const res = await post('/turn')
+
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream carrying the assistant tokens
+  expect.soft(res.headers['content-type']).toBe('text/event-stream')
+
+  // Requirement: A successful turn appends a version
+  // Scenario: A successful turn appends one version
+  // THEN exactly one new version is appended to the document
+  const versions = await listVersions(docId)
+  expect.soft(versions).toHaveLength(2)
+})
+```
+
+The details that go with it:
+
+- **Block boundary** — a block runs from its tagged statement to the statement before
+  the next tagged one, or to the end of the `it` body. Untagged statements in between
+  (`const versions = await …`) belong to the block they sit in.
+- **Steps are bare keywords** — `// GIVEN`, `// WHEN`, `// THEN`. Not the `- **WHEN**`
+  markdown of a `.md` file; that decoration is for the spec document, not for code.
+- **Continuation** — a comment line that does not begin with a keyword continues the
+  previous step. This is how a step runs to more than one sentence (spec.md R2) without
+  needing AND.
+- **`//` only.** No `/* */`. One shape keeps the parse surface minimal.
+- **`// Capability:` is file-level**, one per file. Two capabilities in one file → split
+  the file.
+- **No `describe` inheritance in v1.** A `// Requirement:` may not be hoisted onto a
+  `describe` as a default for the tests inside it. It would be convenient and it
+  complicates rule 4 ("tags come in pairs"); useful before flexible.
+- **`it.each` is one proof site**, whatever its row count.
+
+## 14. Choosing the parser
+
+**Decision: an AST scan, on `oxc-parser`. Parse only — no type checker, no `tsconfig`.**
+
+The alternative was a line scanner over the raw text. Four reasons it lost:
+
+1. **The hard part is free in an AST.** Cutting an `it` body into block proof sites
+   (§13) is the hardest thing the scanner does. In an AST it is the body's `statements`
+   array plus each statement's leading comments. A line scanner has to guess the
+   boundary from indentation or "the next tag", and a wrong guess corrupts the bijection
+   count — the one number the whole tool rests on.
+2. **A line scanner is not the simple option.** To know whether a tag sits above an
+   `it(` or above an `expect(` inside one, you must track brace depth, which means
+   masking strings, template literals, regexes and comments — writing a bad JS lexer. A
+   prototype was fed a decoy `it('x', () => {})` inside a string literal; the AST
+   ignored it for free.
+3. **Performance is not a trade-off.** 200 files / 112,200 lines parse *and* fully walk
+   in 98 ms.
+4. **Error-message quality.** An AST can say "the third statement of `it('posting a
+   turn')`, line 30, has a THEN with no Requirement tag". A line scanner says "near line
+   30". Since OpenTDD is used on itself from day one, that message is what we read every
+   day.
+
+Which parser, then. A ~90-line prototype was written twice — once on `typescript`'s
+`createSourceFile`, once on `oxc-parser` — and run against two samples: an adversarial
+one (a plain test, one `it` with two tagged assertion blocks, an `it.each`, the string
+decoy) and an edge one (CJK capability names, CJK comments, an emoji, `await using`,
+import attributes, `accessor`, a `static {}` block, private fields).
+
+| | `typescript@5.9` | `oxc-parser@0.141` |
+|---|---|---|
+| Proof sites extracted, both samples | 4 / 2 | identical, field for field |
+| CJK + emoji line numbers | correct | correct |
+| Modern syntax | parses | parses, `errors: 0` |
+| Single-file parse | 3.7 ms | 0.3 ms |
+| Dependency size | 23 MB | 3.2 MB |
+| Scanner source | 91 lines | 99 lines |
+
+Two findings decided it.
+
+**`typescript@7` no longer offers the API.** The current `latest` (7.0.2, the Go port)
+exports only `lib/version.cjs` from its main entry; `createSourceFile` is gone. An AST is
+reachable only through `typescript/unstable/ast` plus a `Program` that needs a tsconfig
+and talks to the Go binary over IPC. So the TypeScript route means pinning `5.9`
+forever — a version debt taken on for a feature that only ever parses.
+
+**The reason to pay that debt evaporated.** The one advantage `typescript` had was that
+`getLeadingCommentRanges` attaches comments to nodes for you; `oxc-parser` returns a flat
+comment array with offsets. Writing that attachment by hand came to **18 lines** — and
+the hand-written version is *stricter*, requiring a comment to be directly above its node
+with no blank line between, which is exactly what spec.md R2 says and what
+`getLeadingCommentRanges` does not enforce.
+
+Costs accepted: `oxc-parser` is pre-1.0, and it ships a native binary per platform. Both
+are hedged the same way — `test-scan` exposes only `ProofSite[]`, and the
+`typescript@5.9` implementation already exists and produces identical output, so
+reverting is a one-file change.
+
+## 15. Open questions / next steps
+
 - **Do requirement descriptions need a revision?** The guard compares titles and files,
   so editing a requirement's SHALL text while leaving scenario titles alone passes
   silently. OpenFastTrace solves this by putting a revision number in the item id and
   reporting coverage of an older revision as *outdated*. Worth stealing.
-- **The tree file(s)** — one file per capability, plus a top-level index of
-  capabilities? Or a single file? (Leaning per-capability.)
+- **A capability index?** `spec.md` R4 settles one file per capability. Whether a
+  top-level file also lists the capabilities is still open.
 - **Real starting point** — decide where OpenTDD lands relative to the reference repo
   (the earlier `worktree-turn-route` spec-binding work is a stale snapshot; main has
   moved on). Verify before building.
-- **Then**: build the parser + the capability-file writer + the guard, TDD, using
-  OpenTDD on itself.
+- **Then**: write the requirements for `test-scan` and `spec-tree` first (they fix the
+  grain), then build parser → capability-file writer → guard, TDD, using OpenTDD on
+  itself. The bootstrap is manual: the first tests carry hand-written tags and are only
+  verified once `guard` runs.
+
+*Closed since the first draft:* the missing tool requirement (now `spec.md` R5 and R6);
+the proof-site syntax (§13); the parser choice (§14).
