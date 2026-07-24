@@ -489,10 +489,12 @@ reverting is a one-file change.
   moved on). Verify before building.
 - **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
   `test-scan` is the first capability built this way — 24 scenarios, the scanner on
-  `oxc-parser` (§14), green. Its `<!-- scenarios: generated -->` blocks are hand-filled
-  for now; the bootstrap tags are verified by hand (an AST script cross-checks titles and
-  files) until `guard` can verify them by machine. `spec-tree` is next: it turns the
-  `ProofSite[]` into the stable tree and is what lets `guard` close that loop.
+  `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green. The
+  `<!-- scenarios: generated -->` blocks of both are hand-filled for now; the bootstrap
+  tags are cross-checked by a script that scans the tests and builds the tree, then
+  compares it against the committed blocks — 38 proof sites, no collision, none unplaced —
+  until `guard` can do it as a build step. **`guard` is next**: it has both halves it
+  needs now, so the rules of §7 become exit codes over a `TreeBuild` and a `TreeDiff`.
 
 ## 16. The build pipeline
 
@@ -515,5 +517,47 @@ load-bearing behaviors (the lone-tag no-site rule, the own-line comment strictne
 inside a block) that had no scenario until it named them.
 
 *Closed since the first draft:* the missing tool requirement (now `spec.md` R5 and R6);
-the proof-site syntax (§13); the parser choice (§14); the build pipeline (§16); and
-`test-scan`, the first capability built under it.
+the proof-site syntax (§13); the parser choice (§14); the build pipeline (§16);
+`test-scan`, the first capability built under it; and `spec-tree`, the second (§17).
+
+## 17. The stable tree
+
+`spec-tree` turns `ProofSite[]` into the tree `capability → requirement → scenario title →
+file` and compares two trees. It is pure data: no file I/O, no Markdown (that is
+`spec-file`), no exit codes (that is `guard`). Two functions — `buildTree`, `diffTree`.
+
+**Identity is `(capability, requirement, scenario title)`.** This is where §3.2 lands as a
+machine key. Line numbers and Gherkin steps are excluded, and that exclusion is the whole
+point: a line shift or a reworded step must not read as a change to the spec. §4's
+storage/delivery split says line numbers are delivered and never stored; this is the code
+that makes it true.
+
+**A rename is not a kind of difference.** The first draft of the capability spec listed
+four — added, removed, renamed, moved. Renamed came out, because it is not derivable: the
+title *is* the identity, so a changed title is a different scenario, and no comparison of
+two trees can tell a rename from one deletion plus one unrelated addition. Claiming
+otherwise would have meant a heuristic pretending to be a fact. Three kinds, and a rename
+reads as one removed and one added.
+
+**A site with no capability is set aside, not dropped.** The scan reports such a site with
+`capability: undefined` and leaves the verdict to `guard` (§7 rule 5). The tree cannot key
+it, so `buildTree` returns it in `unplaced`. The alternative — have `guard` filter them
+before building — was rejected: the build is the one pass that already walks every site,
+and a proof site that silently vanished between the scan and the tree is exactly the kind
+of hole this tool exists to close.
+
+**A collision keeps the scenario once and names every site.** Deduplicating quietly would
+hide a broken bijection, which is a modelling error the author has to see. But the tree
+must stay reproducible even while broken, so the surviving entry takes the first file by
+name rather than the first the scan happened to reach.
+
+**Sorting compares UTF-16 code units, not `localeCompare`.** A tree regenerated in CI has
+to sort the way the committed one did, and a locale-sensitive comparison would make the
+machine part of the answer.
+
+What the two review gates (§16) earned this time: the guideline pass caught the identity
+key duplicated across the build and the diff — two definitions of the one concept that
+could have drifted into a tree and a comparison that disagreed. The completion pass found
+four determinism holes that no test defended, the load-bearing one being the file chosen
+for a collided scenario: the code was right, but a one-line edit to "first site scanned"
+would have passed every test while making the committed tree differ between machines.
