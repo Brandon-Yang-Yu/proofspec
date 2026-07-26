@@ -71,6 +71,24 @@ ${block}`
 })
 
 // Requirement: Reading a file yields its requirements and what they record
+// Scenario: A file that declares no requirements reads as a capability with none
+// GIVEN a capability file that is all opening prose and declares no requirement heading
+// WHEN the file is read
+// THEN it comes back as a capability with an empty requirements list — the branch a file
+//      holds before anyone has written a requirement into it, an ordinary state and not an
+//      error
+it('reads a file that declares no requirements as a capability with none', () => {
+  const source = `# spec-file
+
+Opening prose about the capability, and not one requirement declared yet.
+`
+
+  const spec = readCapabilityFile(source, { capability: CAPABILITY })
+
+  expect(spec).toEqual({ capability: 'spec-file', requirements: [] })
+})
+
+// Requirement: Reading a file yields its requirements and what they record
 // Scenario: A heading inside a fenced code block is not a requirement
 // GIVEN a capability file whose description shows an example requirement heading inside a
 //       fenced code block

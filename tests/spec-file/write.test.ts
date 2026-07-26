@@ -67,10 +67,24 @@ Its description.
 // Scenario: A requirement with no block is given one after its description
 // GIVEN a requirement written with a description and no generated block, followed by
 //       another requirement that has one
-// WHEN the write-back runs with an entry for it
-// THEN its generated block sits between its description and the next heading, so the
-//      block a hand-written requirement lacks is the one thing added
-it('gives a requirement with no block one after its description', () => {
+// WHEN the write-back runs, whether it hands the hand-written requirement an entry or
+//      nothing at all
+// THEN its generated block sits between its description and the next heading — holding the
+//      entry when there was one and empty when there was none, since an empty block is
+//      still what a requirement nothing proves yet looks like — so the block a hand-written
+//      requirement lacks is the one thing added either way
+it.each([
+  {
+    handed: 'an entry',
+    scenarios: [{ scenario: 'is recorded now', file: 'tests/spec-file/new.test.ts' }],
+    block: '<!-- scenarios: generated -->\n- "is recorded now" → tests/spec-file/new.test.ts\n<!-- /scenarios -->',
+  },
+  {
+    handed: 'nothing',
+    scenarios: [],
+    block: '<!-- scenarios: generated -->\n<!-- /scenarios -->',
+  },
+])('gives a requirement with no block one after its description, handed $handed', ({ scenarios, block }) => {
   const source = `### Requirement: Written by hand
 
 Its description.
@@ -85,7 +99,7 @@ Its description.
 `
 
   const updated = updateScenarioBlocks(source, { requirements: [
-    { requirement: 'Written by hand', scenarios: [{ scenario: 'is recorded now', file: 'tests/spec-file/new.test.ts' }] },
+    { requirement: 'Written by hand', scenarios },
     { requirement: 'Already recorded', scenarios: [{ scenario: 'was recorded before', file: 'tests/spec-file/old.test.ts' }] },
   ] })
 
@@ -93,9 +107,7 @@ Its description.
 
 Its description.
 
-<!-- scenarios: generated -->
-- "is recorded now" → tests/spec-file/new.test.ts
-<!-- /scenarios -->
+${block}
 
 ### Requirement: Already recorded
 
@@ -230,6 +242,25 @@ Its description.
 <!-- scenarios: generated -->
 <!-- /scenarios -->
 `)
+})
+
+// Requirement: Writing back touches only the generated block
+// Scenario: A file that declares no requirements comes back unchanged
+// GIVEN a capability file that is all opening prose and declares no requirement heading
+// WHEN the write-back runs, even handed entries for requirements the file never declares
+// THEN the file comes back byte for byte, because with no heading to own a block there is
+//      nothing the write-back may touch
+it('leaves a file that declares no requirements unchanged', () => {
+  const source = `# spec-file
+
+Opening prose about the capability, and not one requirement declared yet.
+`
+
+  const updated = updateScenarioBlocks(source, { requirements: [
+    { requirement: 'Never declared', scenarios: [{ scenario: 'has nowhere to go', file: 'tests/spec-file/new.test.ts' }] },
+  ] })
+
+  expect(updated).toBe(source)
 })
 
 // Requirement: Writing back touches only the generated block

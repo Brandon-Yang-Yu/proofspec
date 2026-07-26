@@ -25,6 +25,7 @@ uses, so what is read is already a branch of it. The file keeps its own order; t
 is the human's.
 
 <!-- scenarios: generated -->
+- "A file that declares no requirements reads as a capability with none" → tests/spec-file/read.test.ts
 - "A heading inside a fenced code block is not a requirement" → tests/spec-file/read.test.ts
 - "A line inside a generated block that is not an entry records no scenario" → tests/spec-file/read.test.ts
 - "A requirement that records nothing reads as one with no entries" → tests/spec-file/read.test.ts
@@ -57,6 +58,7 @@ while updating a list is a tool people stop letting run, and a tool that writes 
 of its own is authoring the half it does not own.
 
 <!-- scenarios: generated -->
+- "A file that declares no requirements comes back unchanged" → tests/spec-file/write.test.ts
 - "A generated block inside a fenced code block is left alone" → tests/spec-file/write.test.ts
 - "A requirement nothing proves any more is left with an empty block" → tests/spec-file/write.test.ts
 - "A requirement with no block is given one after its description" → tests/spec-file/write.test.ts
