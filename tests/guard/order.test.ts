@@ -3,7 +3,8 @@
 import { expect, it } from 'vitest'
 import { guard } from '../../src/guard/index.ts'
 import type { GuardReport } from '../../src/guard/index.ts'
-import { CAPABILITY, REQUIREMENT, committed, scan, scanError, site } from './support.ts'
+import type { SpecTree } from '../../src/spec-tree/index.ts'
+import { CAPABILITY, REQUIREMENT, scan, scanError, site } from './support.ts'
 
 /** One scan per file, in the order a file walk happened to reach them. */
 const SCANS = [
@@ -22,12 +23,22 @@ const SCANS = [
   }),
 ]
 
-const COMMITTED = committed({
-  [CAPABILITY]: {
-    [REQUIREMENT]: [{ scenario: 'claimed twice', file: 'tests/a.test.ts' }],
-    'A requirement nothing proves': [],
-  },
-})
+// Built by hand rather than with `committed()` so the tree can carry a repeated heading:
+// 'A requirement nothing proves' is declared twice and proven by nothing, which yields one
+// uncovered-requirement finding (not two) and one duplicate-requirement warning, both of
+// which have to take their place in the fixed order.
+const COMMITTED: SpecTree = {
+  capabilities: [
+    {
+      capability: CAPABILITY,
+      requirements: [
+        { requirement: REQUIREMENT, scenarios: [{ scenario: 'claimed twice', file: 'tests/a.test.ts' }] },
+        { requirement: 'A requirement nothing proves', scenarios: [] },
+        { requirement: 'A requirement nothing proves', scenarios: [] },
+      ],
+    },
+  ],
+}
 
 function kindsOf(report: GuardReport): readonly string[] {
   return report.findings.map(finding => finding.kind)
@@ -52,5 +63,6 @@ it('reports findings in a fixed order whatever order the tests were scanned', ()
     'unknown-requirement',
     'uncovered-requirement',
     'scenario-added',
+    'duplicate-requirement',
   ])
 })

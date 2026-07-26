@@ -1,7 +1,14 @@
 import { assertNever } from '../assert-never.ts'
 import { compareStrings } from '../order.ts'
 import { buildTree, diffTree, identityKey } from '../spec-tree/index.ts'
-import type { Collision, Placement, ScenarioIdentity, SpecTree, TreeChange } from '../spec-tree/index.ts'
+import type {
+  Collision,
+  Placement,
+  RequirementNode,
+  ScenarioIdentity,
+  SpecTree,
+  TreeChange,
+} from '../spec-tree/index.ts'
 import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
 import { severityOf } from './report.ts'
 import type { Finding, GuardReport } from './types.ts'
@@ -30,6 +37,7 @@ export function guard({
     ...driftFindings(trees, declared, sites),
     ...unknownRequirementFindings(sites, declared),
     ...uncoveredRequirementFindings(trees),
+    ...duplicateRequirementFindings(committed),
     ...collisionFindings(collisions),
     ...unplacedFindings(unplaced),
     ...missingStepFindings(sites),
@@ -191,8 +199,14 @@ function uncoveredRequirementFindings({ committed, regenerated }: Trees): Findin
   for (const capability of committed.capabilities) {
     const coverage = coverageOf(regenerated, capability.capability)
     if (coverage.kind === 'untagged') continue
+    // A requirement declared twice and proven by nothing is one uncovered requirement, not
+    // two: the repeated heading is its own warning, and doubling the failure here would
+    // fail the build twice for a single cause.
+    const reported = new Set<string>()
     for (const requirement of capability.requirements) {
       if (coverage.proven.has(requirement.requirement)) continue
+      if (reported.has(requirement.requirement)) continue
+      reported.add(requirement.requirement)
       findings.push({
         kind: 'uncovered-requirement',
         capability: capability.capability,
@@ -216,6 +230,30 @@ function coverageOf(regenerated: SpecTree, capability: string): Coverage {
   const node = regenerated.capabilities.find(candidate => candidate.capability === capability)
   if (node === undefined) return { kind: 'untagged' }
   return { kind: 'tagged', proven: new Set(node.requirements.map(requirement => requirement.requirement)) }
+}
+
+/**
+ * A committed file that declares one requirement more than once. The reader does not dedup
+ * headings, so every occurrence survives into the tree as a requirement node of the same
+ * name; the tree keys scenarios by title, so the repeated entries collapse and nothing
+ * downstream reads them wrong, which is why this warns rather than fails. One finding per
+ * repeated name, however many times it was written.
+ */
+function duplicateRequirementFindings(committed: SpecTree): Finding[] {
+  return committed.capabilities.flatMap(capability =>
+    repeatedNames(capability.requirements).map((requirement): Finding => ({
+      kind: 'duplicate-requirement',
+      capability: capability.capability,
+      requirement,
+    })),
+  )
+}
+
+/** The requirement names declared more than once, each returned once, in first-seen order. */
+function repeatedNames(requirements: readonly RequirementNode[]): string[] {
+  const counts = new Map<string, number>()
+  for (const { requirement } of requirements) counts.set(requirement, (counts.get(requirement) ?? 0) + 1)
+  return [...counts].flatMap(([name, count]) => (count > 1 ? [name] : []))
 }
 
 // --- the rules about the sites themselves ------------------------------------
@@ -270,7 +308,7 @@ function unreadableFindings(errors: readonly ScanError[]): Finding[] {
 
 /**
  * Findings the reader can open a file on come first, the tree comparison after them, and
- * the warning last. A `Record` and not a list, so adding a kind without ranking it is a
+ * the warnings last. A `Record` and not a list, so adding a kind without ranking it is a
  * compile error rather than a kind that silently sorts first.
  */
 const KIND_ORDER: Record<Finding['kind'], number> = {
@@ -283,6 +321,7 @@ const KIND_ORDER: Record<Finding['kind'], number> = {
   'scenario-removed': 6,
   'scenario-moved': 7,
   'no-steps': 8,
+  'duplicate-requirement': 9,
 }
 
 function compareFindings(a: Finding, b: Finding): number {
@@ -308,6 +347,7 @@ function orderParts(finding: Finding): OrderParts {
     case 'scenario-moved':
       return [finding.capability, finding.requirement, finding.scenario, finding.from, finding.to, finding.line]
     case 'uncovered-requirement':
+    case 'duplicate-requirement':
       return [finding.capability, finding.requirement]
     case 'duplicate-scenario':
       return [finding.capability, finding.requirement, finding.scenario]

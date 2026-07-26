@@ -3,13 +3,20 @@ import type { Placement, ScenarioIdentity } from '../spec-tree/index.ts'
 import type { Finding, FindingSeverity } from './types.ts'
 
 /**
+ * The findings that warn rather than fail — both states the tool already handles and the
+ * reader is left to judge. A `no-steps` site is co-location in name only: a tag with no
+ * claim to judge the test against (design.md §7 rule 7). A `duplicate-requirement` file
+ * records the same entries under both headings and nothing downstream reads them wrong, so
+ * which heading is meant to survive is the author's call, not the build's.
+ */
+const WARN_KINDS: ReadonlySet<Finding['kind']> = new Set(['no-steps', 'duplicate-requirement'])
+
+/**
  * Which findings stop a build. Kept in one place rather than as a field on every finding,
  * so the answer to "what fails the build?" is read once and cannot drift between kinds.
  */
 export function severityOf(finding: Finding): FindingSeverity {
-  // A site with no Gherkin is co-location in name only: there is a tag, but no claim to
-  // judge the test against. Worth saying, not worth stopping for (design.md §7 rule 7).
-  return finding.kind === 'no-steps' ? 'warn' : 'fail'
+  return WARN_KINDS.has(finding.kind) ? 'warn' : 'fail'
 }
 
 /**
@@ -29,6 +36,8 @@ export function describeFinding(finding: Finding): string {
       return `${nameOf(finding)}: ${siteOf(finding)} tags a requirement the capability file does not declare`
     case 'uncovered-requirement':
       return `${finding.capability} › ${finding.requirement}: declared, but no test proves it`
+    case 'duplicate-requirement':
+      return `${finding.capability} › ${finding.requirement}: declared more than once in the capability file`
     case 'duplicate-scenario':
       return `${nameOf(finding)}: claimed by ${finding.sites.map(siteOf).join(' and ')}`
     case 'no-capability':

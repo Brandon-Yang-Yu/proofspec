@@ -99,6 +99,26 @@ the scenario needs splitting — or the two sites are the same claim written twi
 - "The same scenario at two proof sites fails the build" → tests/guard/collision.test.ts
 <!-- /scenarios -->
 
+### Requirement: A requirement declared twice is a warning
+
+The guard SHALL report a warning, without failing the build, when a committed capability
+file declares the same requirement more than once, naming the capability and the
+requirement.
+
+The entries are recorded under both headings, deterministically, and nothing downstream
+reads them wrong: the tree keys a scenario by its title under its requirement, so identical
+entries under a repeated heading collapse to one. Stopping the build would punish a state
+the tool already handles.
+
+But two headings of one name are almost always an editing slip, and which one is meant to
+survive is the author's call, not the tool's. So the guard says what it sees and leaves the
+fix to the person or the AI reading the report — the same reason a site with no Gherkin
+above it warns rather than fails.
+
+<!-- scenarios: generated -->
+- "A requirement declared twice in a committed file is a warning" → tests/guard/duplicate-requirement.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A capability is enforced once a test tags it
 
 The guard SHALL apply the requirement rules to a capability only once at least one test

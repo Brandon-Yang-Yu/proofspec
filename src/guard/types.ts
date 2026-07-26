@@ -27,6 +27,11 @@ export type Finding =
   | (ScenarioIdentity & { readonly kind: 'unknown-requirement'; readonly file: string; readonly line: number })
   /** A declared requirement that no test tags. It has no site, so it carries no location. */
   | { readonly kind: 'uncovered-requirement'; readonly capability: string; readonly requirement: string }
+  /**
+   * A committed capability file declares the same requirement twice. The fault is in the
+   * file, not at any proof site, so it names the capability and the requirement and no more.
+   */
+  | { readonly kind: 'duplicate-requirement'; readonly capability: string; readonly requirement: string }
   /** One scenario claimed at more than one proof site, naming every site that claimed it. */
   | (ScenarioIdentity & { readonly kind: 'duplicate-scenario'; readonly sites: readonly Placement[] })
   /** A tagged site in a file that declares no capability, so the tree has nowhere to put it. */
@@ -38,9 +43,9 @@ export type Finding =
       readonly line: number
     }
   /**
-   * A tagged site with no GIVEN, WHEN or THEN above it: the one finding that only warns.
-   * It names the site rather than the capability, because a site the tree could not place
-   * has no capability and is warned about all the same.
+   * A tagged site with no GIVEN, WHEN or THEN above it: a finding that warns rather than
+   * fails. It names the site rather than the capability, because a site the tree could not
+   * place has no capability and is warned about all the same.
    */
   | {
       readonly kind: 'no-steps'

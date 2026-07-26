@@ -487,11 +487,13 @@ reverting is a one-file change.
 - **Real starting point** — decide where OpenTDD lands relative to the reference repo
   (the earlier `worktree-turn-route` spec-binding work is a stale snapshot; main has
   moved on). Verify before building.
-- **A requirement declared twice.** A capability file with two `### Requirement: X`
-  headings reads as two requirements of that name, and the write-back records the same
-  entries under both. That is deterministic and harms nothing downstream (the guard
-  collapses names into a set), but nothing asked for it. Whether the guard should reject a
-  repeated heading outright is open.
+- ~~**A requirement declared twice.**~~ *Settled: the guard warns (§18). A capability file
+  with two `### Requirement: X` headings reads as two requirements of that name, and the
+  write-back records the same entries under both. That is deterministic and harms nothing
+  downstream, so rejecting it would fail the build over a state the tool already handles.
+  But two headings of one name are almost always an editing slip, and which one is meant to
+  survive is the author's call — so the guard reports it as a warning and leaves the fix to
+  the person or AI reading the report, rather than inventing a rule.*
 - **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
   `test-scan` is the first capability built this way — 24 scenarios, the scanner on
   `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green.
@@ -646,6 +648,22 @@ in one file: "this capability has no committed file" in one rule and "no test ta
 capability yet" in the other. Both are states the rules turn on, not absences, so both are
 named now — `hasCommittedFile` for the first, and a `Coverage` union whose `untagged` case
 *is* the opt-in switch for the second.
+
+**A second warning, and why it is a warning.** §15 left open what to do about a capability
+file that declares one `### Requirement:` heading twice. The guard now reports it — as a
+warning, joining `no-steps` as the second finding that does not fail the build. The reason
+it warns rather than fails is that the state is already handled: the reader records the same
+entries under both headings, the tree keys a scenario by its title so the duplicates
+collapse, and nothing downstream reads them wrong. Failing the build would punish a state
+the tool copes with. But two headings of one name are almost always an editing slip, and
+which one is meant to survive is prose the author owns — the same reason the write-back
+never authors a heading. So the guard says what it sees and leaves the fix to the person or
+AI reading the report. The tool's output is that reader's input; a warning hands them a
+decision, a failure would take it away. The completion pass earned two things here: the
+headline promise — *one finding per repeated name, however many times it was written* — was
+unproven until a three-times case was added, and a duplicated requirement that nothing
+proved emitted `uncovered-requirement` twice, one failure doubled for a single cause, now
+deduplicated so the repeated heading is reported once as the warning it is.
 
 ## 19. The capability file
 
