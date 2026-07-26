@@ -487,16 +487,22 @@ reverting is a one-file change.
 - **Real starting point** — decide where OpenTDD lands relative to the reference repo
   (the earlier `worktree-turn-route` spec-binding work is a stale snapshot; main has
   moved on). Verify before building.
+- **A requirement declared twice.** A capability file with two `### Requirement: X`
+  headings reads as two requirements of that name, and the write-back records the same
+  entries under both. That is deterministic and harms nothing downstream (the guard
+  collapses names into a set), but nothing asked for it. Whether the guard should reject a
+  repeated heading outright is open.
 - **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
   `test-scan` is the first capability built this way — 24 scenarios, the scanner on
   `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green.
-  `guard` is the third — 16 scenarios, §18, green. The `<!-- scenarios: generated -->`
-  blocks of all three are hand-filled for now; the bootstrap tags are cross-checked by a
-  script that scans the tests and builds the tree, then compares it against the committed
-  blocks — 54 proof sites, no collision, none unplaced. **`spec-file` is next**: it is the
-  one piece between `guard` and running on itself, since nothing yet reads a capability
-  `.md`. Then `cli`, which wires the four together and turns a `GuardReport` into an exit
-  code a build can act on.
+  `guard` is the third — 16 scenarios, §18, green. `spec-file` is the fourth — 16
+  scenarios, §19, green — and with it **OpenTDD runs on itself end to end**: scan the
+  tests, build the tree, read the six committed `specs/*.md`, guard the two against each
+  other. 70 proof sites, no collision, none unplaced, guard `pass`, and the write-back
+  reproduces all six committed files byte for byte. The blocks are still hand-filled, but
+  they are now checked by the tool that will write them rather than by a script written to
+  check them. **`cli` is next**: it opens the files, wires the four capabilities together,
+  and turns a `GuardReport` into an exit code a build can act on.
 
 ## 16. The build pipeline
 
@@ -520,7 +526,8 @@ inside a block) that had no scenario until it named them.
 
 *Closed since the first draft:* the missing tool requirement (now `spec.md` R5 and R6);
 the proof-site syntax (§13); the parser choice (§14); the build pipeline (§16);
-`test-scan`, the first capability built under it; and `spec-tree`, the second (§17).
+`test-scan`, the first capability built under it; `spec-tree`, the second (§17); `guard`,
+the third (§18); and `spec-file`, the fourth (§19).
 
 ## 17. The stable tree
 
@@ -639,3 +646,80 @@ in one file: "this capability has no committed file" in one rule and "no test ta
 capability yet" in the other. Both are states the rules turn on, not absences, so both are
 named now — `hasCommittedFile` for the first, and a `Coverage` union whose `untagged` case
 *is* the opt-in switch for the second.
+
+## 19. The capability file
+
+`spec-file` is the format: it reads a committed capability `.md` into its requirements and
+what they record, and it writes the recorded entries back without touching anything else.
+Two functions — `readCapabilityFile`, `updateScenarioBlocks`. With it the tool runs on
+itself, because it is the last piece between `guard` and a real capability file.
+
+**Text in, text out. It opens nothing.** The same cut `test-scan` takes (it is handed a
+source, never a path) and `guard` takes (it reads no files). The filesystem belongs to
+`cli`, and keeping it there is what lets every test of this capability be a string
+compared against a string.
+
+**One format, defined once, facing both ways.** The reader and the writer are separate
+jobs but not separate formats, so what a heading is, where a block starts and ends, and
+what an entry looks like are decided in one file that both go through. §17 rejected two
+tree builders and §18 rejected a second Markdown reader for the same reason; this is that
+rule applied inside the capability rather than across it. The completion check found the
+one place it had not been applied and it cost exactly what the rule predicts: the reader
+and the writer had each worked out where a block ends, and for a block whose closing
+marker was missing they disagreed by one line — the reader dropped the last entry the
+writer went on to rewrite. The block now carries two ranges decided together, the lines it
+records and the lines the write-back replaces, so the reader parses exactly what the writer
+replaces.
+
+**A fence nobody closed is not a fence.** A capability file may show an example of itself,
+and a heading or a marker inside a code fence is not one. Markdown says an unclosed fence
+runs to the end of the document; that reading would leave the write-back appending a block
+below it on every run, growing a file it can never bring to rest. Only a fence that is
+closed again masks anything. The rule was chosen for convergence over conformance, because
+the guard compares what it regenerates against what is committed and a file that never
+comes to rest fails a build nothing can fix.
+
+**A marker is a line that is nothing but the marker.** Matching one loosely would mean
+writing an indented marker back unindented — a line outside the block's content, and not
+the write-back's to change. Left as prose it is at least read the same way by both
+directions.
+
+**Both functions are total.** No `Result`, no error list. A line inside a block that is not
+an entry records no scenario; a block with a lost marker is written back closed. Nothing is
+silently swallowed, because every one of these states ends in front of the guard: an entry
+that fails to parse is a scenario the file no longer records, which the guard reports as
+unrecorded and the build fails on. An error channel here would be a second way of saying
+what the guard already says.
+
+**Reading gives back the description, and sorts.** The description is prose no consumer
+needs yet, but a read that silently discarded half the file would be a lie, and `locate`'s
+"the whole tree can be read at once" is the named consumer. Requirements come back in name
+order and entries in title order — the order `SpecTree` promises — so what is read *is* a
+branch of the tree, and the type is built on `CapabilityNode` rather than restated so it
+cannot quietly stop being one.
+
+**The capability's name comes from the caller, not the file's title.** The CLI knows the
+file it opened. Making an H1 load-bearing would let a typo in a heading detach a whole
+capability from the tests that prove it.
+
+**The writer sorts what it is handed** rather than trusting the tree to arrive sorted. The
+same shape as §17's collision-file decision: the file coming out identical on every machine
+is a promise the writer can keep on its own, instead of one it makes about its caller.
+
+What the two review gates (§16) earned this time. The guideline pass found nine, the
+load-bearing one two functions threading a lines array beside the fence mask built from it
+— an invariant nothing declared, where a mask from one file could be paired with another's
+lines; both now travel as one value. It also caught `recorded` naming two opposite things
+in one capability (what the file already holds, and what the caller wants held) and a
+comment in the test support that was simply false. The completion pass found the growing
+file, the reader/writer disagreement above, and three tests that did not bite: the title
+holding an entry separator passed with `indexOf` in place of `lastIndexOf`; and the two
+ordering claims that say "on any machine" passed with `localeCompare` in place of
+`compareStrings` — the exact hole §17 and §18 each record finding, found a third time,
+which is what a fixture chosen for readability rather than for adversariality costs. Each
+fix was checked by breaking the code again and watching the test fail.
+
+Two of its findings became scenarios rather than fixes, and one became neither: a
+requirement declared twice is recorded under both headings, which no requirement asks for
+and nothing downstream minds, so it is an open question in §15 rather than a rule invented
+here.
