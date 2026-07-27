@@ -86,7 +86,7 @@ function declaresRequirement(
 /**
  * The comparison the guard exists for. Capabilities with no committed file are dropped from
  * the regenerated tree first, so their scenarios do not all read as added: those tags are
- * unresolved rather than wrong, which is what lets a suite adopt OpenTDD one capability at
+ * unresolved rather than wrong, which is what lets a suite adopt ProofSpec one capability at
  * a time.
  */
 function driftFindings(
@@ -182,7 +182,7 @@ function unknownRequirementFindings(
 
 /**
  * A declared requirement needs something proving it — but only once at least one test tags
- * its capability. A capability nothing tags yet is planned, not built, and OpenTDD's own
+ * its capability. A capability nothing tags yet is planned, not built, and ProofSpec's own
  * workflow authors the spec before the tests that prove it.
  */
 function uncoveredRequirementFindings({ committed, regenerated }: Trees): Finding[] {

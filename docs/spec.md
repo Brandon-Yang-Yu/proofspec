@@ -1,8 +1,8 @@
-# opentdd
+# proofspec
 
 ## Purpose
 
-OpenTDD makes the test suite the living spec. Each behavior is written as Gherkin — plain
+ProofSpec makes the test suite the living spec. Each behavior is written as Gherkin — plain
 English in GIVEN/WHEN/THEN steps — directly above the one test that proves it, and a
 small tool reads those tests to build the tree `capability → requirement → scenario →
 test`. That
@@ -23,7 +23,7 @@ producing: a description that stays honest while the code churns underneath it. 
 answer is not to write more prose that drifts, but to make the honest description — the
 test — also the one a human can read.
 
-OpenTDD's idea is a hybrid of TDD and Spec-Driven Development (SDD). From SDD it takes
+ProofSpec's idea is a hybrid of TDD and Spec-Driven Development (SDD). From SDD it takes
 the **scenario**: a unit of behavior stated in plain English and, written as Gherkin,
 equally clear to a human and to an AI. From TDD it takes the **binding**: a scenario is
 not a document sitting beside the code — it is fused to the one test that proves it, so
@@ -44,7 +44,7 @@ making the most of that attention is the job of everyone building on top.** An
 application takes the model as given and competes on one thing — how well it lays out the
 context it feeds in. Every token the model reads should carry accurate, useful signal,
 and every token spent reconstructing context that a better layout would have made obvious
-is wasted. OpenTDD lives entirely on that second side. It does not promise a machine can
+is wasted. ProofSpec lives entirely on that second side. It does not promise a machine can
 prove the claim and the code mean the same thing — no build step can. What it promises is
 to put the claim and its proof in one place, so the one judgement that matters — *does
 this test do what it says?* — costs an AI almost nothing to make. Cheap alignment is not
@@ -54,15 +54,15 @@ This is also why the approach does not age against the model. A tool that fills 
 today's model — "it can't yet do X, so we do X" — is a **pillar**: the next model does X
 and walks straight through it. A tool that only makes the context better is a **boat**:
 as the model's attention grows more capable and more precious, laying it out well matters
-*more*, not less. OpenTDD is a boat. It never competes with the model — only on how
+*more*, not less. ProofSpec is a boat. It never competes with the model — only on how
 cheaply it can align intent, test, and code, and that is worth more with every model, not
 less.
 
 ## Requirements
 
-These are the promises the *method* makes — what OpenTDD asks of a project that adopts
+These are the promises the *method* makes — what ProofSpec asks of a project that adopts
 it. They are authored for people to read, and they are deliberately not a capability
-file: their scenarios describe a repo that uses OpenTDD, not code that can be run, so
+file: their scenarios describe a repo that uses ProofSpec, not code that can be run, so
 they carry their Gherkin here rather than above a test and the guard does not read this
 file. The requirements of the *tool* — the code that can be run, and is — live in
 `specs/`, one file per capability, and each of those is under the guard.

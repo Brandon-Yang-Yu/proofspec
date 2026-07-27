@@ -1,4 +1,4 @@
-# OpenTDD
+# ProofSpec
 
 A thin layer that makes your **test suite the living spec**.
 

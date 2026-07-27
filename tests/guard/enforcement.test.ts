@@ -31,7 +31,7 @@ it('passes when a capability file has requirements no test tags yet', () => {
 // Scenario: A tag naming a capability with no file does not fail the build
 // GIVEN a test tagging a capability that no committed file declares
 // WHEN the guard runs
-// THEN the build passes and the tag is left alone, so an existing suite can adopt OpenTDD
+// THEN the build passes and the tag is left alone, so an existing suite can adopt ProofSpec
 //      one capability at a time instead of retagging everything first
 it('passes when a tag names a capability that no committed file declares', () => {
   const report = guard({

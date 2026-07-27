@@ -1,4 +1,4 @@
-# OpenTDD — design record
+# ProofSpec — design record
 
 A record of the design discussion. Captures the reasoning, not just the
 conclusions, so a later reader (or AI) can see *why* each choice was made.
@@ -80,7 +80,7 @@ project spec (expressed by tests)
    splits into scenarios, so it must record *where its scenarios are*. Its storage
    is therefore its description plus a generated list of scenario locations.
 
-6. **OpenTDD does not care which layer a test is (api / component / e2e / unit).**
+6. **ProofSpec does not care which layer a test is (api / component / e2e / unit).**
    It only records "this scenario is proven there." The layer is the test author's
    concern, not the tree's.
 
@@ -114,15 +114,15 @@ editing a test never produces a false "spec drifted" diff.
 Shape of a capability file:
 
 ```markdown
-# opentdd
+# proofspec
 
 ### Requirement: Tests are the source of truth for behavior
 The tests SHALL be the one place that says how the product behaves. …   ← human
 
 <!-- scenarios: generated -->
-- "A scenario is written above the test that proves it"   → tests/opentdd/parse.test.ts
-- "One scenario is proven by exactly one test"            → tests/opentdd/guard.test.ts
-- "Behavior is not duplicated outside the test"           → tests/opentdd/guard.test.ts
+- "A scenario is written above the test that proves it"   → tests/proofspec/parse.test.ts
+- "One scenario is proven by exactly one test"            → tests/proofspec/guard.test.ts
+- "Behavior is not duplicated outside the test"           → tests/proofspec/guard.test.ts
 <!-- /scenarios -->
 ```
 
@@ -132,7 +132,7 @@ is self-consistent.
 
 ## 6. The tool's jobs
 
-A single script (`opentdd`), in the spirit of an MCP resolver:
+A single script (`proofspec`), in the spirit of an MCP resolver:
 
 1. **Deliver** — resolve any scenario's current `file:line`, jump to its test,
    render the whole tree for a human to read.
@@ -183,7 +183,7 @@ every spec written ahead of its tests — see guard.md.*
 
 **Decision: thin layer, not a fork.** Keep the published `openspec` CLI for the
 plan-time `propose` / `change` flow (it is maintained, and we don't want to own it).
-OpenTDD is a small tool around it.
+ProofSpec is a small tool around it.
 
 Findings from reading the OpenSpec source (`@fission-ai/openspec` 1.6.0, MIT):
 
@@ -192,13 +192,13 @@ Findings from reading the OpenSpec source (`@fission-ai/openspec` 1.6.0, MIT):
   templating engine, telemetry, legacy migration — none of it needed.
 - The parser turns a `spec.md` into `{ requirements: [{ text, scenarios: [{ rawText }] }] }`.
   It **discards scenario titles and line numbers** — it is built for validation, not
-  for the title+location indexing OpenTDD needs. So we don't lift the file; we borrow
+  for the title+location indexing ProofSpec needs. So we don't lift the file; we borrow
   two ideas: the nested-header "section tree" walk, and the code-fence mask (so a
   `####` inside a ``` block is not mistaken for a header).
 - **`openspec validate` requires every requirement to have ≥1 scenario** (a hard
   ERROR). So a requirements-only `spec.md` is impossible under the tool. Therefore
-  OpenTDD **retires `openspec/specs/` as the durable store** — OpenSpec is used only
-  to author change proposals (which do carry scenarios and validate fine); OpenTDD
+  ProofSpec **retires `openspec/specs/` as the durable store** — OpenSpec is used only
+  to author change proposals (which do carry scenarios and validate fine); ProofSpec
   owns the archive→tree step instead.
 
 So the "base" we build on is the *format* (Requirement + Scenario/WHEN/THEN) and two
@@ -206,7 +206,7 @@ parsing tricks — not the 34k-line binary.
 
 ## 9. Workflow
 
-OpenTDD's lifecycle, mapped onto the OpenSpec verbs:
+ProofSpec's lifecycle, mapped onto the OpenSpec verbs:
 
 1. **Confirm the requirement** — establish the high-level promise (product-reviewed,
    pre-code). `openspec propose` fits here.
@@ -214,13 +214,13 @@ OpenTDD's lifecycle, mapped onto the OpenSpec verbs:
 3. **Apply** — create the test for each scenario; the scenario's Gherkin is written
    above its `it`. The requirement's `.md` gets its scenario locations written back.
 
-## 10. Draft — OpenTDD's own top-level requirement
+## 10. Draft — ProofSpec's own top-level requirement
 
 **Superseded by [`docs/spec.md`](spec.md)**, which carries the finalized requirements.
 Kept here as the record of the first draft; where the two disagree, `spec.md` wins.
 
 ```markdown
-## opentdd
+## proofspec
 
 ### Requirement: Tests are the source of truth for behavior
 
@@ -252,7 +252,7 @@ The one-scenario-one-test rule was a bet. The reference repo settles it, because
 runs a cruder version of this idea: every `it` carries a `// Spec: <capability> › "<title>"`
 tag, and `tests/spec-coverage.test.ts` (103 lines) checks both directions — every tag
 names a real scenario, and every scenario of an *enforced* capability has at least one
-tag. It is OpenTDD's guard minus rule 6.
+tag. It is ProofSpec's guard minus rule 6.
 
 That "minus rule 6" is what makes it a clean experiment: **nothing there was enforcing
 the bijection, so whatever shape the suite grew into is the honest one.** Counted over
@@ -300,7 +300,7 @@ What the check also confirmed: the guard is closer than §11 used to assume. The
 lines already do rules 2, 3 and half of 1; the genuinely new work is rule 6, dropping
 line numbers out of the comparison, and parsing proof sites inside a test.
 
-And a live example of the problem OpenTDD exists to solve: in the reference repo the same behavior is
+And a live example of the problem ProofSpec exists to solve: in the reference repo the same behavior is
 currently written in **three** places — `openspec/specs/agent-chat/spec.md`, a full
 Gherkin `Feature` block in `docs/behaviors/agent-chat.md`, and a prose summary at the top
 of the test file. That is the first thing worth migrating.
@@ -308,7 +308,7 @@ of the test file. That is the first thing worth migrating.
 ## 12. The tool's capabilities
 
 §6 lists the tool's jobs as a flat list. Cut along the data flow, they become six
-capabilities — the top of OpenTDD's own tree, each able to carry its own requirements
+capabilities — the top of ProofSpec's own tree, each able to carry its own requirements
 and be proven by its own tests:
 
 | Capability | Holds | Serves which of `spec.md`'s requirements |
@@ -330,8 +330,8 @@ Three notes on the cut:
   `ProofSite[]` and never learns that TypeScript exists. That contract — not the
   parsing technique — is what keeps the core language-agnostic. v1 supports TypeScript
   only; a second language is a second scanner behind the same contract.
-- **Delivery is CLI-only in v1.** `locate` ships as `opentdd where <scenario>` and
-  `opentdd tree [--json]`. An MCP server is v2; `--json` is the seam it will sit on.
+- **Delivery is CLI-only in v1.** `locate` ships as `proofspec where <scenario>` and
+  `proofspec tree [--json]`. An MCP server is v2; `--json` is the seam it will sit on.
 
 Two things deliberately *outside* the capabilities: the judgement checks named at the
 end of §7 (they belong to a person or an AI reading the co-located claim), and the
@@ -438,7 +438,7 @@ The alternative was a line scanner over the raw text. Four reasons it lost:
    in 98 ms.
 4. **Error-message quality.** An AST can say "the third statement of `it('posting a
    turn')`, line 30, has a THEN with no Requirement tag". A line scanner says "near line
-   30". Since OpenTDD is used on itself from day one, that message is what we read every
+   30". Since ProofSpec is used on itself from day one, that message is what we read every
    day.
 
 Which parser, then. A ~90-line prototype was written twice — once on `typescript`'s
@@ -484,7 +484,7 @@ reverting is a one-file change.
   reporting coverage of an older revision as *outdated*. Worth stealing.
 - **A capability index?** `spec.md` R4 settles one file per capability. Whether a
   top-level file also lists the capabilities is still open.
-- **Real starting point** — decide where OpenTDD lands relative to the reference repo
+- **Real starting point** — decide where ProofSpec lands relative to the reference repo
   (the earlier `worktree-turn-route` spec-binding work is a stale snapshot; main has
   moved on). Verify before building.
 - ~~**A requirement declared twice.**~~ *Settled: the guard warns (§18). A capability file
@@ -494,27 +494,27 @@ reverting is a one-file change.
   But two headings of one name are almost always an editing slip, and which one is meant to
   survive is the author's call — so the guard reports it as a warning and leaves the fix to
   the person or AI reading the report, rather than inventing a rule.*
-- **Then**: build parser → capability-file writer → guard, TDD, using OpenTDD on itself.
+- **Then**: build parser → capability-file writer → guard, TDD, using ProofSpec on itself.
   `test-scan` is the first capability built this way — 24 scenarios, the scanner on
   `oxc-parser` (§14), green. `spec-tree` is the second — 14 scenarios, §17, green.
   `guard` is the third — 16 scenarios, §18, green. `spec-file` is the fourth — 16
-  scenarios, §19, green — and with it **OpenTDD runs on itself end to end**: scan the
+  scenarios, §19, green — and with it **ProofSpec runs on itself end to end**: scan the
   tests, build the tree, read the six committed `specs/*.md`, guard the two against each
   other. 70 proof sites, no collision, none unplaced, guard `pass`, and the write-back
   reproduces all six committed files byte for byte. **`cli` is the fifth** — 11 scenarios,
   §20: it opens the files, wires the four capabilities together, and turns a `GuardReport`
   into an exit code a build can act on. With it the blocks stop being hand-filled — `write`
-  fills them: run on OpenTDD's own repo it changed only `specs/cli.md`, every other block
-  regenerating byte for byte, and `check` returns `pass`. OpenTDD now runs on itself end to
+  fills them: run on ProofSpec's own repo it changed only `specs/cli.md`, every other block
+  regenerating byte for byte, and `check` returns `pass`. ProofSpec now runs on itself end to
   end, write-back included. **`locate` is the sixth and last** — 7 scenarios, §21: the
   delivery half of §4, resolving a scenario's current `file:line` and the whole tree's
   positions on demand, as a library (the `where`/`tree` commands are a later `cli` change).
-  With it every capability in OpenTDD's own tree is built.
+  With it every capability in ProofSpec's own tree is built.
 
 ## 16. The build pipeline
 
 How a capability gets built, recorded as the `ship` skill so the steps never have to be
-respelled. It is OpenTDD's own — not the reference repo's: no UI (this is a CLI library), no OpenSpec
+respelled. It is ProofSpec's own — not the reference repo's: no UI (this is a CLI library), no OpenSpec
 (retired for our own build, §8; planning happens in Claude Code's plan mode instead).
 
 The steps: **plan** (plan mode — the behavior gate, where a human confirms the scenarios
@@ -752,7 +752,7 @@ here.
 ## 20. The commands
 
 `cli` is the two commands people and CI run — `check` and `write` — and the one capability
-that owns the filesystem and the process. Everything else in OpenTDD takes a string and
+that owns the filesystem and the process. Everything else in ProofSpec takes a string and
 returns a value; `cli` is where the strings come from and where a verdict finally becomes an
 exit code. With it the tool runs on itself for real: `write` fills the generated blocks the
 four capabilities had until now filled by hand, and `check` is the gate a build fails on.
@@ -853,8 +853,8 @@ judge the wrong claim. `locateTree(tree, sites)` walks `spec-tree`'s stable tree
 the live line to each scenario, so the grouping and ordering rule stays in `spec-tree` and is
 not built a second time — the same reason §17 kept one tree builder.
 
-**A library, not the commands — yet.** §12 says `locate` "ships as `opentdd where` and
-`opentdd tree`", but those are a `cli` concern, and `cli` shipped (§20) with only `check` and
+**A library, not the commands — yet.** §12 says `locate` "ships as `proofspec where` and
+`proofspec tree`", but those are a `cli` concern, and `cli` shipped (§20) with only `check` and
 `write`. `locate.md`'s three requirements are pure data behaviour — find a position, deliver
 the tree — with no command, config, or exit code in them. So `locate` lands as the library
 this ship, and wiring `where`/`tree` through `discover`/`render` is a later change against
@@ -882,5 +882,5 @@ with the live site's — but both tree tests held the file constant, so a regres
 the stored file would have passed green. It is the exact hole §4 exists to prevent: a tree
 that "simply is the committed files". Closed by a seventh scenario, the file-analogue of the
 line one — a tree built when a scenario was proven in one file, located against sites proving
-it in another, must carry the new file. With `locate` green, OpenTDD's own tree is complete:
+it in another, must carry the new file. With `locate` green, ProofSpec's own tree is complete:
 all six capabilities built, on itself, end to end.

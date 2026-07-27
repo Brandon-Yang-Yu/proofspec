@@ -5,7 +5,7 @@ import { compareStrings } from '../../src/order.ts'
 
 /**
  * `cli` is the one capability that owns the filesystem, so its tests give it a real one: a
- * throwaway directory laid out like a repo. Everything else in OpenTDD is proven against
+ * throwaway directory laid out like a repo. Everything else in ProofSpec is proven against
  * strings, but "checking never writes" and "runs with no configuration" are claims about
  * files on disk, and only a disk can hold them to account.
  */
@@ -32,7 +32,7 @@ const toClean: string[] = []
  * directory for `cleanupRepos` so a test does not have to unwind it by hand.
  */
 export async function makeRepo(files: Readonly<Record<string, string>>): Promise<Repo> {
-  const root = await mkdtemp(join(tmpdir(), 'opentdd-cli-'))
+  const root = await mkdtemp(join(tmpdir(), 'proofspec-cli-'))
   toClean.push(root)
   for (const [path, content] of Object.entries(files)) {
     const full = join(root, path)

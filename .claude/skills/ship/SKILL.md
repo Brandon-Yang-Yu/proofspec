@@ -1,18 +1,18 @@
 ---
 name: ship
-description: Run the OpenTDD build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard OpenTDD flow.
+description: Run the ProofSpec build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard ProofSpec flow.
 metadata:
-  author: opentdd
+  author: proofspec
   version: "1.0"
 ---
 
-# /ship — the OpenTDD build pipeline
+# /ship — the ProofSpec build pipeline
 
 Take one capability, or one requirement inside it, from plan to a change that is ready to
-commit — test-first, building OpenTDD on itself. Run the steps in order. Each step gates
+commit — test-first, building ProofSpec on itself. Run the steps in order. Each step gates
 the next; do not skip ahead.
 
-There is no UI step: OpenTDD is a CLI library. There is no OpenSpec step: OpenSpec is
+There is no UI step: ProofSpec is a CLI library. There is no OpenSpec step: OpenSpec is
 retired for our own build (`docs/design.md` §8), so the plan is made in Claude Code's plan
 mode instead.
 
@@ -85,7 +85,7 @@ the earlier ones.
 Stop. Do not commit. Report what changed and that the gates are green, then wait.
 
 When the human says commit, use conventional commits (`feat(scope): …`,
-`docs(opentdd): …`). Unlike some repos, OpenTDD **requires** the trailer — end the message
+`docs(proofspec): …`). Unlike some repos, ProofSpec **requires** the trailer — end the message
 with the `Co-Authored-By:` and `Claude-Session:` lines the repo convention specifies. Never
 push to a remote unless the human asks.
 

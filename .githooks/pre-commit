@@ -4,7 +4,7 @@
 Two checks, on newly added lines only (pre-existing
 text is never flagged):
   1. English-only: reject CJK (Chinese/Japanese/Korean) in code, comments and
-     config. Markdown (*.md) and test files are exempt - OpenTDD's tests carry
+     config. Markdown (*.md) and test files are exempt - ProofSpec's tests carry
      foreign-language fixtures on purpose (a spec written in any language is still
      a spec), so CJK inside a *.test.ts fixture is expected, not a mistake.
   2. No debug logs: reject console.debug / logger.debug / log.debug in TS/JS.

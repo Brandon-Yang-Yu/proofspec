@@ -3,7 +3,7 @@ import { basename, join } from 'node:path'
 import { compareStrings } from '../order.ts'
 
 /**
- * The only part of OpenTDD that reads the filesystem. Every other capability takes a source
+ * The only part of ProofSpec that reads the filesystem. Every other capability takes a source
  * string; this is where the strings come from. A directory that cannot be listed is not
  * thrown from here — it is returned as a `cannot-run` reason, because "I could not read my
  * inputs" is an answer the command has to give CI, not a crash.

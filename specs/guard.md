@@ -126,14 +126,14 @@ tags it.
 
 A capability file that no test tags yet is planned, not built. The guard leaves its
 requirements alone until the first test arrives, so a spec written ahead of its tests does
-not fail the build. This is what OpenTDD's own workflow needs: the spec is authored first,
+not fail the build. This is what ProofSpec's own workflow needs: the spec is authored first,
 then the tests, then the code. Writing every test red before the code is what then holds
 the capability whole — each red test still carries its tag, so no declared requirement
 reads as uncovered just because its code is not written yet.
 
 Tags naming a capability that has no file are the mirror case. The scan reports them as
 unresolved, and the guard applies neither requirement rule to them and leaves them out of
-its comparison, so an existing suite can adopt OpenTDD one capability at a time instead of
+its comparison, so an existing suite can adopt ProofSpec one capability at a time instead of
 retagging everything before the build goes green.
 
 What still applies to them is what the tags say on their own. A scenario claimed at two
