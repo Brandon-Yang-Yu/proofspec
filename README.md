@@ -38,6 +38,7 @@ project spec (expressed by tests)
 
 ## Status
 
-Bootstrapping. The `test-scan` capability's tests are written and red; the scanner they
-describe is the next thing to build. The full decision record is in
-[`docs/design.md`](docs/design.md), the capability specs in [`specs/`](specs).
+ProofSpec runs on itself end to end. All six capabilities — `test-scan`, `spec-file`,
+`spec-tree`, `guard`, `locate`, and the `cli` — are built and green (113 tests). The
+full decision record is in [`docs/design.md`](docs/design.md), the capability specs in
+[`specs/`](specs).
