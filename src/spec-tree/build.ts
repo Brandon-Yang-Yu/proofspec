@@ -1,5 +1,6 @@
 import type { ProofSite } from '../test-scan/index.ts'
 import { identityKey } from './identity.ts'
+import { comparePlacements } from './placement.ts'
 import { compareStrings } from '../order.ts'
 import type {
   CapabilityNode,
@@ -113,8 +114,5 @@ function collectCollisions(groups: readonly IdentityGroup[]): Collision[] {
 }
 
 function sortPlacements(placements: readonly Placement[]): Placement[] {
-  return [...placements].sort((a, b) => {
-    const byFile = compareStrings(a.file, b.file)
-    return byFile !== 0 ? byFile : a.line - b.line
-  })
+  return [...placements].sort(comparePlacements)
 }

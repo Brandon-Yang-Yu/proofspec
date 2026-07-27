@@ -15,6 +15,8 @@ Inserting lines above a tagged test changes the answer immediately. Nothing is
 regenerated, nothing goes stale, and no file needs committing for the answer to be right.
 
 <!-- scenarios: generated -->
+- "A scenario's position is the file and line of its tagged test" → tests/locate/position.test.ts
+- "The reported line follows the test when lines are inserted above it" → tests/locate/position.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A scenario that cannot be found is said to be missing
@@ -25,6 +27,8 @@ It SHALL NOT return the nearest match. A confident wrong location costs more tha
 location: the reader goes to the wrong test and judges the wrong claim.
 
 <!-- scenarios: generated -->
+- "A near-miss title is not offered as the answer" → tests/locate/missing.test.ts
+- "An absent scenario is reported missing, naming what was looked for" → tests/locate/missing.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The whole tree can be read at once
@@ -37,4 +41,7 @@ reads before deciding whether a test does what its claim says. Both need the pos
 which is why the tree cannot simply be the committed files.
 
 <!-- scenarios: generated -->
+- "A scenario's file in the tree is its current file, not the tree's stored file" → tests/locate/tree.test.ts
+- "A scenario's line in the tree is its current line" → tests/locate/tree.test.ts
+- "Every scenario in the tree is delivered with its file and line" → tests/locate/tree.test.ts
 <!-- /scenarios -->

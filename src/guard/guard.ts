@@ -1,6 +1,6 @@
 import { assertNever } from '../assert-never.ts'
 import { compareStrings } from '../order.ts'
-import { buildTree, diffTree, identityKey } from '../spec-tree/index.ts'
+import { buildTree, comparePlacements, diffTree, identityKey } from '../spec-tree/index.ts'
 import type {
   Collision,
   Placement,
@@ -140,7 +140,7 @@ function placementsByIdentity(sites: readonly ProofSite[]): Placements {
     })
     const placement = { file: site.file, line: site.line }
     const held = byIdentity.get(key)
-    if (held === undefined || comesFirst(placement, held)) byIdentity.set(key, placement)
+    if (held === undefined || comparePlacements(placement, held) < 0) byIdentity.set(key, placement)
   }
   return byIdentity
 }
@@ -151,15 +151,6 @@ function placementsByIdentity(sites: readonly ProofSite[]): Placements {
  */
 function placementOf(identity: ScenarioIdentity, placements: Placements): Placement {
   return placements.get(identityKey(identity))!
-}
-
-/**
- * Which of two sites a collided scenario is reported at — the first by file, then by line.
- * The same choice `spec-tree` makes for the file, so the finding and the tree agree.
- */
-function comesFirst(placement: Placement, held: Placement): boolean {
-  const byFile = compareStrings(placement.file, held.file)
-  return byFile !== 0 ? byFile < 0 : placement.line < held.line
 }
 
 // --- the requirement rules ---------------------------------------------------

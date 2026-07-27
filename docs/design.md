@@ -506,7 +506,10 @@ reverting is a one-file change.
   into an exit code a build can act on. With it the blocks stop being hand-filled — `write`
   fills them: run on OpenTDD's own repo it changed only `specs/cli.md`, every other block
   regenerating byte for byte, and `check` returns `pass`. OpenTDD now runs on itself end to
-  end, write-back included.
+  end, write-back included. **`locate` is the sixth and last** — 7 scenarios, §21: the
+  delivery half of §4, resolving a scenario's current `file:line` and the whole tree's
+  positions on demand, as a library (the `where`/`tree` commands are a later `cli` change).
+  With it every capability in OpenTDD's own tree is built.
 
 ## 16. The build pipeline
 
@@ -531,8 +534,9 @@ inside a block) that had no scenario until it named them.
 *Closed since the first draft:* the missing tool requirement (now `spec.md` R5 and R6);
 the proof-site syntax (§13); the parser choice (§14); the build pipeline (§16);
 `test-scan`, the first capability built under it; `spec-tree`, the second (§17); `guard`,
-the third (§18); `spec-file`, the fourth (§19); and `cli`, the fifth (§20), with which the
-tool runs on itself including the write-back.
+the third (§18); `spec-file`, the fourth (§19); `cli`, the fifth (§20), with which the
+tool runs on itself including the write-back; and `locate`, the sixth and last (§21), the
+delivery half of §4 — with it all six capabilities are built.
 
 ## 17. The stable tree
 
@@ -829,3 +833,54 @@ refuses when the scan reports any error, changes nothing, and says where to look
 command earns the invariant a reader would assume it already had — *it only changes files in
 a repo it could fully read* — and that is worth more than staying symmetric with the pure
 capabilities below it. Proven by a scenario; `check`'s own error reporting is untouched.
+
+## 21. Locating a scenario
+
+`locate` is the sixth and last capability, and the **delivery** half of the split §4 makes.
+The committed files store what is stable — a scenario's title and the file it is proven in;
+its *line* moves the instant anyone edits above the test, so it is never written down.
+`locate` is where the line comes back: it reads the current `file:line` from the proof sites
+as they stand, and it delivers the whole tree with those positions attached. Nothing is
+regenerated and no file goes stale, because the answer is a pure function of the sites passed
+in — the same stance the codebase-memory index takes, resolving a symbol's range fresh rather
+than hard-coding it.
+
+**Two answers, both values.** `locate(sites, identity)` returns `found` with a `file:line` or
+`missing` naming the identity it looked for — a discriminated union, not a nullable position,
+so a caller has to branch and a scenario that is not there can never be reported as a nearby
+one. A confident wrong location costs more than none: it sends the reader to the wrong test to
+judge the wrong claim. `locateTree(tree, sites)` walks `spec-tree`'s stable tree and adds only
+the live line to each scenario, so the grouping and ordering rule stays in `spec-tree` and is
+not built a second time — the same reason §17 kept one tree builder.
+
+**A library, not the commands — yet.** §12 says `locate` "ships as `opentdd where` and
+`opentdd tree`", but those are a `cli` concern, and `cli` shipped (§20) with only `check` and
+`write`. `locate.md`'s three requirements are pure data behaviour — find a position, deliver
+the tree — with no command, config, or exit code in them. So `locate` lands as the library
+this ship, and wiring `where`/`tree` through `discover`/`render` is a later change against
+`cli.md`. That keeps the `guard`(library)/`check`(cli) boundary the tool already draws.
+
+**One comparator, found a fourth time.** A scenario proven at more than one site resolves to
+the first by file then line — the choice `spec-tree` makes for a scenario's file (`fileOf`,
+`sortPlacements`) and `guard` makes for its placement (`comesFirst`). `locate` needed it too,
+and building it a third private copy is exactly the drift §17, §18 and §19 each caught in
+`compareStrings`: a rule written in three places, each with a comment insisting the three
+agree. So the guideline gate's flag was taken rather than deferred, and the tie-break was
+hoisted into `spec-tree` as `comparePlacements`, over the exported `Placement`; `guard`,
+`spec-tree`'s own `sortPlacements`, and `locate` now all call it. The rule that decides which
+site a collided scenario points at is written once, next to the identity it orders.
+
+What the two review gates (§16) earned this time. The guideline pass found no clear
+deviation but three borderline calls: the triplicated comparator above (hoisted, on the
+human's call, rather than left as the plan had scoped it); a private `Position` type
+re-declaring `Placement` field for field (folded into the hoist); and a test-helper branch
+distinguishing "key absent" from "present but `undefined`" to force an unplaced site no test
+asked for (simplified to `??`, YAGNI). The completion pass confirmed all three requirements
+genuinely satisfied and five of six scenarios pinned, then found the sixth's hole: R3 promises
+each scenario's *current* file, and the code delivers it — overriding the tree's stored file
+with the live site's — but both tree tests held the file constant, so a regression to reading
+the stored file would have passed green. It is the exact hole §4 exists to prevent: a tree
+that "simply is the committed files". Closed by a seventh scenario, the file-analogue of the
+line one — a tree built when a scenario was proven in one file, located against sites proving
+it in another, must carry the new file. With `locate` green, OpenTDD's own tree is complete:
+all six capabilities built, on itself, end to end.

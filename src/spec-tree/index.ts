@@ -1,6 +1,7 @@
 export { buildTree } from './build.ts'
 export { diffTree } from './diff.ts'
 export { identityKey } from './identity.ts'
+export { comparePlacements } from './placement.ts'
 export type {
   CapabilityNode,
   Collision,
