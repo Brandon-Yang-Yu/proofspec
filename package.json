@@ -11,7 +11,8 @@
     "preinstall": "npx only-allow pnpm",
     "prepare": "git config core.hooksPath .githooks",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "proofspec": "node --experimental-transform-types src/cli/main.ts"
   },
   "dependencies": {
     "oxc-parser": "^0.141.0"
