@@ -14,6 +14,7 @@ export function site(fields: {
   readonly requirement?: string
   readonly file?: string
   readonly line?: number
+  readonly endLine?: number
   readonly steps?: readonly Step[]
 }): ProofSite {
   const line = fields.line ?? 1
@@ -24,6 +25,6 @@ export function site(fields: {
     steps: fields.steps ?? [],
     file: fields.file ?? FILE,
     line,
-    endLine: line,
+    endLine: fields.endLine ?? line,
   }
 }

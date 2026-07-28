@@ -17,9 +17,11 @@ export type Locations = {
 /**
  * What a command is asked to do. The locations are optional because the conventional layout
  * needs none: left out, they fall back to `specs/` and `tests/`, which is what lets the
- * check run in an ordinary repo with no configuration.
+ * check run in an ordinary repo with no configuration. `out` is the directory `render` writes
+ * its pages into; left out, it falls back to `build/` at the repo root. It is a generated
+ * output, so a project gitignores it rather than committing it.
  */
-export type RunOptions = { readonly cwd: string } & Partial<Locations>
+export type RunOptions = { readonly cwd: string; readonly out?: string } & Partial<Locations>
 
 /**
  * The result of a command, as a value. `cannot-run` is kept apart from a checked report on

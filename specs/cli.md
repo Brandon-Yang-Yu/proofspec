@@ -84,3 +84,21 @@ the write changes files, so it refuses before it acts rather than reporting afte
 - "Writing back leaves the other capability files untouched" → tests/cli/write.test.ts
 - "Writing back records a scenario the tests prove but the file did not" → tests/cli/write.test.ts
 <!-- /scenarios -->
+
+### Requirement: A command renders the spec into an output directory
+
+The CLI SHALL provide a render command that writes the rendered pages into a directory and
+reports the files it wrote.
+
+The pages are a delivery artifact, not an input: they are regenerated from the tests on
+demand and read by a person, never read back by the tool. The command writes an index and
+one page per capability; given no directory it writes them under `build/`, and a directory can
+be given for a repo that keeps the generated pages elsewhere. The pages are a generated output,
+so a project gitignores that directory rather than committing it. Inputs it cannot read are
+refused the way the check and the write refuse them.
+
+<!-- scenarios: generated -->
+- "The render command reports it cannot run on unreadable inputs" → tests/cli/render.test.ts
+- "The render command writes into a chosen directory" → tests/cli/render.test.ts
+- "The render command writes to the default directory when none is given" → tests/cli/render.test.ts
+<!-- /scenarios -->

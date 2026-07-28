@@ -45,3 +45,45 @@ which is why the tree cannot simply be the committed files.
 - "A scenario's line in the tree is its current line" → tests/locate/tree.test.ts
 - "Every scenario in the tree is delivered with its file and line" → tests/locate/tree.test.ts
 <!-- /scenarios -->
+
+### Requirement: The spec is rendered as one page per capability with an index
+
+Locate SHALL render each capability as its own page and an index that links to them all,
+each page carrying its requirements' descriptions and its scenarios' Gherkin and current
+positions.
+
+The committed files record only titles and locations, so on their own they show which
+scenarios exist, not what they say. This render is the readable view the storage/delivery
+split makes possible: the descriptions come from the files, the Gherkin and the positions
+come live from the tests, and no second copy of behavior is stored. A capability is the unit
+a reader browses, so it is the unit the render splits into pages, with an index as the one
+entry point.
+
+<!-- scenarios: generated -->
+- "A capability is rendered as its own page" → tests/locate/render.test.ts
+- "A recorded scenario with no proof is rendered as unproven" → tests/locate/render.test.ts
+- "A requirement is rendered with its description" → tests/locate/render.test.ts
+- "A scenario is rendered with its Gherkin steps" → tests/locate/render.test.ts
+- "A scenario is rendered with its current position" → tests/locate/render.test.ts
+- "The index links to every capability in name order" → tests/locate/render.test.ts
+<!-- /scenarios -->
+
+### Requirement: Each proof is rendered as an anchored code snippet its scenario links to
+
+Locate SHALL render each proof as a code snippet of its lines on the test's page, headed by
+its scenario and carrying that scenario's Gherkin, and link every scenario to the snippet that
+proves it.
+
+A scenario's whole point is that its proof can be read against the claim, so the snippet holds
+both: its scenario's Gherkin, then the proving lines, so a reader can judge whether the test
+does what the claim says without leaving the page. Each snippet is headed by its scenario title,
+and each scenario links to that heading's anchor, so the anchor reads as the scenario and the
+reader lands on the proving code rather than the top of an undifferentiated file. Everything is
+delivered from the tests each run, never stored, so it is not a second copy of behavior.
+
+<!-- scenarios: generated -->
+- "A proof is rendered as a code snippet" → tests/locate/render.test.ts
+- "A scenario links to the snippet that proves it" → tests/locate/render.test.ts
+- "A snippet is headed by its scenario" → tests/locate/render.test.ts
+- "A snippet shows its scenario's Gherkin" → tests/locate/render.test.ts
+<!-- /scenarios -->

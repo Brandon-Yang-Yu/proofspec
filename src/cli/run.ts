@@ -1,6 +1,7 @@
-import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { guard } from '../guard/index.ts'
+import { renderSite } from '../locate/index.ts'
 import { readCapabilityFile, updateScenarioBlocks } from '../spec-file/index.ts'
 import { buildTree } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
@@ -11,14 +12,16 @@ import type { SourceFile, SpecFileRead } from './discover.ts'
 import type { Outcome, RunOptions } from './types.ts'
 
 /**
- * The two commands people and CI run. Each opens the repo's files, hands them to the four
- * library capabilities, and returns what happened as a value. `check` reads and reports;
- * `write` records. Keeping them as two functions rather than one with a mode keeps each one
- * doing a single thing, while the shared reading lives in `gather`.
+ * The commands people and CI run. Each opens the repo's files, hands them to the library
+ * capabilities, and returns what happened as a value. `check` reads and reports; `write`
+ * records; `render` delivers the readable view. Keeping them as separate functions rather
+ * than one with a mode keeps each doing a single thing, while the shared reading lives in
+ * `gather`.
  */
 
 const DEFAULT_SPECS_DIR = 'specs'
 const DEFAULT_TESTS_DIR = 'tests'
+const DEFAULT_OUT = 'build'
 
 /**
  * Scans the tests, reads the committed capability files, and reports whether they agree.
@@ -65,6 +68,33 @@ export async function write(options: RunOptions): Promise<Outcome> {
     changed.push(spec.path)
   }
   return { kind: 'wrote', files: changed }
+}
+
+/**
+ * Writes the readable spec site — the delivery view of design.md §4 — as one page per
+ * capability plus an index, under the output directory. It scans the tests for the Gherkin
+ * and positions and reads the committed files for the descriptions, joins them, and writes
+ * the pages. They are an output a person reads, never an input the tool reads back, so unlike
+ * `write` it always writes rather than skipping a page whose bytes would not change.
+ */
+export async function render(options: RunOptions): Promise<Outcome> {
+  const inputs = await gather(options)
+  if (!inputs.ok) return { kind: 'cannot-run', reason: inputs.reason }
+
+  const sites = inputs.tests.flatMap(file => scanSource(file.source, { file: file.path }).sites)
+  const specs = inputs.specs.map(file => readCapabilityFile(file.source, { capability: file.capability }))
+  const pages = renderSite(specs, sites, inputs.tests)
+
+  const dir = options.out ?? DEFAULT_OUT
+  const written: string[] = []
+  for (const page of pages) {
+    const path = join(dir, page.path)
+    const full = join(options.cwd, path)
+    await mkdir(dirname(full), { recursive: true })
+    await writeFile(full, page.content)
+    written.push(path)
+  }
+  return { kind: 'wrote', files: written }
 }
 
 /** Names the first thing the scan could not read, so the reason points at a place to look. */

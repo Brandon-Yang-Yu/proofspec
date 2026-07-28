@@ -1,5 +1,8 @@
 node_modules/
 *.tsbuildinfo
 
+# `render`'s output — a generated site, regenerated on demand, never committed.
+build/
+
 # Claude Code worktrees live here; the skills beside them are committed.
 .claude/worktrees/

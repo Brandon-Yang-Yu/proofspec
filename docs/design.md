@@ -884,3 +884,60 @@ that "simply is the committed files". Closed by a seventh scenario, the file-ana
 line one — a tree built when a scenario was proven in one file, located against sites proving
 it in another, must carry the new file. With `locate` green, ProofSpec's own tree is complete:
 all six capabilities built, on itself, end to end.
+
+## 22. Rendering the readable site
+
+The committed files are not meant to be read straight. §4 stores a scenario's title and file
+and nothing else, and §5 keeps the Gherkin out on purpose — a second copy is the drift the
+tool exists to stop. So a person opening `specs/guard.md` sees *which* scenarios exist, never
+*what they say*. `render` is the readable view the split always promised but nothing had yet
+produced. It writes a `build/`: an index, one page per capability, and one code page per test —
+every requirement's description, every scenario's Gherkin, and every proof's code and current
+position, pulled live from the tests. `build/` is a generated output, named the way a build
+tool names one, and gitignored — never committed, because a committed copy would be the very
+drift the tool exists to stop the moment a test changed and no one re-ran `render`.
+
+**One page per capability, not one document.** The first cut was a single `SPEC.md`. Read in a
+static-site renderer it was a 46-minute scroll, and it left the explorer with one file to list.
+A capability is the unit a reader browses, so it became the unit the site splits into pages,
+with an index that links them; the explorer then *is* the capability list. The shape was found
+by reading the render, not by guessing it — the same dogfooding §20 describes, one screen at a
+time.
+
+**The proof travels with the claim.** A scenario's whole point (§1) is that its proof can be
+read *against* the claim. So each test is a code page, and each proof a snippet of exactly its
+lines, headed by its scenario, carrying that scenario's Gherkin, then the code — claim above
+proof, so a reader judges whether the test does what the claim says without leaving the page.
+Every scenario on a capability page links to its snippet. The snippet is the proving lines
+only, so the pages stay short and a reader lands on the proof, not the top of a file.
+
+**The anchor reads as the scenario.** A snippet's heading is its scenario title, so its slug is
+a readable anchor (`#a-scenarios-position-is…`), not a bare `#l14`. `render` computes that slug
+with the rule the renderer uses — lower-case, drop punctuation, spaces to hyphens, github-slugger
+for the plain-English titles the tests carry — so the fragment a scenario links to and the id its
+heading gets are the same string. This is the one place `render` must agree with the site's
+renderer byte-for-byte, so it was checked against every title in this repo before it was trusted.
+
+**It does not violate principle 1, because it stores nothing.** The Gherkin and the code are
+*delivered*, the way `locate` delivers a line — read from the tests each run, written to an
+output a person reads, never back into the committed files. `build/` is a product, not a source;
+`check` never reads it, and it is gitignored so it never enters the repo.
+
+**It bypasses the stable tree.** `spec-tree` strips the steps by design — a scenario's identity
+is its title, so the tree cannot carry the Gherkin or the source. `render` therefore joins the
+committed *descriptions* (from `spec-file`) to the raw scan *sites* (from `test-scan`, which alone
+keep the steps and the line span), keyed by identity. It is the one delivery path that reads a
+site's steps, so it is the one that must not go through `buildTree`.
+
+**No seventh capability.** §12 already assigns "rendering the tree" to `locate`; this is the
+richer render of that same delivery concern, so it lands in `locate` with the command in `cli`,
+and the count stays six. The identity→site collision rule `locate` already had is now
+`firstSiteByIdentity`, shared with the render rather than copied — the same shared-not-copied
+stance the comparators take, the render keeping the whole site where `locate` kept only the
+placement.
+
+**It writes a directory and always rewrites.** Unlike `write`, which skips a file whose bytes
+would not change, `render` rewrites the whole `build/` every run: it is an output, not an input
+the tool reads back, so there is nothing to leave untouched. Drift is shown, not dropped — a
+scenario recorded but proven by no test renders as unproven with no snippet, surfacing the gap
+`check` would fail on rather than silently omitting a promise.

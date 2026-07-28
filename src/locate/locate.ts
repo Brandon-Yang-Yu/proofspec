@@ -1,7 +1,6 @@
 import { comparePlacements, identityKey } from '../spec-tree/index.ts'
 import type {
   CapabilityNode,
-  Placement,
   RequirementNode,
   ScenarioIdentity,
   SpecTree,
@@ -24,7 +23,7 @@ import type {
  * nearest title: a confident wrong location costs more than no location.
  */
 export function locate(sites: readonly ProofSite[], identity: ScenarioIdentity): Location {
-  const position = positionsByIdentity(sites).get(identityKey(identity))
+  const position = firstSiteByIdentity(sites).get(identityKey(identity))
   if (position === undefined) return { kind: 'missing', identity }
   return { kind: 'found', file: position.file, line: position.line }
 }
@@ -35,11 +34,11 @@ export function locate(sites: readonly ProofSite[], identity: ScenarioIdentity):
  * The tree was built from these same sites, so every scenario resolves to one.
  */
 export function locateTree(tree: SpecTree, sites: readonly ProofSite[]): PositionedTree {
-  const positions = positionsByIdentity(sites)
+  const positions = firstSiteByIdentity(sites)
   return { capabilities: tree.capabilities.map(capability => positionedCapability(capability, positions)) }
 }
 
-function positionedCapability(node: CapabilityNode, positions: Positions): PositionedCapability {
+function positionedCapability(node: CapabilityNode, positions: SitesByIdentity): PositionedCapability {
   const requirements = node.requirements.map(requirement =>
     positionedRequirement(node.capability, requirement, positions),
   )
@@ -49,7 +48,7 @@ function positionedCapability(node: CapabilityNode, positions: Positions): Posit
 function positionedRequirement(
   capability: string,
   node: RequirementNode,
-  positions: Positions,
+  positions: SitesByIdentity,
 ): PositionedRequirement {
   const scenarios = node.scenarios.map(scenario =>
     positionedScenario({ capability, requirement: node.requirement, scenario: scenario.scenario }, positions),
@@ -57,7 +56,7 @@ function positionedRequirement(
   return { requirement: node.requirement, scenarios }
 }
 
-function positionedScenario(identity: ScenarioIdentity, positions: Positions): PositionedScenario {
+function positionedScenario(identity: ScenarioIdentity, positions: SitesByIdentity): PositionedScenario {
   // Built from these sites, so the lookup always hits — the same invariant `guard` relies on.
   const position = positions.get(identityKey(identity))!
   return { scenario: identity.scenario, file: position.file, line: position.line }
@@ -65,22 +64,22 @@ function positionedScenario(identity: ScenarioIdentity, positions: Positions): P
 
 // --- resolving live positions from the sites ---------------------------------
 
-/** Each scenario's current placement, keyed by identity. */
-type Positions = ReadonlyMap<string, Placement>
+/** Each scenario's proof site, keyed by identity. */
+type SitesByIdentity = ReadonlyMap<string, ProofSite>
 
 /**
- * On a collision — one identity proven at more than one site — the first placement by file
- * then line wins, via the same comparator `spec-tree` and `guard` use, so the position
- * locate reports and the file the tree records name the same site.
+ * On a collision — one identity proven at more than one site — the first site by file then
+ * line wins, via the same comparator `spec-tree` and `guard` use, so the position locate
+ * reports and the file the tree records name the same site. Shared with the document render,
+ * which needs the whole site for its Gherkin steps, not only the placement.
  */
-function positionsByIdentity(sites: readonly ProofSite[]): Positions {
-  const byIdentity = new Map<string, Placement>()
+export function firstSiteByIdentity(sites: readonly ProofSite[]): SitesByIdentity {
+  const byIdentity = new Map<string, ProofSite>()
   for (const site of sites) {
     if (site.capability === undefined) continue
     const key = identityKey({ capability: site.capability, requirement: site.requirement, scenario: site.scenario })
-    const placement = { file: site.file, line: site.line }
     const held = byIdentity.get(key)
-    if (held === undefined || comparePlacements(placement, held) < 0) byIdentity.set(key, placement)
+    if (held === undefined || comparePlacements(site, held) < 0) byIdentity.set(key, site)
   }
   return byIdentity
 }
