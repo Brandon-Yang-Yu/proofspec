@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# ProofSpec code-discovery gate (PreToolUse on Grep|Glob|Bash).
+# Denies Grep/Glob and Bash grep/rg until at least one codebase-memory MCP
+# tool has been called in this session; after that, everything is allowed.
+# Fails open: any script/jq failure exits 0 so a broken hook never blocks work.
+set -u
+command -v jq >/dev/null 2>&1 || exit 0
+
+input=$(cat) || exit 0
+tool=$(printf '%s' "$input" | jq -r '.tool_name // empty') || exit 0
+
+# Bash: only gate commands that are code searches (grep/rg/egrep/fgrep as a word)
+if [ "$tool" = "Bash" ]; then
+  cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty') || exit 0
+  printf '%s' "$cmd" | grep -Eq '(^|[|;&[:space:]])(git[[:space:]]+grep|grep|rg|egrep|fgrep)([[:space:]]|$)' || exit 0
+fi
+
+# Allow if a codebase-memory MCP tool_use already exists in this session's
+# transcript. The marker is assembled from two halves so this script's own
+# text (which also ends up in transcripts) can never satisfy the check.
+marker='"name":"mcp__codebase-'
+marker="${marker}memory-mcp"
+tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty') || exit 0
+if [ -n "$tp" ] && [ -f "$tp" ] && grep -qF "$marker" "$tp"; then
+  exit 0
+fi
+
+cat <<'EOF'
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"ProofSpec code-discovery gate: use the codebase-memory MCP before grep-style search. Call search_graph / search_code / trace_path / get_code_snippet (load via ToolSearch if deferred; run index_repository first if the project is not indexed). Grep/Glob and shell grep/rg unlock after the first codebase-memory call this session."}}
+EOF
+exit 0

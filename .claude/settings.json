@@ -1,5 +1,20 @@
 {
   "worktree": {
     "baseRef": "head"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/cbm-first-gate",
+            "timeout": 5,
+            "statusMessage": "ProofSpec cbm-first gate"
+          }
+        ]
+      }
+    ]
   }
 }
