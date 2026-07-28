@@ -1,8 +1,10 @@
 // Capability: cli
 
+import { access, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { render } from '../../src/cli/index.ts'
-import { CAPABILITY, cleanupRepos, makeRepo, REQUIREMENT, specFile, testFile } from './support.ts'
+import { CAPABILITY, cleanupRepos, makeRepo, REQUIREMENT, specFile, testFile, unreadableTestFile } from './support.ts'
 
 afterEach(cleanupRepos)
 
@@ -54,15 +56,47 @@ it('writes the pages into a chosen output directory', async () => {
 })
 
 // Requirement: A command renders the spec into an output directory
+// Scenario: An absolute output directory is written to exactly
+// GIVEN a repo whose capability files and tests agree
+// WHEN the render command runs with an absolute output directory
+// THEN the pages exist under exactly that directory, the outcome names them where they
+//      were written, and nothing appears under the repo itself
+it('writes into an absolute output directory exactly', async () => {
+  const repo = await makeRepo(inSync())
+  // An absolute directory outside the repo, cleaned up with the other fixtures.
+  const out = (await makeRepo({})).root
+
+  const outcome = await render({ cwd: repo.root, out })
+
+  expect(outcome).toEqual({
+    kind: 'wrote',
+    files: [join(out, 'index.md'), join(out, `${CAPABILITY}.md`), join(out, `${TEST_PATH}.md`)],
+  })
+  expect(await readFile(join(out, `${CAPABILITY}.md`), 'utf8')).toContain(SCENARIO)
+  // `join` glues the absolute out onto the repo root — the exact place the pre-fix code
+  // buried the pages. Neither it nor the default directory may exist: the pages went to
+  // the absolute out and nowhere else.
+  const buried = join(repo.root, out)
+  await expect(access(buried)).rejects.toThrow()
+  await expect(access(join(repo.root, 'build'))).rejects.toThrow()
+})
+
+// Requirement: A command renders the spec into an output directory
 // Scenario: The render command reports it cannot run on unreadable inputs
-// GIVEN a specs directory that cannot be read
-// WHEN the render command runs
-// THEN the outcome is cannot-run with a reason, told apart from pages it could produce, the
-//      same way check and write refuse inputs they cannot read
+// GIVEN a specs directory that cannot be read, and separately a test the scan cannot read
+// WHEN the render command runs on each
+// THEN both outcomes are cannot-run with a reason, told apart from pages it could produce,
+//      the same way check and write refuse inputs they cannot read
 it('reports cannot-run when its inputs cannot be read', async () => {
   const repo = await makeRepo(inSync())
+  const unreadable = await makeRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: [SCENARIO] }),
+    [TEST_PATH]: unreadableTestFile(),
+  })
 
-  const outcome = await render({ cwd: repo.root, specsDir: 'nowhere' })
+  const missingSpecs = await render({ cwd: repo.root, specsDir: 'nowhere' })
+  const unreadableTest = await render({ cwd: unreadable.root })
 
-  expect(outcome.kind).toBe('cannot-run')
+  expect(missingSpecs.kind).toBe('cannot-run')
+  expect(unreadableTest.kind).toBe('cannot-run')
 })

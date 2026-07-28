@@ -27,6 +27,11 @@ export type RunOptions = { readonly cwd: string; readonly out?: string } & Parti
  * The result of a command, as a value. `cannot-run` is kept apart from a checked report on
  * purpose: CI has to tell "your spec has drifted" from "I could not read my inputs", and a
  * union says which happened without a caller having to infer it from an exit code.
+ *
+ * `wrote.files` names files the way each command anchors them: `write` reports repo-relative
+ * paths because they are the committed entries' paths, while `render` keeps the spelling the
+ * out directory was given — absolute in, absolute out — so the answer names the pages where
+ * the caller will look for them.
  */
 export type Outcome =
   | { readonly kind: 'checked'; readonly report: GuardReport }

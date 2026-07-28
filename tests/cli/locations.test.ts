@@ -1,5 +1,6 @@
 // Capability: cli
 
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { check } from '../../src/cli/index.ts'
 import { CAPABILITY, cleanupRepos, makeRepo, specFile, testFile } from './support.ts'
@@ -40,6 +41,30 @@ it('checks a repo whose files sit in unconventional places', async () => {
   })
 
   const outcome = await check({ cwd: repo.root, specsDir: 'docs/spec', testsDir: 'test' })
+
+  expect(outcome.kind).toBe('checked')
+  if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')
+  expect(outcome.report.status).toBe('pass')
+})
+
+// Requirement: It runs in a conventional repo with no configuration
+// Scenario: Locations given as absolute paths are read from exactly there
+// GIVEN a repo keeping both halves in unconventional places the defaults would never find
+// WHEN the check runs with both locations given as absolute paths
+// THEN it reads them from exactly there and the verdict is agreement, which neither the
+//      glued-on path a concatenation would build nor the ignored-option defaults could give
+it('checks a repo whose locations are given as absolute paths', async () => {
+  const testPath = 'checks/demo.test.ts'
+  const repo = await makeRepo({
+    [`notes/${CAPABILITY}.md`]: specFile({ recorded: SCENARIOS, testPath }),
+    [testPath]: testFile(SCENARIOS),
+  })
+
+  const outcome = await check({
+    cwd: repo.root,
+    specsDir: join(repo.root, 'notes'),
+    testsDir: join(repo.root, 'checks'),
+  })
 
   expect(outcome.kind).toBe('checked')
   if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')

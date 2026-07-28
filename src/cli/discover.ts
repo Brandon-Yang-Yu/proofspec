@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 import { compareStrings } from '../order.ts'
 
 /**
@@ -48,14 +48,18 @@ async function readFiles(
   dir: string,
   match: { readonly recursive: boolean; readonly suffix: string },
 ): Promise<Discovery<SourceFile>> {
-  const base = join(cwd, dir)
+  // `resolve` honours a location given as an absolute path, where `join` would glue it
+  // onto the repo root and read from a directory nobody named.
+  const base = resolve(cwd, dir)
   const names = await listDir(base, { recursive: match.recursive })
   if (names === undefined) return { ok: false, reason: `${dir} could not be read` }
 
   const matching = names.filter(name => name.endsWith(match.suffix)).sort(compareStrings)
   const files = await Promise.all(
     matching.map(async (name): Promise<SourceFile> => ({
-      path: join(dir, name),
+      // Reported relative to the repo root however the location was spelled, because the
+      // committed entries carry these paths and must not change with the spelling.
+      path: relative(cwd, join(base, name)),
       source: await readFile(join(base, name), 'utf8'),
     })),
   )

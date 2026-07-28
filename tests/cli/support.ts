@@ -79,6 +79,25 @@ export function testFile(scenarios: readonly string[], tags: Tags = {}): string 
 }
 
 /**
+ * A test file the scan cannot read: an AND sits where a step keyword belongs. Both the
+ * write and the render must refuse a repo holding one, so the fixture lives here once.
+ */
+export function unreadableTestFile(): string {
+  return [
+    `// Capability: ${CAPABILITY}`,
+    '',
+    `// Requirement: ${REQUIREMENT}`,
+    '// Scenario: A first behavior',
+    '// WHEN something happens',
+    '// AND another thing happens',
+    '// THEN the demonstrated claim holds',
+    "it('a first behavior', () => {",
+    '  expect(true).toBe(true)',
+    '})',
+  ].join('\n')
+}
+
+/**
  * A capability file recording the given scenarios, each against the test file that proves
  * them. Entries come out in title order — the order the write-back keeps them in — so a
  * file built here that already agrees with its tests is byte-for-byte what the write-back
