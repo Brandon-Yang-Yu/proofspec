@@ -1,28 +1,13 @@
 // Capability: cli
 
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { check, write } from '../../src/cli/index.ts'
-import { CAPABILITY, REQUIREMENT, TEST_PATH, cleanupRepos, makeRepo, specFile, testFile } from './support.ts'
+import { CAPABILITY, TEST_PATH, cleanupRepos, makeRepo, specFile, testFile, unreadableTestFile } from './support.ts'
 
 afterEach(cleanupRepos)
 
 const SCENARIOS = ['A first behavior', 'A second behavior']
-
-/** A test file the scan cannot read: an AND sits where a step keyword belongs. */
-function unreadableTest(): string {
-  return [
-    `// Capability: ${CAPABILITY}`,
-    '',
-    `// Requirement: ${REQUIREMENT}`,
-    '// Scenario: A first behavior',
-    '// WHEN something happens',
-    '// AND another thing happens',
-    '// THEN the demonstrated claim holds',
-    "it('a first behavior', () => {",
-    '  expect(true).toBe(true)',
-    '})',
-  ].join('\n')
-}
 
 // Requirement: Writing back records the tests in the committed files
 // Scenario: Writing back records a scenario the tests prove but the file did not
@@ -90,6 +75,26 @@ it('leaves a capability file it need not change untouched', async () => {
 })
 
 // Requirement: Writing back records the tests in the committed files
+// Scenario: Writing back through an absolute location changes the file exactly there
+// GIVEN a repo keeping its capability file in an unconventional place the default would
+//       never find, not recording a scenario its tests prove
+// WHEN the write runs with the specs location given as an absolute path
+// THEN the file at that absolute location records the scenario, and the outcome names the
+//      file that actually changed
+it('writes back through an absolute specs location', async () => {
+  const specPath = `notes/${CAPABILITY}.md`
+  const repo = await makeRepo({
+    [specPath]: specFile({ recorded: ['A first behavior'] }),
+    [TEST_PATH]: testFile(SCENARIOS),
+  })
+
+  const outcome = await write({ cwd: repo.root, specsDir: join(repo.root, 'notes') })
+
+  expect(outcome).toEqual({ kind: 'wrote', files: [specPath] })
+  expect(await repo.read(specPath)).toBe(specFile({ recorded: SCENARIOS }))
+})
+
+// Requirement: Writing back records the tests in the committed files
 // Scenario: Writing back a repo it cannot fully read changes nothing
 // GIVEN a repo holding a test the scan cannot read
 // WHEN the write runs
@@ -99,7 +104,7 @@ it('refuses and changes nothing when a test cannot be read', async () => {
   const specPath = `specs/${CAPABILITY}.md`
   const before = {
     [specPath]: specFile({ recorded: [] }),
-    [TEST_PATH]: unreadableTest(),
+    [TEST_PATH]: unreadableTestFile(),
   }
   const repo = await makeRepo(before)
 

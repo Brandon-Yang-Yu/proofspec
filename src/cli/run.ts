@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { guard } from '../guard/index.ts'
 import { renderSite } from '../locate/index.ts'
 import { readCapabilityFile, updateScenarioBlocks } from '../spec-file/index.ts'
@@ -54,7 +54,7 @@ export async function write(options: RunOptions): Promise<Outcome> {
   // surface at `check` too, but `check` runs after the write would already have changed the
   // files; refusing here keeps `write` safe to run without a green check in front of it.
   const unreadable = scans.flatMap(scan => scan.errors)
-  if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable) }
+  if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'write') }
 
   const sites = scans.flatMap(scan => scan.sites)
   const { tree } = buildTree(sites)
@@ -64,7 +64,9 @@ export async function write(options: RunOptions): Promise<Outcome> {
     const node = tree.capabilities.find(capability => capability.capability === spec.capability)
     const next = updateScenarioBlocks(spec.source, { requirements: node?.requirements ?? [] })
     if (next === spec.source) continue
-    await writeFile(join(options.cwd, spec.path), next)
+    // Anchored with `resolve` like every other cwd boundary, though discover only ever
+    // reports repo-relative paths — one rule for all anchoring beats a special case.
+    await writeFile(resolve(options.cwd, spec.path), next)
     changed.push(spec.path)
   }
   return { kind: 'wrote', files: changed }
@@ -81,7 +83,13 @@ export async function render(options: RunOptions): Promise<Outcome> {
   const inputs = await gather(options)
   if (!inputs.ok) return { kind: 'cannot-run', reason: inputs.reason }
 
-  const sites = inputs.tests.flatMap(file => scanSource(file.source, { file: file.path }).sites)
+  const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
+  // The pages record what the tests prove, so a test the scan could not read is a tree the
+  // pages cannot vouch for — refused the way `write` refuses, before anything is written.
+  const unreadable = scans.flatMap(scan => scan.errors)
+  if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'render') }
+
+  const sites = scans.flatMap(scan => scan.sites)
   const specs = inputs.specs.map(file => readCapabilityFile(file.source, { capability: file.capability }))
   const pages = renderSite(specs, sites, inputs.tests)
 
@@ -89,7 +97,9 @@ export async function render(options: RunOptions): Promise<Outcome> {
   const written: string[] = []
   for (const page of pages) {
     const path = join(dir, page.path)
-    const full = join(options.cwd, path)
+    // `resolve` writes to an absolute `--out` exactly, so the outcome names the files
+    // where they really are; `join` would bury them under the repo root.
+    const full = resolve(options.cwd, path)
     await mkdir(dirname(full), { recursive: true })
     await writeFile(full, page.content)
     written.push(path)
@@ -98,10 +108,10 @@ export async function render(options: RunOptions): Promise<Outcome> {
 }
 
 /** Names the first thing the scan could not read, so the reason points at a place to look. */
-function reasonFor(errors: readonly ScanError[]): string {
+function reasonFor(errors: readonly ScanError[], command: 'write' | 'render'): string {
   const first = errors[0]!
   const rest = errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''
-  return `cannot write: ${first.file}:${first.line} ${first.message}${rest}`
+  return `cannot ${command}: ${first.file}:${first.line} ${first.message}${rest}`
 }
 
 /** Both halves of a repo read, or the reason one of them could not be. */

@@ -44,6 +44,7 @@ setting: there is no compiler to point at and no project to build.
 
 <!-- scenarios: generated -->
 - "Both locations can be pointed at where a repo keeps them" → tests/cli/locations.test.ts
+- "Locations given as absolute paths are read from exactly there" → tests/cli/locations.test.ts
 - "The conventional layout is checked with no locations given" → tests/cli/locations.test.ts
 <!-- /scenarios -->
 
@@ -83,6 +84,7 @@ the write changes files, so it refuses before it acts rather than reporting afte
 - "Writing back a repo it cannot fully read changes nothing" → tests/cli/write.test.ts
 - "Writing back leaves the other capability files untouched" → tests/cli/write.test.ts
 - "Writing back records a scenario the tests prove but the file did not" → tests/cli/write.test.ts
+- "Writing back through an absolute location changes the file exactly there" → tests/cli/write.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command renders the spec into an output directory
@@ -98,6 +100,7 @@ so a project gitignores that directory rather than committing it. Inputs it cann
 refused the way the check and the write refuse them.
 
 <!-- scenarios: generated -->
+- "An absolute output directory is written to exactly" → tests/cli/render.test.ts
 - "The render command reports it cannot run on unreadable inputs" → tests/cli/render.test.ts
 - "The render command writes into a chosen directory" → tests/cli/render.test.ts
 - "The render command writes to the default directory when none is given" → tests/cli/render.test.ts

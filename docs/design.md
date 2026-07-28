@@ -941,3 +941,32 @@ would not change, `render` rewrites the whole `build/` every run: it is an outpu
 the tool reads back, so there is nothing to leave untouched. Drift is shown, not dropped — a
 scenario recorded but proven by no test renders as unproven with no snippet, surfacing the gap
 `check` would fail on rather than silently omitting a promise.
+
+## 23. Absolute paths, and the answer naming files where they are
+
+Found by running the tool, not by reading it: `render --out /an/absolute/dir` buried its pages
+under `<repo>/an/absolute/dir` while the JSON named the absolute paths — the outcome claimed
+files that were not where it said. The cause was one habit applied at the wrong boundary:
+`path.join` concatenates, so joining a caller's directory onto the repo root silently rewrites
+an absolute spelling into a relative one. Three sites did it — discovery's base directory, the
+write-back's target, the render's output.
+
+**The rule that fixed it.** Every place a caller-supplied path meets the repo root now anchors
+with `resolve`, which honours an absolute spelling and treats a relative one exactly as before.
+`join` remains for building names *within* a directory the caller named. One rule for all
+anchoring, so the next command added does not re-import the bug.
+
+**Reported paths do not change with the spelling.** Discovery still reports every file relative
+to the repo root, now by `relative()` rather than by construction — the committed entries carry
+those paths, and a file's recorded location must not depend on how the location was spelled on
+the command line. `render` is the deliberate exception: its outcome keeps the caller's spelling
+(absolute in, absolute out), because the answer's job is to name the pages where the caller
+will look for them. The two conventions are documented on `Outcome` rather than unified,
+because they serve different readers: the committed file needs stability, the render answer
+needs honesty.
+
+**Render now refuses what it cannot read.** The completion check on this fix surfaced a nearby
+gap: `render` silently dropped scan errors where `write` refused them, contradicting the spec's
+"inputs it cannot read are refused the way the check and the write refuse them". The pages
+record what the tests prove, so a test the scan could not read is a tree the pages cannot vouch
+for — `render` now refuses before writing, the same reason `write` refuses before acting.
