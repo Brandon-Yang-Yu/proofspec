@@ -12,6 +12,13 @@ Take one capability, or one requirement inside it, from plan to a change that is
 commit — test-first, building ProofSpec on itself. Run the steps in order. Each step gates
 the next; do not skip ahead.
 
+The pipeline ships three kinds of change, and knowing which one you are in matters most
+at the red gate (step 2):
+
+- **New** — a capability or requirement that does not exist yet.
+- **Fix** — the spec is right and the code disagrees with it.
+- **Amendment** — the behavior the human wants has changed, so the spec changes first.
+
 There is no UI step: ProofSpec is a CLI library. There is no OpenSpec step: OpenSpec is
 retired for our own build (`docs/design.md` §8), so the plan is made in Claude Code's plan
 mode instead.
@@ -31,6 +38,12 @@ Enter plan mode. Produce the capability's spec: each `### Requirement:` with its
 sentence, and the Gherkin scenarios each requirement will carry. Written to
 `specs/<capability>.md`, one file per capability.
 
+For a **fix**, the spec usually already exists — the plan names the requirement and
+scenario the code violates, and adds a scenario only if the defect fell between the
+existing ones. For an **amendment**, this step is where the spec changes: rewrite the
+SHALL sentence and scenarios to say the new behavior, and get the human to confirm the
+new wording the same way they would confirm a new capability's.
+
 This is the behavior gate — the one place the human confirms *intent*. State the scenarios
 as `GIVEN/WHEN/THEN` in plain English, and get explicit confirmation that they are the
 behavior the human wants before writing any test or code. Leave plan mode only when the
@@ -40,8 +53,19 @@ human approves the plan.
 
 Write one test per scenario. Tag each with `// Capability:`, `// Requirement:`,
 `// Scenario:` and its `// GIVEN/WHEN/THEN` steps, directly above the test that proves it.
-Run them and confirm each fails for the right reason — the code is not built yet, not a
-broken fixture.
+Run them and confirm each fails for the right reason — which depends on the kind of
+change:
+
+- **New**: the test fails because the code is not built yet.
+- **Fix**: the test is written against the scenario as the spec states it, and fails
+  because today's code behaves wrongly. That failing run *is* the reproduction — if the
+  new test passes on the unfixed code, it does not pin the defect.
+- **Amendment**: the existing tests are changed to say the new behavior first, and fail
+  because the code still implements the old behavior. A test that keeps passing across
+  the amendment was not testing the part that changed.
+
+In every mode the wrong reason is the same: a broken fixture, a typo, a test that would
+fail against any implementation.
 
 Hand-fill the `<!-- scenarios: generated -->` blocks for the new capability. This is the
 bootstrap: until `guard` runs, the tags are verified by hand.
