@@ -12,6 +12,12 @@ Take one capability, or one requirement inside it, from plan to a change that is
 commit — test-first, building ProofSpec on itself. Run the steps in order. Each step gates
 the next; do not skip ahead.
 
+**Tests before implementation, always.** No implementation code is written until the
+scenario's test exists and has been run red. This holds in every mode and at every scale —
+there is no change small enough, obvious enough, or urgent enough to skip the red test.
+If you notice implementation happening without a red test behind it, stop and go back to
+step 2.
+
 The pipeline ships three kinds of change, and knowing which one you are in matters most
 at the red gate (step 2):
 
@@ -67,6 +73,14 @@ change:
 In every mode the wrong reason is the same: a broken fixture, a typo, a test that would
 fail against any implementation.
 
+For a **new** capability the tests may not compile without a source file to import. The
+only implementation allowed before red is minimal scaffolding — empty exports, type
+stubs — just enough for the tests to run and fail for the right reason. Scaffolding that
+makes any test pass is implementation, and it belongs in step 3.
+
+This step ends with a test run whose failures you show. Do not proceed to step 3 without
+that red run in hand.
+
 Hand-fill the `<!-- scenarios: generated -->` blocks for the new capability. This is the
 bootstrap: until `guard` runs, the tags are verified by hand.
 
@@ -75,6 +89,11 @@ bootstrap: until `guard` runs, the tags are verified by hand.
 Implement until every test passes. Keep each capability's knowledge inside it — language
 details stay in `test-scan`; everything downstream reads the contract only. Follow
 `docs/typescript-style.md` as you write, so the guideline review has little to find.
+
+If the build surfaces behavior no scenario covers — an edge case, a needed error path, a
+requirement the plan missed — do not code it and backfill the test later. Stop, return to
+step 1 to get the scenario confirmed (or step 2 if it clearly falls under an approved
+requirement), write its test, run it red, then resume building.
 
 ## 4. Guideline review — fresh subagent
 
