@@ -9,9 +9,9 @@ import type { Outcome, RunOptions } from './types.ts'
  * locations, the `--out` path, and the `--json` switch, calls the command, prints the
  * answer, and exits. Every decision worth a test lives in `run`/`render`; nothing here does.
  *
- * It is not yet wired to a `package.json` bin — running a `.ts` file as an executable is a
- * packaging decision this repo has not taken (there is no build step), and it is the one
- * piece of `cli` that does not need one to be right.
+ * The `package.json` bin points at this file's compiled form in `dist/`; in the repo it
+ * also runs straight from source via `pnpm proofspec`. Either way it is the one piece of
+ * `cli` that does not need a test to be right.
  */
 
 const USAGE = `proofspec — the test suite is the living spec

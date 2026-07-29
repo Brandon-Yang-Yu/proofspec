@@ -1,6 +1,9 @@
 node_modules/
 *.tsbuildinfo
 
+# `build`'s output — the published package contents, produced by tsc on demand.
+dist/
+
 # `render`'s output — a generated site, regenerated on demand, never committed.
 build/
 

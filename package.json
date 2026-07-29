@@ -1,18 +1,43 @@
 {
   "name": "proofspec",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "A thin layer that makes your test suite the living spec",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Brandon-Yang-Yu/proofspec.git"
+  },
+  "homepage": "https://github.com/Brandon-Yang-Yu/proofspec#readme",
+  "bugs": "https://github.com/Brandon-Yang-Yu/proofspec/issues",
+  "keywords": [
+    "spec",
+    "living-documentation",
+    "gherkin",
+    "bdd",
+    "testing",
+    "vitest"
+  ],
   "packageManager": "pnpm@11.13.1",
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "proofspec": "dist/cli/main.js"
+  },
+  "exports": {
+    ".": "./dist/cli/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
-    "prepare": "git config core.hooksPath .githooks",
+    "preinstall": "node -e \"const{existsSync}=require('node:fs');const ua=process.env.npm_config_user_agent??'';if(existsSync('.githooks')&&!ua.startsWith('pnpm')){console.error('This repo uses pnpm');process.exit(1)}\"",
+    "prepare": "node -e \"const{existsSync}=require('node:fs');if(existsSync('.githooks'))require('node:child_process').execSync('git config core.hooksPath .githooks')\"",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "pnpm test && pnpm typecheck && pnpm build",
     "proofspec": "node --experimental-transform-types src/cli/main.ts"
   },
   "dependencies": {
