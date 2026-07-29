@@ -26,7 +26,8 @@
     "proofspec": "dist/cli/main.js"
   },
   "exports": {
-    ".": "./dist/cli/index.js"
+    ".": "./dist/cli/index.js",
+    "./src/*": "./src/*"
   },
   "files": [
     "dist"
