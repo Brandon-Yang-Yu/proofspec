@@ -38,19 +38,27 @@ project spec (expressed by tests)
 
 ## Quick start
 
-ProofSpec currently supports TypeScript test suites only.
+ProofSpec currently supports TypeScript test suites only. Requires Node ≥ 20.
 
-ProofSpec isn't published to npm yet — clone the repo to try it.
-Requires Node ≥ 20 and pnpm.
+```sh
+npm install -D proofspec   # or: pnpm add -D proofspec
+
+npx proofspec check    # rebuild the spec tree from the tests and report drift
+npx proofspec write    # record what the tests prove into specs/
+npx proofspec render   # write the readable spec site to build/
+```
+
+Tests are read from `tests/` and capability files from `specs/` by default
+(`--tests` / `--specs` to change). `write` fills the scenario blocks of capability
+files you author, so create `specs/<capability>.md` before the first write.
+
+### Developing
 
 ```sh
 git clone https://github.com/Brandon-Yang-Yu/proofspec.git
 cd proofspec
 pnpm install
-pnpm test              # run the suite
-pnpm proofspec check   # rebuild the spec tree from the tests and report drift
-pnpm proofspec write   # record what the tests prove into specs/
-pnpm proofspec render  # write the readable spec site to build/
+pnpm test              # run the suite; `pnpm proofspec <cmd>` runs the CLI from source
 ```
 
 ## Status
