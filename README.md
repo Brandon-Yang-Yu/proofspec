@@ -38,9 +38,14 @@ project spec (expressed by tests)
 
 ## Quick start
 
+ProofSpec currently supports TypeScript test suites only.
+
+ProofSpec isn't published to npm yet — clone the repo to try it.
 Requires Node ≥ 20 and pnpm.
 
 ```sh
+git clone https://github.com/Brandon-Yang-Yu/proofspec.git
+cd proofspec
 pnpm install
 pnpm test              # run the suite
 pnpm proofspec check   # rebuild the spec tree from the tests and report drift
