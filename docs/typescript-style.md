@@ -4,7 +4,8 @@
 first read, no puzzles.** Priority order: readability > expressing correctness >
 performance > so-called brevity; when they conflict, pick the version with fewer
 concepts; **prefer explicit over implicit.** Anything "shorter but harder to
-follow" is rejected. These rules always apply (imported by `CLAUDE.md`).
+follow" is rejected. These rules always apply (the `ship` skill's guideline
+review audits every diff against them).
 
 **Readability is a hard requirement, not a suggestion.** The test (and you can
 prove it fails): **without running the code and without jumping elsewhere, can you
@@ -14,9 +15,6 @@ blocker just like a failing test. Fix it until it reads clearly. Common offender
 hiding simple logic behind an indirection that makes you guess the output
 (`ops.map(fn => fn(3, 4))`), writing one function of a kind as an arrow and another
 as `function`, or comments like "arrow function" that say nothing.
-
-Code examples are in English, to match the letters and UI; the notes here are in
-English too.
 
 ---
 
@@ -159,7 +157,7 @@ thing these rules oppose most.
   behind a small interface). Don't cut modules along the "read → change → write"
   order of operations (temporal decomposition leaks one design decision across all
   of them).
-- Full reasoning in `docs/reference/reading-notes.md` (Ousterhout / qntm).
+- Full reasoning in the Ousterhout / qntm links under Further reading below.
 
 ## 7. Comments say WHY only
 
@@ -235,9 +233,6 @@ function build(md: string): BuildResult { /* ... */ }
 ---
 
 ## Further reading (by relevance)
-
-> The full distillation of the four articles plus ts-reset is in
-> `docs/reference/reading-notes.md` (archived, not in the always-loaded context).
 
 - qntm, "It's probably time to stop recommending Clean Code" — the case against
   over-extraction: https://qntm.org/clean

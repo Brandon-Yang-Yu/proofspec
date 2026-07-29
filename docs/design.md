@@ -98,9 +98,9 @@ resolves the current line range fresh):
 | **Storage** (committed `.md`) | capability → requirement (SHALL, authored) → scenario title + **file** (generated) | a scenario is added / removed / renamed / moved file — all meaningful |
 | **Delivery** (a tool) | the current `file:line`, jump-to-test, the rendered tree | every call, computed live — always correct |
 
-**Line numbers are delivered, never stored.** The tool finds a scenario by grepping
-`// Scenario: <title>` (titles are unique within a requirement, per the bijection)
-and reports the current line. Because line numbers never enter the stored file,
+**Line numbers are delivered, never stored.** The tool finds a scenario by its
+`// Scenario: <title>` tag (titles are unique within a requirement, per the bijection)
+and reports the current line — §14 settles the mechanism as an AST scan, not a grep. Because line numbers never enter the stored file,
 editing a test never produces a false "spec drifted" diff.
 
 ## 5. Where each piece lives (zero duplication)
@@ -181,14 +181,16 @@ every spec written ahead of its tests — see guard.md.*
 
 ## 8. Relationship to OpenSpec
 
-**Decision: thin layer, not a fork.** Keep the published `openspec` CLI for the
-plan-time `propose` / `change` flow (it is maintained, and we don't want to own it).
-ProofSpec is a small tool around it.
+**Decision: thin layer, not a fork.** Keep the published OpenSpec tooling for the
+plan-time proposal flow (it is maintained, and we don't want to own it). That flow is
+the `/opsx:propose` → `/opsx:apply` → `/opsx:archive` slash commands OpenSpec installs
+into the coding agent; the `openspec` CLI itself has no `propose` verb — it scaffolds,
+validates, and archives. ProofSpec is a small tool around it.
 
 Findings from reading the OpenSpec source (`@fission-ai/openspec` 1.6.0, MIT):
 
-- **~34,500 LOC across ~175 files**, but the reusable kernel (parsers + validation +
-  schemas) is only **~1,900 LOC**. The other ~32k is stores, shell completions, a
+- **~32,400 LOC across 171 files** (`src/`, at the v1.6.0 tag), but the reusable kernel
+  (parsers + validation + schemas) is only **~1,700 LOC**. The other ~30k is stores, shell completions, a
   templating engine, telemetry, legacy migration — none of it needed.
 - The parser turns a `spec.md` into `{ requirements: [{ text, scenarios: [{ rawText }] }] }`.
   It **discards scenario titles and line numbers** — it is built for validation, not
@@ -209,7 +211,8 @@ parsing tricks — not the 34k-line binary.
 ProofSpec's lifecycle, mapped onto the OpenSpec verbs:
 
 1. **Confirm the requirement** — establish the high-level promise (product-reviewed,
-   pre-code). `openspec propose` fits here.
+   pre-code). OpenSpec's `/opsx:propose` fits here (a slash command run in the coding
+   agent — the `openspec` CLI has no `propose` verb).
 2. **Refine into scenarios** — break the requirement into detailed conditions.
 3. **Apply** — create the test for each scenario; the scenario's Gherkin is written
    above its `it`. The requirement's `.md` gets its scenario locations written back.
@@ -248,7 +251,8 @@ requirement MAY be written on its own, but every scenario SHALL live with its te
 
 ## 11. The bijection, checked against a real suite
 
-The one-scenario-one-test rule was a bet. The reference repo settles it, because that repo already
+The one-scenario-one-test rule was a bet. A production repo that predates ProofSpec
+(the reference repo below) settles it, because that repo already
 runs a cruder version of this idea: every `it` carries a `// Spec: <capability> › "<title>"`
 tag, and `tests/spec-coverage.test.ts` (103 lines) checks both directions — every tag
 names a real scenario, and every scenario of an *enforced* capability has at least one
@@ -300,10 +304,13 @@ What the check also confirmed: the guard is closer than §11 used to assume. The
 lines already do rules 2, 3 and half of 1; the genuinely new work is rule 6, dropping
 line numbers out of the comparison, and parsing proof sites inside a test.
 
-And a live example of the problem ProofSpec exists to solve: in the reference repo the same behavior is
-currently written in **three** places — `openspec/specs/agent-chat/spec.md`, a full
-Gherkin `Feature` block in `docs/behaviors/agent-chat.md`, and a prose summary at the top
-of the test file. That is the first thing worth migrating.
+And a live example of the problem ProofSpec exists to solve: in the reference repo the
+same behavior was, at the time of this audit, written in **three** places —
+`openspec/specs/agent-chat/spec.md`, a full Gherkin `Feature` block in
+`docs/behaviors/agent-chat.md`, and a prose summary at the top of the test file. That was
+the first thing worth migrating. *(Since done: its `specs/*.md` are now ProofSpec
+capability files with generated scenario blocks, its tests carry `// Capability:` tags,
+and the `openspec/` and `docs/behaviors/` copies are gone.)*
 
 ## 12. The tool's capabilities
 
@@ -332,10 +339,12 @@ Three notes on the cut:
   only; a second language is a second scanner behind the same contract.
 - **Delivery is CLI-only in v1.** `locate` ships as `proofspec where <scenario>` and
   `proofspec tree [--json]`. An MCP server is v2; `--json` is the seam it will sit on.
+  *(§21 revised this: `locate` shipped as a library, and the commands as built are
+  `check` / `write` / `render` — `where` and `tree` remain a later `cli` change.)*
 
 Two things deliberately *outside* the capabilities: the judgement checks named at the
 end of §7 (they belong to a person or an AI reading the co-located claim), and the
-plan-time `propose` flow (that stays with the `openspec` CLI, per §8).
+plan-time propose flow (that stays with OpenSpec's `/opsx` commands, per §8).
 
 **A capability requirement states behavior, never implementation.** The test is whether
 it can be falsified by observing what the tool produces. "The scanner SHALL NOT read
@@ -509,12 +518,16 @@ reverting is a one-file change.
   end, write-back included. **`locate` is the sixth and last** — 7 scenarios, §21: the
   delivery half of §4, resolving a scenario's current `file:line` and the whole tree's
   positions on demand, as a library (the `where`/`tree` commands are a later `cli` change).
-  With it every capability in ProofSpec's own tree is built.
+  With it every capability in ProofSpec's own tree is built. *(The per-capability counts
+  above are ship-time snapshots; the tree has since grown — as of the §22–§23 work it
+  stands at test-scan 24, spec-tree 14, guard 17, spec-file 18, cli 18, locate 17 —
+  108 scenarios, 129 tests, still green.)*
 
 ## 16. The build pipeline
 
 How a capability gets built, recorded as the `ship` skill so the steps never have to be
-respelled. It is ProofSpec's own — not the reference repo's: no UI (this is a CLI library), no OpenSpec
+respelled. It is ProofSpec's own — not the reference repo's: no UI (this is a CLI
+library), no OpenSpec
 (retired for our own build, §8; planning happens in Claude Code's plan mode instead).
 
 The steps: **plan** (plan mode — the behavior gate, where a human confirms the scenarios
@@ -524,7 +537,8 @@ fixes) → **completion check** (a fresh subagent confirms the code satisfies ev
 requirement and each test really pins its claim) → **archive the plan** (the *why* into
 this record) → **wait for the human to say commit**.
 
-The load-bearing idea is the same one the two review gates in the reference repo's `ship` carry: a
+The load-bearing idea is the same one the two review gates in the reference repo's
+`ship` carry: a
 builder is a poor judge of their own fresh work, so the review hands off to a reader who
 never watched the code get written. Building `test-scan` this way earned its keep — the
 guideline pass caught a real double-reporting bug, and the completion pass found three
@@ -776,8 +790,9 @@ which is rule 10 applied to the one capability that has real I/O to fail at.
 **Two commands, two functions.** `check` reads and reports; `write` records. They share how
 a repo is read, but each is its own function rather than one entry with a mode, so neither
 does two things and the check has no path that could ever write. That last point is R1 made
-structural: `writeFile` is imported once and reachable only from `write`, so a check cannot
-fix what it finds however much the repo has drifted.
+structural: `writeFile` is imported once and reachable only from the commands that record —
+`write` and, since §22, `render` — never from `check`, so a check cannot fix what it finds
+however much the repo has drifted.
 
 **It re-implements nothing.** `cli` is wiring: `scanSource` over each test, `readCapabilityFile`
 over each committed file, `buildTree`, `guard`, `updateScenarioBlocks`. The format knowledge

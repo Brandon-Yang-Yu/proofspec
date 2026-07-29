@@ -2,7 +2,7 @@
 
 A thin layer that makes your **test suite the living spec**.
 
-Write each behavior as Gherkin — plain English in WHEN/THEN steps — directly above
+Write each behavior as Gherkin — plain English in GIVEN/WHEN/THEN steps — directly above
 the one test that proves it. A small tool reads those tests and builds a tree:
 
 ```
