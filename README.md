@@ -36,9 +36,25 @@ project spec (expressed by tests)
   (titles + file); a tool resolves the current `file:line` on demand, the way the
   codebase-memory index resolves a symbol's range fresh instead of hard-coding it.
 
+## Quick start
+
+Requires Node ≥ 20 and pnpm.
+
+```sh
+pnpm install
+pnpm test              # run the suite
+pnpm proofspec check   # rebuild the spec tree from the tests and report drift
+pnpm proofspec write   # record what the tests prove into specs/
+pnpm proofspec render  # write the readable spec site to build/
+```
+
 ## Status
 
 ProofSpec runs on itself end to end. All six capabilities — `test-scan`, `spec-file`,
-`spec-tree`, `guard`, `locate`, and the `cli` — are built and green (113 tests). The
+`spec-tree`, `guard`, `locate`, and the `cli` — are built and green (129 tests). The
 full decision record is in [`docs/design.md`](docs/design.md), the capability specs in
 [`specs/`](specs).
+
+## License
+
+[MIT](LICENSE)
