@@ -52,6 +52,32 @@ Tests are read from `tests/` and capability files from `specs/` by default
 (`--tests` / `--specs` to change). `write` fills the scenario blocks of capability
 files you author, so create `specs/<capability>.md` before the first write.
 
+### Output formats
+
+The `check` command supports multiple output formats for different use cases:
+
+```sh
+npx proofspec check --format text       # Human-readable (default)
+npx proofspec check --format json       # JSON for CI/scripts
+npx proofspec check --format quickfix   # file:line:E/W:msg (nvim/vim quickfix)
+npx proofspec check --format diagnostics # LSP diagnostics format (JSON)
+```
+
+### Neovim integration
+
+ProofSpec includes native support for Neovim:
+
+- **Quickfix format** (`--format quickfix`): Jump directly to findings
+- **LSP diagnostics** (`--format diagnostics`): Inline errors/warnings
+- **Example configs**: See `examples/nvim/` and `docs/neovim.md`
+
+```sh
+# Quick setup with diagnostics
+lua require('proofspec').setup()
+```
+
+For minimal setup, copy `examples/nvim/minimal.lua` to your config.
+
 ### Developing
 
 ```sh
