@@ -58,6 +58,8 @@ editor, a CI annotation, and in a later version an MCP server. Each of those sho
 the same answer rather than parse the one meant for a terminal.
 
 <!-- scenarios: generated -->
+- "The check's findings are returned as LSP diagnostics a modern editor shows inline" → tests/cli/format.test.ts
+- "The check's findings are returned in quickfix form for an editor to jump to" → tests/cli/format.test.ts
 - "The check's verdict is returned as JSON carrying the same findings" → tests/cli/json.test.ts
 - "The write's answer is returned as JSON naming the changed files" → tests/cli/json.test.ts
 <!-- /scenarios -->

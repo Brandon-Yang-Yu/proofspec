@@ -1,5 +1,5 @@
 import { assertNever } from '../assert-never.ts'
-import { describeFinding } from '../guard/index.ts'
+import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { Outcome } from './types.ts'
 
 /**
@@ -63,4 +63,62 @@ export function renderJson(outcome: Outcome): string {
     default:
       return assertNever(outcome)
   }
+}
+
+// The single-character severity tags a quickfix list expects: E for a finding that fails the
+// build, W for one that only warns. An editor reads the tag to colour the entry.
+const QUICKFIX_ERROR = 'E'
+const QUICKFIX_WARNING = 'W'
+// LSP DiagnosticSeverity values travel as numbers on the wire: 1 = Error, 2 = Warning.
+const LSP_ERROR = 1
+const LSP_WARNING = 2
+
+/**
+ * Each finding as one `file:line:E: message` line — the shape vim/nvim loads into its
+ * quickfix list via `errorformat`. The content is the text form's; only the line shape
+ * changes, so an editor can jump straight to each site. Non-checked outcomes have no
+ * findings, so they fall back to the text form a person reads.
+ */
+export function renderQuickfix(outcome: Outcome): string {
+  if (outcome.kind !== 'checked') {
+    return renderText(outcome)
+  }
+  return outcome.report.findings.map(renderQuickfixFinding).join('\n')
+}
+
+function renderQuickfixFinding(finding: Finding): string {
+  const message = describeFinding(finding)
+  // A finding with no file (an uncovered or duplicate requirement) has nowhere to jump to;
+  // plain text beats a malformed `:line:` entry an editor would misparse.
+  if (!('file' in finding)) return message
+  const severity = severityOf(finding) === 'fail' ? QUICKFIX_ERROR : QUICKFIX_WARNING
+  const line = 'line' in finding ? finding.line : 1
+  return `${finding.file}:${line}:${severity}: ${message}`
+}
+
+/**
+ * Each finding as one LSP Diagnostic, so an editor's diagnostics UI shows the same findings
+ * inline that a person reads in the terminal. The content is the JSON report's, reshaped
+ * into the {severity, range, message, code} a diagnostic carries. Non-checked outcomes fall
+ * back to the JSON form, since a diagnostics consumer is already parsing JSON.
+ */
+export function renderDiagnostics(outcome: Outcome): string {
+  if (outcome.kind !== 'checked') {
+    return renderJson(outcome)
+  }
+
+  const diagnostics = outcome.report.findings.map(finding => {
+    // A finding without a line (an uncovered or duplicate requirement) has no site; pin it at
+    // line 0 of nothing rather than inventing a position, the way a diagnostic with no range.
+    const line = 'line' in finding ? Math.max(0, finding.line - 1) : 0
+    return {
+      severity: severityOf(finding) === 'fail' ? LSP_ERROR : LSP_WARNING,
+      range: { start: { line, character: 0 }, end: { line, character: 0 } },
+      message: describeFinding(finding),
+      source: 'proofspec',
+      code: finding.kind,
+    }
+  })
+
+  return JSON.stringify({ diagnostics })
 }
