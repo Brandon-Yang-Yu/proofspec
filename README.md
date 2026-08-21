@@ -46,11 +46,37 @@ npm install -D proofspec   # or: pnpm add -D proofspec
 npx proofspec check    # rebuild the spec tree from the tests and report drift
 npx proofspec write    # record what the tests prove into specs/
 npx proofspec render   # write the readable spec site to build/ (build/spec.md is the whole spec in one page)
+npx proofspec touched  # name the scenarios this branch's changes touched
 ```
 
 Tests are read from `tests/` and capability files from `specs/` by default
 (`--tests` / `--specs` to change). `write` fills the scenario blocks of capability
 files you author, so create `specs/<capability>.md` before the first write.
+
+### What did this change touch?
+
+`touched` reads the changes to your tests and names the promises they reached:
+
+```sh
+npx proofspec touched              # since this branch left main
+npx proofspec touched --since HEAD # since the last commit
+```
+
+```
+touched since 7cdd20f
+
+tests/cli/touched.test.ts:32  A change inside a proof names the scenario  [the claim changed]
+    cli → A command says which scenarios a change touched  → specs/cli.md:112
+tests/cli/support.ts:128-161  changed outside every proof
+```
+
+A proof runs from its `// Requirement:` line to the last line of its test, so editing the
+Gherkin counts as touching the scenario — and is reported as the claim changing, not the
+proof. Changes to a helper or a fixture are listed as touching nothing. A proof the change
+deleted is read back from the base revision and reported as no longer proven.
+
+It counts the working tree and files git has never seen, not only what is committed, and it
+always exits zero: it reports, it does not judge. The command that fails a build is `check`.
 
 ### Output formats
 

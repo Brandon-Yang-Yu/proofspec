@@ -54,3 +54,22 @@ function recordedEntries(section: RequirementSection, lines: readonly string[]):
   })
   return entries.sort((a, b) => compareStrings(a.scenario, b.scenario))
 }
+
+/**
+ * The line each requirement heading is written on, 1-based, by requirement name. Delivered
+ * on demand and never stored, the same rule a scenario's position follows: the heading moves
+ * whenever a line above it does.
+ *
+ * It lives here because nothing outside `spec-file` knows the file is Markdown, so nothing
+ * else could find the line without learning the format.
+ */
+export function requirementLines(source: string): ReadonlyMap<string, number> {
+  const lines = new Map<string, number>()
+  for (const section of findSections(readMarkdown(source))) {
+    // A name written twice keeps the first heading: the guard warns about the repeat, and a
+    // reader sent to the first one is sent to where the requirement was declared.
+    if (lines.has(section.requirement)) continue
+    lines.set(section.requirement, section.headingLine + 1)
+  }
+  return lines
+}

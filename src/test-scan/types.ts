@@ -21,6 +21,12 @@ export type ProofSite = {
   /** The steps above the site. A block also carries the GIVEN/WHEN above its test. */
   readonly steps: readonly Step[]
   readonly file: string
+  /**
+   * 1-based line the site opens on: the top of the comment block carrying its tag and
+   * Gherkin. Equal to `line` when nothing sits above the code. The claim is written above
+   * the code it tags, so this is where the site starts as a reader sees it.
+   */
+  readonly tagLine: number
   /** 1-based line of the tagged code: the test, or the statement that opens the block. */
   readonly line: number
   /** 1-based last line of the site: the end of the test, or of the block. */

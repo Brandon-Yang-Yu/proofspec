@@ -7,6 +7,7 @@
  */
 
 import type { GuardReport } from '../guard/index.ts'
+import type { LineRange, TouchedScenario } from '../locate/index.ts'
 
 /** Where a repo keeps its capability files and its tests, both as directories under the root. */
 export type Locations = {
@@ -21,7 +22,51 @@ export type Locations = {
  * its pages into; left out, it falls back to `build/` at the repo root. It is a generated
  * output, so a project gitignores it rather than committing it.
  */
-export type RunOptions = { readonly cwd: string; readonly out?: string } & Partial<Locations>
+export type RunOptions = {
+  readonly cwd: string
+  readonly out?: string
+  /** The revision `touched` measures from; left out, it uses where the branch left `main`. */
+  readonly since?: string
+} & Partial<Locations>
+
+/** Where a requirement is written: the capability file, and the line of its heading. */
+export type SpecLocation = {
+  readonly file: string
+  readonly line: number
+}
+
+/** A scenario a change touched, plus where the requirement it proves is written. */
+export type TouchedScenarioReport = TouchedScenario & {
+  /** Absent when no capability file declares the requirement — a gap the check reports. */
+  readonly spec: SpecLocation | undefined
+}
+
+/** Changed lines that fall in no proof: a helper, an import, a fixture. */
+export type UnmatchedLines = LineRange & {
+  readonly file: string
+}
+
+/** A scenario the change stopped proving, read from the base revision. */
+export type GoneScenario = {
+  readonly capability: string
+  readonly requirement: string
+  readonly scenario: string
+  /** The file that used to prove it. */
+  readonly file: string
+  readonly spec: SpecLocation | undefined
+}
+
+/**
+ * What a change touched. It is a report, never a verdict: `gone` names a promise nothing
+ * proves any more, but deciding whether that fails a build is the check's job, not this one's.
+ */
+export type TouchedReport = {
+  /** The revision everything here was measured against. */
+  readonly base: string
+  readonly scenarios: readonly TouchedScenarioReport[]
+  readonly unmatched: readonly UnmatchedLines[]
+  readonly gone: readonly GoneScenario[]
+}
 
 /**
  * The result of a command, as a value. `cannot-run` is kept apart from a checked report on
@@ -35,5 +80,6 @@ export type RunOptions = { readonly cwd: string; readonly out?: string } & Parti
  */
 export type Outcome =
   | { readonly kind: 'checked'; readonly report: GuardReport }
+  | { readonly kind: 'touched'; readonly report: TouchedReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
   | { readonly kind: 'cannot-run'; readonly reason: string }

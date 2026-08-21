@@ -1012,3 +1012,63 @@ shared-not-copied stance §22 took with `firstSiteByIdentity`.
 **It carries the links, not the code.** A scenario in the full page links to the snippet that
 proves it, exactly as on a capability page. Inlining every proof would have doubled the file
 with the code pages' content and buried the promise it exists to show.
+
+## 25. Which promises did this change touch
+
+`check` asks whether the tests and the committed files agree. Reviewing a diff asks the
+opposite question: *this* change — which promises did it put its hands on? Everything needed
+to answer it was already here. A proof site carries its file and its line span, and a
+scenario's identity is what the committed files record, so changed lines → sites → scenarios
+→ requirements is a lookup, not an inference. All that was missing was reading the diff.
+
+**A proof starts where its claim is written.** The first cut matched changed lines against
+`[site.line, endLine]` — the test itself. On this repo's own branches that finds the same
+scenarios nearly every time, because a rewritten claim usually comes with a rewritten test
+under it: on the branch that added §24, all six touched scenarios were found either way. What
+body-only matching cannot see is the change that touches *only* the claim. Rename a scenario,
+or reword a THEN, and every changed line sits in the comment block above the test: measured
+here, a one-word edit to a THEN on line 23 of a proof whose code opens on line 25 is reported
+as "changed outside every proof" and names no promise at all. Passing most of the time on
+luck is worse than failing, because the one case it misses is the promise being rewritten —
+the edit a reviewer must not miss.
+
+So the claim is part of the site. `test-scan` reports `tagLine`, the line the tag-and-Gherkin
+block opens on, and the span runs from there to the test's last line.
+
+**The claim and the proof are different news.** A change above the tagged line rewrote the
+promise; one below it rewrote only the evidence. The report says which, because they ask the
+reader different questions: "should this promise change?" against "does this still prove it?"
+
+**Lines that prove nothing are still reported.** A helper, an import, a fixture — a real
+change with no promise behind it. Dropping them would read as "this change touched nothing"
+when it touched plenty.
+
+**No seventh capability.** The git process is a boundary, and `cli` already owns the
+boundaries (§20): `cli/diff.ts` runs git and turns a `--unified=0` diff into line ranges,
+the way `cli/discover.ts` turns a directory into strings. Matching those ranges against
+sites is the inverse of locating a scenario, so it lands in `locate` beside `locate` itself.
+The count stays six.
+
+**It measures from where the branch left `main`.** Work happens in a worktree per task
+(`CLAUDE.md` Rule 5), so the useful default is "what did this branch touch", not "what is
+uncommitted". It counts the working tree and files git has never seen, because in a worktree
+most of the work is uncommitted most of the time — diffing `main...HEAD` on this very branch
+reported nothing while every change sat in the working tree.
+
+**A deleted proof is read from the base revision.** The current files cannot say what was
+removed, so the old version of a changed file is fetched with `git show` and scanned. A
+scenario that merely moved is still proven somewhere and is not reported gone; one that is
+proven nowhere now is named, so a promise left with nothing behind it surfaces at review time
+rather than at the next `check`.
+
+**It reports, it never judges.** Whatever it finds, it exits zero — including a promise
+nothing proves any more. Turning a fact into a failed build is `check`'s job, and giving two
+commands the power to fail CI for the same cause would make it ambiguous which one to fix.
+
+**What it deliberately does not do.** It maps *tests* to promises, not source code to
+promises. Which test covers `src/locate/render.ts` is not something this tool knows: it would
+take per-test coverage or a call graph, both of them external, and the call graph is exactly
+what goes stale in a worktree (the codebase-memory index tracks the main checkout only). If
+that link is ever wanted, it should arrive as an input — a file-to-test map handed in — with
+`touched` still doing only its own half: tests to promises.
+

@@ -1,7 +1,11 @@
+import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import { compareStrings } from '../../src/order.ts'
+
+const execFileAsync = promisify(execFile)
 
 /**
  * `cli` is the one capability that owns the filesystem, so its tests give it a real one: a
@@ -120,4 +124,38 @@ export function specFile(options: { recorded: readonly string[]; testPath?: stri
     '<!-- /scenarios -->',
     '',
   ].join('\n')
+}
+
+/**
+ * A fixture repo under git, its files committed on `main` — the branch point `touched`
+ * compares against. `commit.gpgsign` is forced off and the identity set on the repo itself,
+ * so the fixture does not depend on whatever the machine running the suite has configured.
+ */
+export type GitRepo = Repo & {
+  /** Overwrites a file in the working tree, creating its directory when it is new. */
+  write(path: string, content: string): Promise<void>
+  /** Runs git in the repo and returns its stdout, trimmed. */
+  git(args: readonly string[]): Promise<string>
+}
+
+export async function makeGitRepo(files: Readonly<Record<string, string>>): Promise<GitRepo> {
+  const repo = await makeRepo(files)
+  const git = async (args: readonly string[]): Promise<string> => {
+    const { stdout } = await execFileAsync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd: repo.root })
+    return stdout.trim()
+  }
+  await git(['init', '-b', 'main'])
+  await git(['config', 'user.email', 'proofspec@example.com'])
+  await git(['config', 'user.name', 'ProofSpec'])
+  await git(['add', '-A'])
+  await git(['commit', '-m', 'base'])
+  return {
+    ...repo,
+    git,
+    write: async (path, content) => {
+      const full = join(repo.root, path)
+      await mkdir(dirname(full), { recursive: true })
+      await writeFile(full, content)
+    },
+  }
 }

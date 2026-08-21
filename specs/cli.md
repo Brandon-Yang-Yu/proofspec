@@ -108,3 +108,33 @@ them.
 - "The render command writes into a chosen directory" → tests/cli/render.test.ts
 - "The render command writes to the default directory when none is given" → tests/cli/render.test.ts
 <!-- /scenarios -->
+
+### Requirement: A command says which scenarios a change touched
+
+The CLI SHALL provide a command that reads the changes to the tests and names every
+scenario whose proof they touched, the requirement each scenario proves, and where that
+requirement is written.
+
+It compares against the branch point with `main` by default, so run inside a task's
+worktree it answers "what did this branch touch"; `--since` names another revision. It
+counts the work as it stands — the working tree and files not yet added to git, not only
+what is committed — because in a worktree most of the work is uncommitted most of the time.
+
+A change that removed a proof is read from the base revision and named too, so a promise
+left with nothing behind it is reported rather than silently missing.
+
+It only reports. Whatever it finds, it SHALL exit zero: "your change touched this promise"
+is not a verdict, and the command that gives verdicts is the check. A repo it cannot read —
+not a git repository, or a revision it cannot resolve — SHALL exit the same cannot-run code
+the other commands use.
+
+<!-- scenarios: generated -->
+- "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
+- "A change inside a proof names the scenario and where its requirement is written" → tests/cli/touched.test.ts
+- "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
+- "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
+- "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
+- "A test file not yet added to git is counted" → tests/cli/touched.test.ts
+- "Changed lines that prove nothing are reported as touching no scenario" → tests/cli/touched.test.ts
+- "Whatever it touched, the command exits zero" → tests/cli/touched.test.ts
+<!-- /scenarios -->

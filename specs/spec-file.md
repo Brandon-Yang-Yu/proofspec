@@ -96,3 +96,18 @@ the guard could ever disagree about the same input, a clean repo would fail its 
 - "Entries come out in title order whatever order they were given" → tests/spec-file/idempotence.test.ts
 - "Writing back a file that has just been written changes nothing" → tests/spec-file/idempotence.test.ts
 <!-- /scenarios -->
+
+### Requirement: Where each requirement is written is delivered on demand
+
+Asked where a capability file's requirements are written, spec-file SHALL report the line
+each `### Requirement:` heading sits on, read from the file as it stands.
+
+Nothing outside spec-file knows the file is Markdown, so nothing else can find that line.
+It is delivered, never stored — the same rule a scenario's position follows — and it obeys
+the same fence rule reading does, so a heading shown as an example inside a code fence is
+not reported as a place a requirement is written.
+
+<!-- scenarios: generated -->
+- "A heading shown inside a code fence is not a place a requirement is written" → tests/spec-file/lines.test.ts
+- "A requirement's heading line is reported as it stands" → tests/spec-file/lines.test.ts
+<!-- /scenarios -->

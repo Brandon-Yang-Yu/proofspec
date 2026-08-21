@@ -37,6 +37,7 @@ export function site(fields: {
     steps: fields.steps ?? [A_STEP],
     file: fields.file ?? FILE,
     line,
+    tagLine: line,
     endLine: line,
   }
 }
