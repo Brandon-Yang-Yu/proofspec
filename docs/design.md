@@ -1123,3 +1123,54 @@ cycle.
 
 **It reports, it never judges.** Exit zero whatever it finds, for the reason §25 gives.
 
+## 27. Which scenarios actually ran the change
+
+§26 ends at a ceiling: a call graph reaches a test file, never a scenario inside it. Lifting
+it needs something a static reading cannot give — what a test *did*, not what it could do. So
+`impact` takes a second, optional input: a recording of a real test run.
+
+**The join key is the line, not the title.** A recording names a test; a spec names a
+scenario; in ProofSpec's own style those two strings differ on purpose (`it('renders each
+capability as its own page')` proves `Scenario: A capability is rendered as its own page`).
+Matching them by text would be a guess. What both sides do agree on is *where* the test is:
+vitest's `includeTaskLocation` gives each test the line it opens on, and that is exactly the
+line a proof site carries. A record with no location is dropped rather than written, because a
+record that matched the wrong proof would be worse than a missing one.
+
+**Counters are cumulative, so a test owns only what moved.** Istanbul's counters hold every
+hit since the file was instrumented: by the tenth test they carry what the first nine did too.
+The functions a test ran are the ones whose counters went up between a snapshot before it and
+one after. That difference is the whole mechanism, and it is the one part worth a test of its
+own — `impact.functionsRun` — while the setup file around it stays glue.
+
+**Function names, not line numbers, and that was found by measuring.** The obvious design was
+to record the source *lines* a test executed and intersect them with the diff. It is wrong:
+istanbul's `statementMap` holds positions in the *transformed* code, and the drift grows with
+every comment stripped — `identityKey` reported as line 9 where the source has it at 10,
+`spanOf` as 46 where it sits at 54. Recovering original lines means carrying source maps
+through the collector. Recording which *functions* ran sidesteps all of it, and it is the
+right granularity anyway: `impact` has already turned changed lines into changed functions via
+the graph, so functions are what the two sides can be matched on. Inline callbacks come
+through as `(anonymous_3)` and match nothing, which costs nothing — a change inside a callback
+belongs to the named function around it, and that is the one the graph reports.
+
+**Both views are kept, and they disagree usefully.** The tree still comes from the graph,
+because only the graph can say *how* a test reaches the change. The list of promises comes
+from the run when there is one. On the change that added this feature the graph reached 4 test
+files and 16 scenarios; the recording narrowed that to 2 and 12. The two it dropped —
+`tests/cli/format.test.ts` and `tests/cli/json.test.ts` — really can reach the changed
+renderer through `renderText`, but they only ever render a `checked` outcome, so they never
+run it. That gap is the point: the graph's list is a superset kept deliberately wide, and the
+run's list is exact. The report says which of the two is on the page.
+
+**A recording that cannot be read is a cannot-run.** Falling back to the wide list would hand
+a reader the superset while they believe they are holding the exact answer, which is worse
+than either alone.
+
+**Two operational facts, both found by running it.** The indexer's `--mode fast` produced 4
+call edges out of this repo's tests where a full index produced 170 — the first tree came out
+with no tests on it at all, and nothing about the output said why. And the indexer excludes
+any directory named `coverage`, which silently swallowed the collector's own source until it
+was renamed to `src/test-run`. Both are now in `docs/coverage.md`, because a tool whose
+answer quietly depends on how its input was built has to say so where its user is looking.
+

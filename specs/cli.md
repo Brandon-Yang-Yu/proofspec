@@ -160,3 +160,20 @@ Changed tests are `touched`'s question, so this command reads everything except 
 - "A graph that cannot be read is a cannot-run" → tests/cli/impact.test.ts
 - "Whatever it reaches, the command exits zero" → tests/cli/impact.test.ts
 <!-- /scenarios -->
+
+### Requirement: A test run narrows the tree to the scenarios that ran the change
+
+Given what a test run recorded, the command SHALL name only the scenarios that ran the
+changed functions, in place of every scenario their files hold.
+
+The call graph reaches a test file, never a scenario inside it: one file's tests usually call
+the same entry point, so without a run the honest answer is every promise that file proves. A
+run says which of them executed the change, which is the answer a reviewer wanted. A recording
+that cannot be read SHALL be a cannot-run rather than a silent fall back to the wide list —
+asking for the exact answer and being given the wide one without being told is worse than
+either.
+
+<!-- scenarios: generated -->
+- "A recording that cannot be read is a cannot-run" → tests/cli/impact.test.ts
+- "Only the scenarios a run executed are named" → tests/cli/impact.test.ts
+<!-- /scenarios -->

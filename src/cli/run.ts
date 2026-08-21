@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { guard } from '../guard/index.ts'
-import { impactTree } from '../impact/index.ts'
-import type { ImpactNode } from '../impact/index.ts'
+import { impactTree, testsRunning } from '../impact/index.ts'
+import type { GraphNode, ImpactNode, TestReach } from '../impact/index.ts'
 import { renderSite, scenariosTouched } from '../locate/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import { compareStrings } from '../order.ts'
@@ -12,6 +12,7 @@ import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
 import { readChangedFiles, readFileAt } from './diff.ts'
+import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
@@ -223,15 +224,75 @@ export async function impact(options: RunOptions): Promise<Outcome> {
     depth: options.depth ?? DEFAULT_DEPTH,
   })
 
+  const specs = specLocations(inputs.specs)
+  if (options.coverage === undefined) {
+    return {
+      kind: 'impact',
+      report: {
+        base: diff.base,
+        changed: tree.changed,
+        unmapped: tree.unmapped,
+        proves: provenBy(testFilesOn(tree.changed), { specs, scans }),
+        from: 'call-graph',
+      },
+    }
+  }
+
+  const runs = await readTestRuns({ cwd: options.cwd, from: options.coverage })
+  if (!runs.ok) return { kind: 'cannot-run', reason: runs.reason }
+  const ran = testsRunning({ functions: changedFunctions(tree.changed), runs: runs.runs })
   return {
     kind: 'impact',
     report: {
       base: diff.base,
       changed: tree.changed,
       unmapped: tree.unmapped,
-      proves: provenBy(testFilesOn(tree.changed), { specs: specLocations(inputs.specs), scans }),
+      proves: provenByRun(ran, { specs, scans }),
+      from: 'test-run',
     },
   }
+}
+
+/** The changed functions themselves — the roots of the tree, which is what a run is matched on. */
+function changedFunctions(nodes: readonly ImpactNode[]): readonly GraphNode[] {
+  return nodes.map(node => node.fn)
+}
+
+/**
+ * What the tests that actually ran the change prove. A run names a test by the line it opens
+ * on, and a proof site spans its whole claim and code, so the scenario is the one whose span
+ * that line falls in — the same match `touched` makes, with a single line for a range.
+ */
+function provenByRun(
+  ran: readonly TestReach[],
+  from: { readonly specs: SpecLocations; readonly scans: readonly FileScan[] },
+): TestProves[] {
+  const byFile = new Map<string, TouchedScenario[]>()
+  for (const test of ran) {
+    const sites = from.scans.filter(scan => scan.file === test.file).flatMap(scan => scan.sites)
+    const found = scenariosTouched(sites, [{ from: test.line, to: test.line }]).scenarios
+    if (found.length === 0) continue
+    byFile.set(test.file, [...(byFile.get(test.file) ?? []), ...found])
+  }
+  return [...byFile]
+    .sort(([a], [b]) => compareStrings(a, b))
+    .map(([file, scenarios]) => ({ file, requirements: groupByRequirement(scenarios, from.specs) }))
+}
+
+/** One entry per requirement, carrying the scenarios of it that ran, in the order they ran. */
+function groupByRequirement(
+  scenarios: readonly TouchedScenario[],
+  specs: SpecLocations,
+): ProvenRequirement[] {
+  const byRequirement = new Map<string, ProvenRequirement>()
+  for (const scenario of scenarios) {
+    const identity = { capability: scenario.capability, requirement: scenario.requirement }
+    const key = `${identity.capability}\u0000${identity.requirement}`
+    const held = byRequirement.get(key) ?? { ...identity, spec: specFor(identity, specs), scenarios: [] }
+    if (held.scenarios.includes(scenario.scenario)) continue
+    byRequirement.set(key, { ...held, scenarios: [...held.scenarios, scenario.scenario] })
+  }
+  return [...byRequirement.values()]
 }
 
 /** How far up the call chain the walk goes unless a run says otherwise. */

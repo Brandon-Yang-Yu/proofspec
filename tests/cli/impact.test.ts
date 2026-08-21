@@ -140,3 +140,49 @@ it('exits zero whatever the change reaches', async () => {
   expect(reportOf(outcome).changed).toHaveLength(1)
   expect(exitCodeOf(outcome)).toBe(0)
 })
+
+// Requirement: A test run narrows the tree to the scenarios that ran the change
+// Scenario: Only the scenarios a run executed are named
+// GIVEN a test file proving two scenarios, and a recording that only the first ran the change
+// WHEN the impact command runs with that recording
+// THEN only the first scenario is named, where the call graph alone would have named both,
+//      because reaching the file is what the graph knows and running the change is what the
+//      recording knows
+it('names only the scenarios a test run executed', async () => {
+  const repo = await makeGitRepo(repoFiles())
+  await repo.write(SOURCE, 'export function thing() {\n  return 2\n}\n')
+  // The fixture's first test opens on line 6, its second on line 12.
+  await repo.write('coverage.jsonl', `${JSON.stringify({ file: TEST_PATH, line: 6, ran: [{ file: SOURCE, names: ['thing'] }] })}\n`)
+
+  const report = reportOf(await impact({ cwd: repo.root, graph: GRAPH, coverage: 'coverage.jsonl' }))
+
+  expect(report.from).toBe('test-run')
+  expect(report.proves).toEqual([
+    {
+      file: TEST_PATH,
+      requirements: [
+        {
+          capability: CAPABILITY,
+          requirement: REQUIREMENT,
+          spec: { file: `specs/${CAPABILITY}.md`, line: 3 },
+          scenarios: [FIRST],
+        },
+      ],
+    },
+  ])
+})
+
+// Requirement: A test run narrows the tree to the scenarios that ran the change
+// Scenario: A recording that cannot be read is a cannot-run
+// GIVEN a run pointed at a recording that is not there
+// WHEN the impact command runs
+// THEN it is cannot-run, rather than falling back to what the call graph alone can reach:
+//      being handed the wide list while believing it is the exact one is worse than either
+it('refuses to fall back when the recording cannot be read', async () => {
+  const repo = await makeGitRepo(repoFiles())
+  await repo.write(SOURCE, 'export function thing() {\n  return 2\n}\n')
+
+  const outcome = await impact({ cwd: repo.root, graph: GRAPH, coverage: 'nowhere.jsonl' })
+
+  expect(outcome.kind).toBe('cannot-run')
+})
