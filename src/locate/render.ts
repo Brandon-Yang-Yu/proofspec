@@ -116,7 +116,7 @@ function renderScenario(identity: ScenarioIdentity, section: Section): string {
   // The location links to the anchored snippet that proves this scenario. The fragment is the
   // slug of the scenario title — the same one the code page's heading gets — so the anchor
   // reads as the scenario, not a bare line number, and the reader lands on the proof.
-  const location = `[${site.file}:${site.line}](${site.file}#${slugOf(site.scenario)})`
+  const location = `[${site.file}:${site.line}](${codePagePath(site.file)}#${slugOf(site.scenario)})`
   if (site.steps.length === 0) return [heading, location].join('\n\n')
   const steps = site.steps.map(step => `- **${step.keyword}** ${step.text}`).join('\n')
   return [heading, location, steps].join('\n\n')
@@ -129,7 +129,7 @@ function renderCodePages(sites: readonly ProofSite[], tests: readonly TestSource
   return [...tests]
     .filter(test => byFile.has(test.path))
     .sort((a, b) => compareStrings(a.path, b.path))
-    .map(test => ({ path: `${test.path}.md`, content: renderCodePage(test, byFile.get(test.path)!) }))
+    .map(test => ({ path: codePagePath(test.path), content: renderCodePage(test, byFile.get(test.path)!) }))
 }
 
 function renderCodePage(test: TestSource, fileSites: readonly ProofSite[]): string {
@@ -150,10 +150,17 @@ function renderSnippet(site: ProofSite, lines: readonly string[]): string {
   return parts.join('\n\n')
 }
 
+/** Where a test file's code page is written, and so where a scenario's link must point. */
+function codePagePath(file: string): string {
+  return `${file}.md`
+}
+
 /**
  * The heading slug Quartz gives a title, so a scenario's link can target its snippet. Matches
  * github-slugger for the plain-English titles the tests carry: lower-case, drop punctuation,
- * spaces to hyphens. Titles are unique within a requirement, so the slug is a stable anchor.
+ * spaces to hyphens. A code page's scope is the file, not the requirement, so two scenarios
+ * sharing a title under different requirements would collide there — `guard` allows that, and
+ * no title in this repo does it. If one ever does, this is where the anchor stops being stable.
  */
 function slugOf(title: string): string {
   return title.toLowerCase().replace(/[^\w\- ]+/g, '').replace(/ /g, '-')
