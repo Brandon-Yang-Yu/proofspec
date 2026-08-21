@@ -51,3 +51,33 @@ from the test — one hop is a direct proof, four hops is a test that merely pas
 - "A test that calls a caller of the change is named under that caller" → tests/impact/tree.test.ts
 - "A test that calls a changed function is named under it" → tests/impact/tree.test.ts
 <!-- /scenarios -->
+
+### Requirement: A test's own coverage is the counters that moved while it ran
+
+Given a coverage counter snapshot from before a test and one from after, impact SHALL name
+the functions whose counters went up, and no others.
+
+Coverage counters are cumulative: by the tenth test they hold what the first nine did too.
+Reading them straight would say every test runs everything. The difference between two
+snapshots is what that one test ran, and it is the only thing that makes per-test attribution
+mean anything.
+
+<!-- scenarios: generated -->
+- "A counter that went up while the test ran names a function it executed" → tests/impact/coverage.test.ts
+- "A counter the test never moved is not named however high it stands" → tests/impact/coverage.test.ts
+<!-- /scenarios -->
+
+### Requirement: The tests that ran a changed function are named from coverage
+
+Given what each test ran and the functions a change edited, impact SHALL name the tests that
+ran one of them.
+
+The call graph says a test file *can* reach the change; this says a test *did*. It is matched
+on the function and the file it lives in together, because two files may each hold a function
+of the same name and only one of them changed.
+
+<!-- scenarios: generated -->
+- "A function of the same name in another file is not a match" → tests/impact/coverage.test.ts
+- "A test that ran a changed function is named" → tests/impact/coverage.test.ts
+- "A test that ran only other functions is not named" → tests/impact/coverage.test.ts
+<!-- /scenarios -->

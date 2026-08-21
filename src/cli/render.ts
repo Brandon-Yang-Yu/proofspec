@@ -150,7 +150,10 @@ function renderImpact(report: ImpactReport): string {
     parts.push(['changed, but the graph knows no function here:', ...report.unmapped.map(file => `  ${file}`)].join('\n'))
   }
   if (report.proves.length > 0) {
-    parts.push(['to review:', ...report.proves.map(renderProves)].join('\n'))
+    // Which of the two views this is matters: the graph's list is a superset kept
+    // deliberately wide, a run's list is exactly what executed the change.
+    const heading = report.from === 'test-run' ? 'to review (these ran the change):' : 'to review (these can reach it):'
+    parts.push([heading, ...report.proves.map(renderProves)].join('\n'))
   }
   return parts.join('\n\n')
 }

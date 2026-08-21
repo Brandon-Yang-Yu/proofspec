@@ -37,6 +37,7 @@ Options:
   --graph <file>  A call graph for impact to walk, instead of the indexed one
   --project <id>  The indexed project impact reads (default: derived from the directory)
   --depth <n>     How far up the call chain impact walks (default: 4)
+  --coverage <f>  What a test run recorded, narrowing impact to the scenarios that ran
   --format <fmt>  Output format: text (default), json, quickfix, diagnostics
   --json          Print the answer as JSON instead of text (legacy, use --format json)
   -h, --help      Show this help`
@@ -55,6 +56,7 @@ try {
       graph: { type: 'string' },
       project: { type: 'string' },
       depth: { type: 'string' },
+      coverage: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -95,6 +97,7 @@ const options: RunOptions = {
   graph: values.graph,
   project: values.project,
   depth: values.depth === undefined ? undefined : Number(values.depth),
+  coverage: values.coverage,
 }
 const outcome = await runCommand(positionals[0], options)
 

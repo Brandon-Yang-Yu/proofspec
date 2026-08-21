@@ -68,6 +68,23 @@ export type ImpactNode =
       readonly fn: GraphNode
     }
 
+/** The functions one file's code ran during a test. */
+export type RanFunctions = {
+  readonly file: string
+  readonly names: readonly string[]
+}
+
+/**
+ * What one test ran, as a coverage collector records it. The line is the one the test opens
+ * on - the same line a proof site carries - so a run joins back to the scenario it proves
+ * without depending on a title matching between the two.
+ */
+export type TestRun = {
+  readonly file: string
+  readonly line: number
+  readonly ran: readonly RanFunctions[]
+}
+
 export type ImpactTree = {
   /** The changed functions, each with everything that reaches it. */
   readonly changed: readonly ImpactNode[]

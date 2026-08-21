@@ -34,6 +34,8 @@ export type RunOptions = {
   readonly project?: string
   /** How far up the call chain `impact` walks. */
   readonly depth?: number
+  /** What a test run recorded, narrowing `impact` from test files to scenarios. */
+  readonly coverage?: string
 } & Partial<Locations>
 
 /** Where a requirement is written: the capability file, and the line of its heading. */
@@ -100,6 +102,12 @@ export type ImpactReport = {
   /** Changed files holding no function the graph knows. */
   readonly unmapped: readonly string[]
   readonly proves: readonly TestProves[]
+  /**
+   * How `proves` was arrived at. The call graph says which test files *can* reach the
+   * change; a test run says which scenarios *did*. A reader has to know which of the two is
+   * on the page, because one is a superset kept deliberately wide and the other is exact.
+   */
+  readonly from: 'call-graph' | 'test-run'
 }
 
 /**

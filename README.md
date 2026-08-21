@@ -113,9 +113,31 @@ index it first. A graph can also be handed in as JSON — `{ nodes: [...], calls
 which is how the tests give it one.
 
 The tests hang off the function they actually call, so you can see how far each is from what
-changed. **The unit is the test file, not the scenario**: a graph records one call edge per
-test file, and every test in a file usually calls the same entry point. Narrowing further
-would take per-test coverage.
+changed. On its own the unit is the **test file**, not the scenario: a graph records one call
+edge per test file, and every test in a file usually calls the same entry point.
+
+### Which scenarios actually ran it?
+
+A call graph says a test file *can* reach the change. A real test run says which scenarios
+*did*. Record one, and `impact` narrows to exactly those:
+
+```sh
+vitest run -c vitest.coverage.config.ts       # writes .proofspec-coverage.jsonl
+npx proofspec impact --coverage .proofspec-coverage.jsonl
+```
+
+```
+to review (these ran the change):
+tests/impact/coverage.test.ts
+  impact → The tests that ran a changed function are named from coverage  → specs/impact.md:68
+     · A test that ran a changed function is named
+     ...
+```
+
+On the change that added this feature, the call graph reached 4 test files / 16 scenarios and
+the recording narrowed it to 2 files / 12 — the two it dropped can reach the changed code but
+never execute it. Setting up the collector takes a config of its own; see
+[`docs/coverage.md`](docs/coverage.md).
 
 ### Output formats
 

@@ -27,7 +27,17 @@
   },
   "exports": {
     ".": "./dist/cli/index.js",
+    "./vitest-setup": "./dist/test-run/vitest-setup.js",
+    "./vitest-global": "./dist/test-run/vitest-global.js",
     "./src/*": "./src/*"
+  },
+  "peerDependencies": {
+    "vitest": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "files": [
     "dist"
@@ -37,6 +47,7 @@
     "prepare": "node -e \"const{existsSync}=require('node:fs');if(existsSync('.githooks'))require('node:child_process').execSync('git config core.hooksPath .githooks')\"",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "test": "vitest run",
+    "coverage": "vitest run -c vitest.coverage.config.ts",
     "typecheck": "tsc -p tsconfig.json",
     "prepublishOnly": "pnpm test && pnpm typecheck && pnpm build",
     "proofspec": "node --experimental-transform-types src/cli/main.ts"
@@ -46,6 +57,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@vitest/coverage-istanbul": "^4.1.10",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
