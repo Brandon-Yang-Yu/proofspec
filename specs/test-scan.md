@@ -94,14 +94,21 @@ when it is needed most.
 
 ### Requirement: Every proof site reports its current position
 
-The scan SHALL report the line of each proof site and the line of each of its steps.
+The scan SHALL report the line of each proof site, the line its tag block opens on, and
+the line of each of its steps.
 `locate` needs them to answer where a scenario is. `guard` needs them to point at what
 caused an error.
+
+A site starts where its claim is written, not where its code is: the `### Requirement:` and
+`Scenario:` tags and the Gherkin sit in the comment block above the test. Reporting that
+line is what lets a reader ask which promises a change reached, since editing a claim edits
+the site.
 
 Positions SHALL be right in files containing non-ASCII text. A spec written in any
 language is still a spec.
 
 <!-- scenarios: generated -->
+- "A proof site reports the line its tag block opens on" → tests/test-scan/position.test.ts
 - "A proof site reports the line of the code it tags" → tests/test-scan/position.test.ts
 - "Each step reports its own line" → tests/test-scan/position.test.ts
 - "Positions are right in a file containing non-ASCII text" → tests/test-scan/position.test.ts

@@ -37,3 +37,31 @@ export type PositionedCapability = {
 export type PositionedTree = {
   readonly capabilities: readonly PositionedCapability[]
 }
+
+/** A run of 1-based lines in a file, both ends inclusive. */
+export type LineRange = {
+  readonly from: number
+  readonly to: number
+}
+
+/**
+ * A scenario a change reached, and how far in it got. `claim` is the whole point of the
+ * distinction: a change to the Gherkin rewrites the promise, a change below it only rewrites
+ * the proof, and a reader reviewing a diff has to tell those apart.
+ */
+export type TouchedScenario = {
+  readonly capability: string
+  readonly requirement: string
+  readonly scenario: string
+  readonly file: string
+  /** The proof's first line, the Gherkin above the code included. */
+  readonly from: number
+  readonly to: number
+  readonly claim: 'changed' | 'unchanged'
+}
+
+/** What a set of changed lines touched: the scenarios, and the lines that proved nothing. */
+export type TouchedScenarios = {
+  readonly scenarios: readonly TouchedScenario[]
+  readonly unmatched: readonly LineRange[]
+}

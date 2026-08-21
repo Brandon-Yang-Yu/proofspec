@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, render, write } from './run.ts'
+import { check, render, touched, write } from './run.ts'
 import { exitCodeOf, renderDiagnostics, renderJson, renderQuickfix, renderText } from './render.ts'
 import type { Outcome, RunOptions } from './types.ts'
 
@@ -24,11 +24,14 @@ Commands:
   write    Record what the tests prove into the committed capability files.
   render   Write the readable spec site (an index, the full spec in one page, and one
            page per capability).
+  touched  Name the scenarios this branch's changes touched, and where each one's
+           requirement is written. Always exits zero: it reports, it does not judge.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
   --tests <dir>   Where the tests live (default: tests)
   --out <dir>     Where render writes its pages (default: build)
+  --since <rev>   What touched compares against (default: where the branch left main)
   --format <fmt>  Output format: text (default), json, quickfix, diagnostics
   --json          Print the answer as JSON instead of text (legacy, use --format json)
   -h, --help      Show this help`
@@ -43,6 +46,7 @@ try {
       specs: { type: 'string' },
       tests: { type: 'string' },
       out: { type: 'string' },
+      since: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -79,6 +83,7 @@ const options: RunOptions = {
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,
+  since: values.since,
 }
 const outcome = await runCommand(positionals[0], options)
 
@@ -104,6 +109,10 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'check') return check(options)
   if (command === 'write') return write(options)
   if (command === 'render') return render(options)
+  if (command === 'touched') return touched(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
-  return Promise.resolve({ kind: 'cannot-run', reason: `${named}. Use "check", "write", or "render".` })
+  return Promise.resolve({
+    kind: 'cannot-run',
+    reason: `${named}. Use "check", "write", "render", or "touched".`,
+  })
 }

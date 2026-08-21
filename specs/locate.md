@@ -105,3 +105,24 @@ delivered from the tests each run, never stored, so it is not a second copy of b
 - "A snippet is headed by its scenario" → tests/locate/render.test.ts
 - "A snippet shows its scenario's Gherkin" → tests/locate/render.test.ts
 <!-- /scenarios -->
+
+### Requirement: The scenarios proven at a set of lines can be found
+
+Given a file's proof sites and a set of its lines, locate SHALL name every scenario whose
+proof those lines fall in, and report the lines that fall in none.
+
+This is the inverse of asking where a scenario is: it asks what a change touched. A
+scenario's claim sits *above* its code — the Gherkin comment block comes before the test —
+so the span a line is matched against runs from the first step to the last line of the
+proof. Matching only the test body would miss the one change that matters most: a rewritten
+GIVEN/WHEN/THEN is the promise itself changing, so locate SHALL say which of the two a
+change reached. Lines that fall in no proof are reported rather than dropped, because a
+helper, an import, or a fixture is a real change with no promise behind it.
+
+<!-- scenarios: generated -->
+- "A line changed in the Gherkin above a proof says the claim changed" → tests/locate/touched.test.ts
+- "A line changed inside a proof names the scenario it proves" → tests/locate/touched.test.ts
+- "A line changed outside every proof is reported as matching none" → tests/locate/touched.test.ts
+- "A proof with no capability names no scenario" → tests/locate/touched.test.ts
+- "A scenario is named once however many changed lines fall in it" → tests/locate/touched.test.ts
+<!-- /scenarios -->

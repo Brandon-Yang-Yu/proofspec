@@ -67,7 +67,13 @@ function readCapability(
 
 // --- turning one test into its proof sites -----------------------------------
 
-type TaggedStatement = { readonly statement: AstNode; readonly index: number; readonly block: ParsedBlock }
+type TaggedStatement = {
+  readonly statement: AstNode
+  readonly index: number
+  readonly block: ParsedBlock
+  /** Where the statement's leading comments open, or the statement itself when it has none. */
+  readonly tagLine: number
+}
 
 /**
  * A test is a proof site two ways (§13). A tag pair directly above it makes the whole
@@ -81,14 +87,18 @@ function collectFromTest(
   const { file, lines, comments } = context
   const testLine = lines.of(call.start)
 
-  const above = parseBlock(comments.leadingBlock(testLine), file)
-  const body = testBody(call).map(
-    (statement, index): TaggedStatement => ({
+  const aboveComments = comments.leadingBlock(testLine)
+  const above = parseBlock(aboveComments, file)
+  const body = testBody(call).map((statement, index): TaggedStatement => {
+    const statementLine = lines.of(statement.start)
+    const leading = comments.leadingBlock(statementLine)
+    return {
       statement,
       index,
-      block: parseBlock(comments.leadingBlock(lines.of(statement.start)), file),
-    }),
-  )
+      block: parseBlock(leading, file),
+      tagLine: opensAt(leading, statementLine),
+    }
+  })
   const errors = [...above.errors, ...body.flatMap(entry => entry.block.errors)]
   const tagged = body.filter(entry => entry.block.tag.tagged)
 
@@ -105,14 +115,19 @@ function collectFromTest(
   if (tagged.length > 0) {
     return { sites: layoutBSites(body, tagged, above, context), errors }
   }
-  return { sites: layoutASite(above, call, testLine, context), errors }
+  return { sites: layoutASite(above, call, { tagLine: opensAt(aboveComments, testLine), testLine }, context), errors }
+}
+
+/** Where a run of leading comments opens, or the tagged line itself when there are none. */
+function opensAt(leading: readonly LineComment[], fallback: number): number {
+  return leading[0]?.line ?? fallback
 }
 
 /** Layout A: the whole test is one site. A lone tag makes no site — guard catches it. */
 function layoutASite(
   above: ParsedBlock,
   call: AstNode,
-  testLine: number,
+  at: { readonly tagLine: number; readonly testLine: number },
   context: FileContext,
 ): ProofSite[] {
   if (!above.tag.tagged) return []
@@ -123,7 +138,8 @@ function layoutASite(
       scenario: above.tag.scenario,
       steps: above.steps,
       file: context.file,
-      line: testLine,
+      tagLine: at.tagLine,
+      line: at.testLine,
       endLine: context.lines.of(call.end),
     },
   ]
@@ -151,6 +167,7 @@ function layoutBSites(
         scenario: start.block.tag.scenario,
         steps: [...above.steps, ...start.block.steps],
         file: context.file,
+        tagLine: start.tagLine,
         line: context.lines.of(start.statement.start),
         endLine: context.lines.of(body[lastIndex]!.statement.end),
       },

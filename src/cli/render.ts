@@ -1,6 +1,6 @@
 import { assertNever } from '../assert-never.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
-import type { Outcome } from './types.ts'
+import type { GoneScenario, Outcome, SpecLocation, TouchedReport, TouchedScenarioReport, UnmatchedLines } from './types.ts'
 
 /**
  * Turns an `Outcome` into the three things the process boundary needs: an exit code, a line
@@ -22,6 +22,10 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
       return outcome.report.status === 'fail' ? EXIT_DRIFT : EXIT_OK
     case 'wrote':
       return EXIT_OK
+    // A report, not a verdict: naming a promise this change touched — even one nothing proves
+    // any more — is not the tool saying the build is wrong. That is the check's answer to give.
+    case 'touched':
+      return EXIT_OK
     case 'cannot-run':
       return EXIT_CANNOT_RUN
     default:
@@ -40,6 +44,8 @@ export function renderText(outcome: Outcome): string {
       return outcome.files.length === 0
         ? 'nothing to write'
         : [`wrote ${outcome.files.length} file(s):`, ...outcome.files.map(file => `  ${file}`)].join('\n')
+    case 'touched':
+      return renderTouched(outcome.report)
     case 'cannot-run':
       return outcome.reason
     default:
@@ -58,11 +64,57 @@ export function renderJson(outcome: Outcome): string {
       return JSON.stringify(outcome.report)
     case 'wrote':
       return JSON.stringify({ changed: outcome.files })
+    case 'touched':
+      return JSON.stringify(outcome.report)
     case 'cannot-run':
       return JSON.stringify({ error: outcome.reason })
     default:
       return assertNever(outcome)
   }
+}
+
+/**
+ * What a change touched, as a person reads it. Each line a reader can act on starts with the
+ * place to open — `file:line` — and the line under it names the promise and where it is
+ * written, so the two questions a diff raises ("which claim is this?" and "where does it
+ * live?") are answered without leaving the report.
+ */
+function renderTouched(report: TouchedReport): string {
+  const nothing = report.scenarios.length === 0 && report.unmatched.length === 0 && report.gone.length === 0
+  if (nothing) return `nothing touched since ${report.base}`
+
+  const parts = [`touched since ${report.base}`]
+  if (report.scenarios.length > 0) parts.push(report.scenarios.map(renderTouchedScenario).join('\n'))
+  if (report.unmatched.length > 0) parts.push(report.unmatched.map(renderUnmatched).join('\n'))
+  if (report.gone.length > 0) parts.push(['no longer proven:', ...report.gone.map(renderGone)].join('\n'))
+  return parts.join('\n\n')
+}
+
+function renderTouchedScenario(scenario: TouchedScenarioReport): string {
+  // The claim is the promise itself; saying so is the difference between "review this
+  // sentence" and "review this test".
+  const claim = scenario.claim === 'changed' ? '  [the claim changed]' : ''
+  return [
+    `${scenario.file}:${scenario.from}  ${scenario.scenario}${claim}`,
+    `    ${scenario.capability} → ${scenario.requirement}${where(scenario.spec)}`,
+  ].join('\n')
+}
+
+function renderUnmatched(lines: UnmatchedLines): string {
+  const at = lines.from === lines.to ? `${lines.from}` : `${lines.from}-${lines.to}`
+  return `${lines.file}:${at}  changed outside every proof`
+}
+
+function renderGone(scenario: GoneScenario): string {
+  return [
+    `${scenario.file}  ${scenario.scenario}`,
+    `    ${scenario.capability} → ${scenario.requirement}${where(scenario.spec)}`,
+  ].join('\n')
+}
+
+/** Where a requirement is written, or nothing when no capability file declares it. */
+function where(spec: SpecLocation | undefined): string {
+  return spec === undefined ? '' : `  → ${spec.file}:${spec.line}`
 }
 
 // The single-character severity tags a quickfix list expects: E for a finding that fails the

@@ -82,3 +82,25 @@ it('fails on a stale capability file', () => {
     lineOf(source, '// THEN the guard fails'),
   ])
 })
+
+// Requirement: Every proof site reports its current position
+// Scenario: A proof site reports the line its tag block opens on
+// GIVEN a test whose tag and Gherkin sit in a comment block above it
+// WHEN the file is scanned
+// THEN the site reports the line that block opens on, which is where the site starts for a
+//      reader: the claim is written above the code, so a change to it is a change to the site
+it('reports the line a proof site opens on, tag block included', () => {
+  const source = `import { guard } from '../src/guard/index.ts'
+
+// Requirement: The guard fails the build on drift
+// Scenario: A stale capability file fails the build
+// THEN the guard fails
+it('fails on a stale capability file', () => {
+  expect(guard(tree)).toBe('fail')
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: The guard fails'))
+})
