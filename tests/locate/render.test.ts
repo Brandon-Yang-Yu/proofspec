@@ -189,15 +189,27 @@ it('renders a proof as a code snippet of its lines', () => {
 // Scenario: A scenario links to the snippet that proves it
 // GIVEN a scenario proven at a line in a test file
 // WHEN the site is rendered
-// THEN the scenario on its capability page links to that proof's `#l<line>` anchor, so the
-//      reader is one click from the snippet that proves it
+// THEN the scenario on its capability page links to that test's code page, anchored at the
+//      scenario, so the link resolves to a page the render writes
 it('links a scenario to the anchored snippet that proves it', () => {
   const tests = [{ path: 'tests/x.test.ts', source: "it('a', () => {\n  expect(true).toBe(true)\n})\n" }]
   const sites = [site({ capability: 'locate', requirement: 'A requirement', scenario: 'A scenario', file: 'tests/x.test.ts', line: 2 })]
 
-  const content = page(renderSite([ONE], sites, tests), 'locate.md')
+  const pages = renderSite([ONE], sites, tests)
+  const capability = page(pages, 'locate.md')
+  const link = capability.match(/\[tests\/x\.test\.ts:2\]\(([^)#]+)#([^)]+)\)/)
 
-  expect(content).toContain('[tests/x.test.ts:2](tests/x.test.ts#a-scenario)')
+  expect(link, `no link to the proof on the capability page — got: ${capability}`).not.toBeNull()
+  if (!link) return
+  // The regex matched, so both groups are present.
+  const path = link[1]!
+  const anchor = link[2]!
+
+  // Follow the link rather than matching its text: the defect this pins was a link that read
+  // correctly and pointed at a page the render never wrote.
+  expect(pages.map(one => one.path)).toContain(path)
+  expect(page(pages, path)).toContain('## A scenario')
+  expect(anchor).toBe('a-scenario')
 })
 
 // Requirement: Each proof is rendered as an anchored code snippet its scenario links to
@@ -277,13 +289,15 @@ it('carries the requirement prose, the Gherkin, and the live position of every s
     site({ capability: 'locate', requirement: 'A requirement', scenario: 'A scenario', file: 'tests/live.test.ts', line: 87, steps }),
   ]
 
-  const full = page(renderSite([ONE], sites, []), 'spec.md')
+  const tests = [{ path: 'tests/live.test.ts', source: "it('a', () => {\n  expect(true).toBe(true)\n})\n" }]
+
+  const full = page(renderSite([ONE], sites, tests), 'spec.md')
 
   expect(full).toContain('### Requirement: A requirement')
   expect(full).toContain('The tool SHALL render.')
   expect(full).toContain('#### Scenario: A scenario')
   expect(full).toContain('**GIVEN** a scanned test file')
-  expect(full).toContain('[tests/live.test.ts:87](tests/live.test.ts#a-scenario)')
+  expect(full).toContain('[tests/live.test.ts:87](tests/live.test.ts.md#a-scenario)')
 })
 
 // Requirement: The whole spec is rendered as one page

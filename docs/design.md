@@ -934,6 +934,16 @@ for the plain-English titles the tests carry — so the fragment a scenario link
 heading gets are the same string. This is the one place `render` must agree with the site's
 renderer byte-for-byte, so it was checked against every title in this repo before it was trusted.
 
+**And the path is the page's, not the test's.** The fragment was right for a long time while the
+path in front of it was wrong: the link read `tests/x.test.ts#a-scenario`, but the page it pointed
+at is written as `tests/x.test.ts.md`, so every scenario link in the site was dead — all 298 of
+them, the core promise of `render` broken in a way no test caught, because both tests asserted the
+string the code happened to produce. `codePagePath` now spells that path once: `renderCodePages`
+names the file it writes with it and `renderScenario` links with it. That makes the two *spellings*
+agree; it does not make the link *resolve*, which still rests on the caller handing `render` the
+tests the sites were scanned from (§20's `run`). The test pins the resolution instead, asserting
+the linked page is among the pages the render returns.
+
 **It does not violate principle 1, because it stores nothing.** The Gherkin and the code are
 *delivered*, the way `locate` delivers a line — read from the tests each run, written to an
 output a person reads, never back into the committed files. `build/` is a product, not a source;
