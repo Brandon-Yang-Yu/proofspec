@@ -47,6 +47,7 @@ npx proofspec check    # rebuild the spec tree from the tests and report drift
 npx proofspec write    # record what the tests prove into specs/
 npx proofspec render   # write the readable spec site to build/ (build/spec.md is the whole spec in one page)
 npx proofspec touched  # name the scenarios this branch's changes touched
+npx proofspec impact   # walk from changed source, up the call graph, to the tests that reach it
 ```
 
 Tests are read from `tests/` and capability files from `specs/` by default
@@ -77,6 +78,44 @@ deleted is read back from the base revision and reported as no longer proven.
 
 It counts the working tree and files git has never seen, not only what is committed, and it
 always exits zero: it reports, it does not judge. The command that fails a build is `check`.
+
+### What does a change to the source reach?
+
+`touched` starts at a changed test. `impact` starts at changed *source*: it walks the call
+graph backwards from the functions you edited, through everything that calls them, until it
+meets the tests — and lists the requirements those tests prove.
+
+```sh
+npx proofspec impact                    # since this branch left main
+npx proofspec impact --depth 6          # walk further up the call chain
+npx proofspec impact --graph graph.json # walk a graph from a file instead of the index
+```
+
+```
+what this change reaches, since 7cdd20f
+
+renderFullPage  src/locate/render.ts:84
+  └─ renderSite  src/locate/render.ts:43
+    [test] tests/locate/render.test.ts:296
+    └─ render  src/cli/run.ts:82
+      [test] tests/cli/render.test.ts:101
+
+to review:
+tests/locate/render.test.ts
+  locate → The whole spec is rendered as one page  → specs/locate.md:71
+     · Every capability is rendered into one full-spec page
+     ...
+```
+
+The call graph is not ProofSpec's to build: it comes from a
+[codebase-memory](https://github.com/Brandon-Yang-Yu/codebase-memory) index of the repo, so
+index it first. A graph can also be handed in as JSON — `{ nodes: [...], calls: [...] }` —
+which is how the tests give it one.
+
+The tests hang off the function they actually call, so you can see how far each is from what
+changed. **The unit is the test file, not the scenario**: a graph records one call edge per
+test file, and every test in a file usually calls the same entry point. Narrowing further
+would take per-test coverage.
 
 ### Output formats
 

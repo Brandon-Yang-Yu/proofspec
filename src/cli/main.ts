@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, render, touched, write } from './run.ts'
+import { check, impact, render, touched, write } from './run.ts'
 import { exitCodeOf, renderDiagnostics, renderJson, renderQuickfix, renderText } from './render.ts'
 import type { Outcome, RunOptions } from './types.ts'
 
@@ -26,12 +26,17 @@ Commands:
            page per capability).
   touched  Name the scenarios this branch's changes touched, and where each one's
            requirement is written. Always exits zero: it reports, it does not judge.
+  impact   Walk from the source this branch changed, up the call graph, to the tests that
+           reach it and the requirements they prove. Needs a codebase-memory index.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
   --tests <dir>   Where the tests live (default: tests)
   --out <dir>     Where render writes its pages (default: build)
-  --since <rev>   What touched compares against (default: where the branch left main)
+  --since <rev>   What touched and impact compare against (default: the branch point)
+  --graph <file>  A call graph for impact to walk, instead of the indexed one
+  --project <id>  The indexed project impact reads (default: derived from the directory)
+  --depth <n>     How far up the call chain impact walks (default: 4)
   --format <fmt>  Output format: text (default), json, quickfix, diagnostics
   --json          Print the answer as JSON instead of text (legacy, use --format json)
   -h, --help      Show this help`
@@ -47,6 +52,9 @@ try {
       tests: { type: 'string' },
       out: { type: 'string' },
       since: { type: 'string' },
+      graph: { type: 'string' },
+      project: { type: 'string' },
+      depth: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
@@ -84,6 +92,9 @@ const options: RunOptions = {
   testsDir: values.tests,
   out: values.out,
   since: values.since,
+  graph: values.graph,
+  project: values.project,
+  depth: values.depth === undefined ? undefined : Number(values.depth),
 }
 const outcome = await runCommand(positionals[0], options)
 
@@ -110,9 +121,10 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'write') return write(options)
   if (command === 'render') return render(options)
   if (command === 'touched') return touched(options)
+  if (command === 'impact') return impact(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", or "touched".`,
+    reason: `${named}. Use "check", "write", "render", "touched", or "impact".`,
   })
 }

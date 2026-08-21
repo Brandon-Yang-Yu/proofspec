@@ -138,3 +138,25 @@ the other commands use.
 - "Changed lines that prove nothing are reported as touching no scenario" → tests/cli/touched.test.ts
 - "Whatever it touched, the command exits zero" → tests/cli/touched.test.ts
 <!-- /scenarios -->
+
+### Requirement: A command walks from changed source to the tests that reach it
+
+The CLI SHALL provide a command that takes the source this branch changed, walks the call
+graph backwards from the functions those lines fall in, and reports the tests that reach
+them along with the requirements those tests prove.
+
+The call graph is not ProofSpec's to build. It is read from the codebase-memory index the
+repository already keeps, or from a file when one is named — which is also how a test hands
+one over, since a test cannot index a repository. Being unable to read a graph SHALL be a
+cannot-run: "nothing reaches this change" and "I could not look" must not read the same.
+
+Changed tests are `touched`'s question, so this command reads everything except them. Like
+`touched` it only reports, and exits zero whatever it finds.
+
+<!-- scenarios: generated -->
+- "A change to the tests is not on this tree" → tests/cli/impact.test.ts
+- "A changed file the graph knows no function in is reported unmapped" → tests/cli/impact.test.ts
+- "A changed function's tree names the tests that reach it and what they prove" → tests/cli/impact.test.ts
+- "A graph that cannot be read is a cannot-run" → tests/cli/impact.test.ts
+- "Whatever it reaches, the command exits zero" → tests/cli/impact.test.ts
+<!-- /scenarios -->

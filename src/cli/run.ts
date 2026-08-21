@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { guard } from '../guard/index.ts'
+import { impactTree } from '../impact/index.ts'
+import type { ImpactNode } from '../impact/index.ts'
 import { renderSite, scenariosTouched } from '../locate/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import { compareStrings } from '../order.ts'
@@ -8,15 +10,18 @@ import { readCapabilityFile, requirementLines, updateScenarioBlocks } from '../s
 import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
-import type { ProofSite, ScanError } from '../test-scan/index.ts'
-import { readChangedTests, readFileAt } from './diff.ts'
+import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
+import { readChangedFiles, readFileAt } from './diff.ts'
+import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
 import type {
   GoneScenario,
   Outcome,
+  ProvenRequirement,
   RunOptions,
   SpecLocation,
+  TestProves,
   TouchedScenarioReport,
   UnmatchedLines,
 } from './types.ts'
@@ -136,9 +141,9 @@ export async function touched(options: RunOptions): Promise<Outcome> {
   if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'touched') }
   const sites = scans.flatMap(scan => scan.sites)
 
-  const diff = await readChangedTests({
+  const diff = await readChangedFiles({
     cwd: options.cwd,
-    testsDir: options.testsDir ?? DEFAULT_TESTS_DIR,
+    paths: [options.testsDir ?? DEFAULT_TESTS_DIR],
     since: options.since,
   })
   if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
@@ -173,6 +178,105 @@ export async function touched(options: RunOptions): Promise<Outcome> {
       gone: gone.sort(byIdentity),
     },
   }
+}
+
+/**
+ * The tree from the source this change edited to the promises it reaches: the changed
+ * functions, everything that calls them, the tests that get there, and what those tests
+ * prove. `touched` answers the same question from the other end, starting at a changed test.
+ *
+ * The call graph is not proofspec's to build, so it comes from the codebase-memory index, or
+ * from a file when one is named. Being unable to read it is a `cannot-run`, not an empty
+ * tree: "nothing reaches this change" and "I could not look" must not read the same.
+ */
+export async function impact(options: RunOptions): Promise<Outcome> {
+  const inputs = await gather(options)
+  if (!inputs.ok) return { kind: 'cannot-run', reason: inputs.reason }
+
+  const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
+  const unreadable = scans.flatMap(scan => scan.errors)
+  if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'impact') }
+
+  const testsDir = options.testsDir ?? DEFAULT_TESTS_DIR
+  const diff = await readChangedFiles({
+    cwd: options.cwd,
+    // Everything but the tests: a changed test is `touched`'s question, not this one's.
+    paths: ['.', `:(exclude)${testsDir}`],
+    since: options.since,
+  })
+  if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
+
+  const graph = await readCallGraph({
+    cwd: options.cwd,
+    testsDir,
+    project: options.project,
+    from: options.graph,
+  })
+  if (!graph.ok) return { kind: 'cannot-run', reason: graph.reason }
+
+  const tree = impactTree({
+    changed: diff.files.map(file => ({
+      file: file.path,
+      ranges: file.changed.kind === 'new-file' ? [WHOLE_FILE] : file.changed.ranges,
+    })),
+    graph: graph.graph,
+    depth: options.depth ?? DEFAULT_DEPTH,
+  })
+
+  return {
+    kind: 'impact',
+    report: {
+      base: diff.base,
+      changed: tree.changed,
+      unmapped: tree.unmapped,
+      proves: provenBy(testFilesOn(tree.changed), { specs: specLocations(inputs.specs), scans }),
+    },
+  }
+}
+
+/** How far up the call chain the walk goes unless a run says otherwise. */
+const DEFAULT_DEPTH = 4
+
+/** Every test file the tree names, in name order, each once however often it appears. */
+function testFilesOn(nodes: readonly ImpactNode[]): readonly string[] {
+  const files = new Set<string>()
+  const visit = (node: ImpactNode): void => {
+    if (node.kind !== 'reached') return
+    for (const test of node.tests) files.add(test.file)
+    for (const caller of node.callers) visit(caller)
+  }
+  for (const node of nodes) visit(node)
+  return [...files].sort(compareStrings)
+}
+
+/**
+ * What each of those test files proves, grouped by requirement. The graph reaches a test
+ * file, not a scenario inside it — one file's tests all call the same entry point — so the
+ * unit of review is the file, and every promise it proves is listed under it.
+ */
+function provenBy(
+  files: readonly string[],
+  from: { readonly specs: SpecLocations; readonly scans: readonly FileScan[] },
+): TestProves[] {
+  return files.map(file => {
+    const sites = from.scans.filter(scan => scan.file === file).flatMap(scan => scan.sites)
+    const byRequirement = new Map<string, ProvenRequirement>()
+    for (const site of sites) {
+      const capability = site.capability
+      // A file that declares no capability proves nothing this report can name; `check`
+      // reports that gap on its own.
+      if (capability === undefined) continue
+      const identity = { capability, requirement: site.requirement }
+      const key = `${capability}\u0000${site.requirement}`
+      const held = byRequirement.get(key) ?? {
+        ...identity,
+        spec: specFor(identity, from.specs),
+        scenarios: [],
+      }
+      byRequirement.set(key, { ...held, scenarios: [...held.scenarios, site.scenario] })
+    }
+    return { file, requirements: [...byRequirement.values()] }
+  })
 }
 
 /** Every line of a file git has never seen: there is no base version to compare it against. */
@@ -247,7 +351,7 @@ function byIdentity(a: GoneScenario, b: GoneScenario): number {
 }
 
 /** Names the first thing the scan could not read, so the reason points at a place to look. */
-function reasonFor(errors: readonly ScanError[], command: 'write' | 'render' | 'touched'): string {
+function reasonFor(errors: readonly ScanError[], command: 'write' | 'render' | 'touched' | 'impact'): string {
   const first = errors[0]!
   const rest = errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''
   return `cannot ${command}: ${first.file}:${first.line} ${first.message}${rest}`

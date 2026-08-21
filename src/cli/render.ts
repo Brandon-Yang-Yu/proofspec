@@ -1,6 +1,16 @@
 import { assertNever } from '../assert-never.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
-import type { GoneScenario, Outcome, SpecLocation, TouchedReport, TouchedScenarioReport, UnmatchedLines } from './types.ts'
+import type { ImpactNode } from '../impact/index.ts'
+import type {
+  GoneScenario,
+  ImpactReport,
+  Outcome,
+  SpecLocation,
+  TestProves,
+  TouchedReport,
+  TouchedScenarioReport,
+  UnmatchedLines,
+} from './types.ts'
 
 /**
  * Turns an `Outcome` into the three things the process boundary needs: an exit code, a line
@@ -25,6 +35,7 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     // A report, not a verdict: naming a promise this change touched — even one nothing proves
     // any more — is not the tool saying the build is wrong. That is the check's answer to give.
     case 'touched':
+    case 'impact':
       return EXIT_OK
     case 'cannot-run':
       return EXIT_CANNOT_RUN
@@ -46,6 +57,8 @@ export function renderText(outcome: Outcome): string {
         : [`wrote ${outcome.files.length} file(s):`, ...outcome.files.map(file => `  ${file}`)].join('\n')
     case 'touched':
       return renderTouched(outcome.report)
+    case 'impact':
+      return renderImpact(outcome.report)
     case 'cannot-run':
       return outcome.reason
     default:
@@ -65,6 +78,7 @@ export function renderJson(outcome: Outcome): string {
     case 'wrote':
       return JSON.stringify({ changed: outcome.files })
     case 'touched':
+    case 'impact':
       return JSON.stringify(outcome.report)
     case 'cannot-run':
       return JSON.stringify({ error: outcome.reason })
@@ -115,6 +129,52 @@ function renderGone(scenario: GoneScenario): string {
 /** Where a requirement is written, or nothing when no capability file declares it. */
 function where(spec: SpecLocation | undefined): string {
   return spec === undefined ? '' : `  → ${spec.file}:${spec.line}`
+}
+
+/**
+ * What a change to the source reaches, as a tree a person reads top-down: the function that
+ * changed, then what calls it, with the tests hanging off whichever function they call. The
+ * promises come after the tree rather than inside it, because one test file can appear at
+ * several places on the tree and its promises are the same wherever it hangs.
+ */
+function renderImpact(report: ImpactReport): string {
+  if (report.changed.length === 0 && report.unmapped.length === 0) {
+    return `nothing outside the tests changed since ${report.base}`
+  }
+
+  const parts = [`what this change reaches, since ${report.base}`]
+  if (report.changed.length > 0) {
+    parts.push(report.changed.flatMap(node => renderImpactNode(node, 0)).join('\n'))
+  }
+  if (report.unmapped.length > 0) {
+    parts.push(['changed, but the graph knows no function here:', ...report.unmapped.map(file => `  ${file}`)].join('\n'))
+  }
+  if (report.proves.length > 0) {
+    parts.push(['to review:', ...report.proves.map(renderProves)].join('\n'))
+  }
+  return parts.join('\n\n')
+}
+
+function renderImpactNode(node: ImpactNode, depth: number): string[] {
+  const pad = '  '.repeat(depth)
+  const arrow = depth === 0 ? '' : '└─ '
+  // Not "shown above": the roots come out in file order, so a repeat can appear before the
+  // place it is expanded.
+  if (node.kind === 'repeated') return [`${pad}${arrow}${node.fn.name}  (shown elsewhere)`]
+
+  const lines = [`${pad}${arrow}${node.fn.name}  ${node.fn.file}:${node.fn.from}`]
+  for (const test of node.tests) lines.push(`${pad}  [test] ${test.file}:${test.line}`)
+  for (const caller of node.callers) lines.push(...renderImpactNode(caller, depth + 1))
+  return lines
+}
+
+function renderProves(proves: TestProves): string {
+  const lines = [proves.file]
+  for (const requirement of proves.requirements) {
+    lines.push(`  ${requirement.capability} → ${requirement.requirement}${where(requirement.spec)}`)
+    lines.push(...requirement.scenarios.map(scenario => `     · ${scenario}`))
+  }
+  return lines.join('\n')
 }
 
 // The single-character severity tags a quickfix list expects: E for a finding that fails the
