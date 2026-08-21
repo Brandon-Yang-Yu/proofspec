@@ -1072,3 +1072,54 @@ what goes stale in a worktree (the codebase-memory index tracks the main checkou
 that link is ever wanted, it should arrive as an input — a file-to-test map handed in — with
 `touched` still doing only its own half: tests to promises.
 
+## 26. From changed code to the promises it reaches
+
+§25 answers "which promises did this change touch" by starting at a changed *test*. The
+question a reviewer actually asks first is the other one: I edited this function — what
+depends on it, and which tests get there? Those tests are what to review, and the promises
+they prove are what to re-read.
+
+That walk needs a call graph, which ProofSpec has no business building: parsing a whole
+repository's call relationships is a different tool's job, and this one already has an index
+of the repo sitting beside it. So `impact` reads the graph from codebase-memory's index — by
+running its CLI, the same way `touched` runs git — or from a JSON file when one is named.
+The file is not an escape hatch bolted on: a test cannot index a repository, so it is how
+the capability is proven at all, and it doubles as the way to feed in a graph from anywhere
+else.
+
+**A seventh capability, on purpose.** §22 kept the count at six by putting the render in
+`locate`, because §12 had already assigned "rendering the tree" there. Nothing owns "what does
+a change reach": `test-scan` reads tests, `spec-file` reads files, `spec-tree` groups, `guard`
+decides, `locate` answers where, `cli` runs. Walking a call graph is none of those, and it has
+its own promises to keep — place a change on its functions, walk backwards without looping,
+name the tests where they reach. It gets its own capability file. The rule was never "six
+forever"; it was "do not invent a capability for something that already has an owner".
+
+**The graph is handed in as values.** `impact` takes nodes and edges, not a connection. That
+keeps it a pure walk — a fixture and a real index are the same input — and keeps every
+process boundary in `cli`, where git already lives.
+
+**What the graph could and could not say.** Two things were found by running it, not by
+reading about it. First, a test file calls through its *module* node, not a function node:
+querying only functions left every test off the tree, and the first run looked like a change
+nothing tests. Second, the index's `is_test` marks a test file's module but not the functions
+inside it, so a helper in a test file reads as source. Test-ness is therefore decided by the
+tests directory — the same rule the rest of the tool uses — and a node says whether it is a
+function or a whole file, because a file node spans every line in it and would swallow the
+change that landed in one function.
+
+**The precision ceiling is the test file.** A graph records one call edge per (test file →
+function), so a file whose ten tests all call the same entry point is one edge. `impact` can
+say which *file* reaches the change, never which scenario inside it. Every promise that file
+proves is therefore listed: over-reporting is the honest failure here, since the alternative
+is a reviewer trusting a list that quietly dropped the scenario that mattered. Narrowing it
+would take per-test coverage — a different input, from a real test run, which would arrive
+the same way the graph does rather than being computed here.
+
+**It bounds the walk.** Callers are followed to a depth, four by default. Without a bound a
+long chain reaches the whole program and the tree stops meaning anything; a function already
+on the tree is reported as repeated rather than expanded twice, which is also what ends a
+cycle.
+
+**It reports, it never judges.** Exit zero whatever it finds, for the reason §25 gives.
+

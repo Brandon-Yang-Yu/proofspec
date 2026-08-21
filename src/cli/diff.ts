@@ -40,17 +40,18 @@ export type DiffRead =
 const INTEGRATION_BRANCH = 'main'
 
 /**
- * Every test file the working tree has changed since the base revision, with the lines that
- * changed in each. The base is where this branch left `main` unless a revision is named, so
+ * Every file under the given paths the working tree has changed since the base revision, with
+ * the lines that changed in each. The base is where this branch left `main` unless a revision is named, so
  * run inside a worktree with no arguments it answers "what did this branch touch".
  *
  * It reads the working tree, not just what is committed: in a worktree most of the work is
  * uncommitted most of the time, and files not yet added to git are counted for the same
  * reason — a brand new test file is exactly what a new capability looks like.
  */
-export async function readChangedTests(options: {
+export async function readChangedFiles(options: {
   readonly cwd: string
-  readonly testsDir: string
+  /** What to diff, as git pathspecs: a directory, or everything but one. */
+  readonly paths: readonly string[]
   readonly since: string | undefined
 }): Promise<DiffRead> {
   const inWorkTree = await git(options.cwd, ['rev-parse', '--is-inside-work-tree'])
@@ -67,11 +68,11 @@ export async function readChangedTests(options: {
   // person's global config would otherwise change what this parses.
   const diff = await git(options.cwd, [
     'diff', '--unified=0', '--no-color', '--no-renames', '--relative',
-    '--src-prefix=a/', '--dst-prefix=b/', base, '--', options.testsDir,
+    '--src-prefix=a/', '--dst-prefix=b/', base, '--', ...options.paths,
   ])
-  if (diff === undefined) return { ok: false, reason: `git could not diff ${options.testsDir} against ${base}` }
+  if (diff === undefined) return { ok: false, reason: `git could not diff against ${base}` }
 
-  const untracked = await git(options.cwd, ['ls-files', '--others', '--exclude-standard', '--', options.testsDir])
+  const untracked = await git(options.cwd, ['ls-files', '--others', '--exclude-standard', '--', ...options.paths])
   const files = [...parseDiff(diff), ...newFiles(untracked ?? '')]
   return { ok: true, base, files: files.sort((a, b) => compareStrings(a.path, b.path)) }
 }

@@ -7,6 +7,7 @@
  */
 
 import type { GuardReport } from '../guard/index.ts'
+import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 
 /** Where a repo keeps its capability files and its tests, both as directories under the root. */
@@ -25,8 +26,14 @@ export type Locations = {
 export type RunOptions = {
   readonly cwd: string
   readonly out?: string
-  /** The revision `touched` measures from; left out, it uses where the branch left `main`. */
+  /** The revision `touched` and `impact` measure from; left out, where the branch left `main`. */
   readonly since?: string
+  /** A call graph for `impact` to walk, instead of the one the indexer holds. */
+  readonly graph?: string
+  /** The indexed project `impact` reads its graph from; left out, derived from `cwd`. */
+  readonly project?: string
+  /** How far up the call chain `impact` walks. */
+  readonly depth?: number
 } & Partial<Locations>
 
 /** Where a requirement is written: the capability file, and the line of its heading. */
@@ -68,6 +75,33 @@ export type TouchedReport = {
   readonly gone: readonly GoneScenario[]
 }
 
+/** One requirement a test file proves, and every scenario of it that file holds. */
+export type ProvenRequirement = {
+  readonly capability: string
+  readonly requirement: string
+  readonly spec: SpecLocation | undefined
+  readonly scenarios: readonly string[]
+}
+
+/** What one test file on the impact tree proves. */
+export type TestProves = {
+  readonly file: string
+  readonly requirements: readonly ProvenRequirement[]
+}
+
+/**
+ * What a change to the source reaches: the changed functions with everything that calls
+ * them, and what the tests hanging off that tree prove. The tests are the ones to review and
+ * their requirements the ones to re-read, which is the whole reason to walk the graph.
+ */
+export type ImpactReport = {
+  readonly base: string
+  readonly changed: readonly ImpactNode[]
+  /** Changed files holding no function the graph knows. */
+  readonly unmapped: readonly string[]
+  readonly proves: readonly TestProves[]
+}
+
 /**
  * The result of a command, as a value. `cannot-run` is kept apart from a checked report on
  * purpose: CI has to tell "your spec has drifted" from "I could not read my inputs", and a
@@ -81,5 +115,6 @@ export type TouchedReport = {
 export type Outcome =
   | { readonly kind: 'checked'; readonly report: GuardReport }
   | { readonly kind: 'touched'; readonly report: TouchedReport }
+  | { readonly kind: 'impact'; readonly report: ImpactReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
   | { readonly kind: 'cannot-run'; readonly reason: string }
