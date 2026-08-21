@@ -917,7 +917,8 @@ static-site renderer it was a 46-minute scroll, and it left the explorer with on
 A capability is the unit a reader browses, so it became the unit the site splits into pages,
 with an index that links them; the explorer then *is* the capability list. The shape was found
 by reading the render, not by guessing it — the same dogfooding §20 describes, one screen at a
-time.
+time. §24 later added the one-document view back *beside* the pages, for the reader who is not
+browsing.
 
 **The proof travels with the claim.** A scenario's whole point (§1) is that its proof can be
 read *against* the claim. So each test is a code page, and each proof a snippet of exactly its
@@ -985,3 +986,29 @@ gap: `render` silently dropped scan errors where `write` refused them, contradic
 "inputs it cannot read are refused the way the check and the write refuse them". The pages
 record what the tests prove, so a test the scan could not read is a tree the pages cannot vouch
 for — `render` now refuses before writing, the same reason `write` refuses before acting.
+
+## 24. The whole spec in one page
+
+Splitting the site into a page per capability (§22) was right for browsing and wrong for
+everything else. Two readers do not browse: a person who wants to read the whole promise in
+one sitting, and a model handed the spec as context, which reads one file far better than it
+follows nine links. Both were being asked to reassemble by hand what the render already had
+in memory.
+
+So `render` writes `build/spec.md` as well: every capability in name order, each requirement's
+description, each scenario's Gherkin and live position, all in one file. The index links to it,
+so the single entry point offers both ways in.
+
+**It is not a reversal of §22.** The pages stay exactly as they were — the browse view is still
+a page per capability, and the full page is an extra output, not a replacement. What §22
+rejected was *only* having the scroll.
+
+**One render, two shapes.** The full page is not a second renderer. Requirements and scenarios
+go through the same functions the capability pages use, given a heading depth: `##` for a
+requirement on a capability page, `###` in the full page, where the top level is spent on the
+capability. Two views built from one code path cannot say different things — the same
+shared-not-copied stance §22 took with `firstSiteByIdentity`.
+
+**It carries the links, not the code.** A scenario in the full page links to the snippet that
+proves it, exactly as on a capability page. Inlining every proof would have doubled the file
+with the code pages' content and buried the promise it exists to show.

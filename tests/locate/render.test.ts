@@ -237,3 +237,63 @@ it("shows a scenario's Gherkin above its snippet", () => {
   expect(code).toContain('**THEN** the claim holds')
   expect(gherkin).toBeLessThan(proof)
 })
+
+// Requirement: The whole spec is rendered as one page
+// Scenario: Every capability is rendered into one full-spec page
+// GIVEN two capabilities handed over out of name order
+// WHEN the site is rendered
+// THEN one page holds a section for each capability, in name order, so a reader — or a model
+//      given the file — has the whole spec without opening a page per capability
+it('renders every capability into one full-spec page in name order', () => {
+  const specs = [
+    spec({ capability: 'zebra', requirement: 'R', description: 'The tool SHALL z.', scenarios: [{ scenario: 'z', file: 'tests/z.test.ts' }] }),
+    spec({ capability: 'alpha', requirement: 'R', description: 'The tool SHALL a.', scenarios: [{ scenario: 'a', file: 'tests/a.test.ts' }] }),
+  ]
+  const sites = [
+    site({ capability: 'zebra', requirement: 'R', scenario: 'z', file: 'tests/z.test.ts' }),
+    site({ capability: 'alpha', requirement: 'R', scenario: 'a', file: 'tests/a.test.ts' }),
+  ]
+
+  const full = page(renderSite(specs, sites, []), 'spec.md')
+
+  const alpha = full.indexOf('## Capability: alpha')
+  const zebra = full.indexOf('## Capability: zebra')
+  expect(alpha).toBeGreaterThanOrEqual(0)
+  expect(zebra).toBeGreaterThan(alpha)
+})
+
+// Requirement: The whole spec is rendered as one page
+// Scenario: The full-spec page says everything the capability pages say
+// GIVEN a capability whose requirement carries prose and whose scenario is proven with Gherkin
+// WHEN the site is rendered
+// THEN the full-spec page carries that prose, those steps, and the live position, one heading
+//      level deeper than the capability page, so the one file is the whole spec and not an index
+it('carries the requirement prose, the Gherkin, and the live position of every scenario', () => {
+  const steps: readonly Step[] = [
+    { keyword: 'GIVEN', text: 'a scanned test file', line: 1 },
+    { keyword: 'THEN', text: 'the full page says it too', line: 2 },
+  ]
+  const sites = [
+    site({ capability: 'locate', requirement: 'A requirement', scenario: 'A scenario', file: 'tests/live.test.ts', line: 87, steps }),
+  ]
+
+  const full = page(renderSite([ONE], sites, []), 'spec.md')
+
+  expect(full).toContain('### Requirement: A requirement')
+  expect(full).toContain('The tool SHALL render.')
+  expect(full).toContain('#### Scenario: A scenario')
+  expect(full).toContain('**GIVEN** a scanned test file')
+  expect(full).toContain('[tests/live.test.ts:87](tests/live.test.ts#a-scenario)')
+})
+
+// Requirement: The whole spec is rendered as one page
+// Scenario: The index links to the full-spec page
+// GIVEN a capability to render
+// WHEN the site is rendered
+// THEN the index links to the full-spec page as well as to each capability, so the one entry
+//      point offers the whole spec in one file
+it('links the index to the full-spec page', () => {
+  const index = page(renderSite([ONE], [site({ scenario: 'A scenario' })], []), 'index.md')
+
+  expect(index).toContain('(spec.md)')
+})

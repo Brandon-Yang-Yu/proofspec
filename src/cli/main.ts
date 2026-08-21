@@ -22,7 +22,8 @@ Commands:
   check    Rebuild the spec tree from the tests and report drift; never writes.
            Exits 0 when the tests and the committed files agree, non-zero when they do not.
   write    Record what the tests prove into the committed capability files.
-  render   Write the readable spec site (an index and one page per capability).
+  render   Write the readable spec site (an index, the full spec in one page, and one
+           page per capability).
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)

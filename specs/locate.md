@@ -68,6 +68,24 @@ entry point.
 - "The index links to every capability in name order" → tests/locate/render.test.ts
 <!-- /scenarios -->
 
+### Requirement: The whole spec is rendered as one page
+
+Locate SHALL also render every capability into one page, each requirement and scenario
+carrying the same description, Gherkin, and current position its capability's own page
+shows.
+
+A page per capability is the unit a reader browses. Reading the whole promise at once — or
+handing the spec to a model that reads one file — wants a single page instead. Both views
+come from the same render, so they cannot say different things. The full page spends its top
+heading level on the capability, so its requirements and scenarios sit one level deeper, and
+the index links to it, so the one entry point offers both ways in.
+
+<!-- scenarios: generated -->
+- "Every capability is rendered into one full-spec page" → tests/locate/render.test.ts
+- "The full-spec page says everything the capability pages say" → tests/locate/render.test.ts
+- "The index links to the full-spec page" → tests/locate/render.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Each proof is rendered as an anchored code snippet its scenario links to
 
 Locate SHALL render each proof as a code snippet of its lines on the test's page, headed by

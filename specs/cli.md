@@ -95,11 +95,12 @@ The CLI SHALL provide a render command that writes the rendered pages into a dir
 reports the files it wrote.
 
 The pages are a delivery artifact, not an input: they are regenerated from the tests on
-demand and read by a person, never read back by the tool. The command writes an index and
-one page per capability; given no directory it writes them under `build/`, and a directory can
-be given for a repo that keeps the generated pages elsewhere. The pages are a generated output,
-so a project gitignores that directory rather than committing it. Inputs it cannot read are
-refused the way the check and the write refuse them.
+demand and read by a person, never read back by the tool. The command writes an index, one
+page per capability, and the full spec as a single page; given no directory it writes them
+under `build/`, and a directory can be given for a repo that keeps the generated pages
+elsewhere. The pages are a generated output, so a project gitignores that directory rather
+than committing it. Inputs it cannot read are refused the way the check and the write refuse
+them.
 
 <!-- scenarios: generated -->
 - "An absolute output directory is written to exactly" → tests/cli/render.test.ts
