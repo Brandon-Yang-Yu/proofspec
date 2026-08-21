@@ -45,7 +45,7 @@ npm install -D proofspec   # or: pnpm add -D proofspec
 
 npx proofspec check    # rebuild the spec tree from the tests and report drift
 npx proofspec write    # record what the tests prove into specs/
-npx proofspec render   # write the readable spec site to build/
+npx proofspec render   # write the readable spec site to build/ (build/spec.md is the whole spec in one page)
 ```
 
 Tests are read from `tests/` and capability files from `specs/` by default

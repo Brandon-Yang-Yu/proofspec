@@ -23,14 +23,17 @@ function inSync(): Readonly<Record<string, string>> {
 // Scenario: The render command writes to the default directory when none is given
 // GIVEN a repo whose capability files and tests agree
 // WHEN the render command runs with no output directory
-// THEN an index page, one page per capability, and a code page per test are written under the
-//      default `build/`, and the outcome names the files it wrote
-it('writes an index, a page per capability, and a code page per test under build/', async () => {
+// THEN an index page, a full-spec page, one page per capability, and a code page per test are
+//      written under the default `build/`, and the outcome names the files it wrote
+it('writes an index, a full spec, a page per capability, and a code page per test under build/', async () => {
   const repo = await makeRepo(inSync())
 
   const outcome = await render({ cwd: repo.root })
 
-  expect(outcome).toEqual({ kind: 'wrote', files: ['build/index.md', `build/${CAPABILITY}.md`, `build/${TEST_PATH}.md`] })
+  expect(outcome).toEqual({
+    kind: 'wrote',
+    files: ['build/index.md', 'build/spec.md', `build/${CAPABILITY}.md`, `build/${TEST_PATH}.md`],
+  })
   expect(await repo.read('build/index.md')).toContain(CAPABILITY)
   const capabilityPage = await repo.read(`build/${CAPABILITY}.md`)
   expect(capabilityPage).toContain(REQUIREMENT)
@@ -50,7 +53,7 @@ it('writes the pages into a chosen output directory', async () => {
 
   expect(outcome).toEqual({
     kind: 'wrote',
-    files: ['docs/spec/index.md', `docs/spec/${CAPABILITY}.md`, `docs/spec/${TEST_PATH}.md`],
+    files: ['docs/spec/index.md', 'docs/spec/spec.md', `docs/spec/${CAPABILITY}.md`, `docs/spec/${TEST_PATH}.md`],
   })
   expect(await repo.read(`docs/spec/${CAPABILITY}.md`)).toContain(SCENARIO)
 })
@@ -70,7 +73,7 @@ it('writes into an absolute output directory exactly', async () => {
 
   expect(outcome).toEqual({
     kind: 'wrote',
-    files: [join(out, 'index.md'), join(out, `${CAPABILITY}.md`), join(out, `${TEST_PATH}.md`)],
+    files: [join(out, 'index.md'), join(out, 'spec.md'), join(out, `${CAPABILITY}.md`), join(out, `${TEST_PATH}.md`)],
   })
   expect(await readFile(join(out, `${CAPABILITY}.md`), 'utf8')).toContain(SCENARIO)
   // `join` glues the absolute out onto the repo root — the exact place the pre-fix code
