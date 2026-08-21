@@ -730,12 +730,13 @@ that fails to parse is a scenario the file no longer records, which the guard re
 unrecorded and the build fails on. An error channel here would be a second way of saying
 what the guard already says.
 
-**Reading gives back the description, and sorts.** The description is prose no consumer
-needs yet, but a read that silently discarded half the file would be a lie, and `locate`'s
-"the whole tree can be read at once" is the named consumer. Requirements come back in name
-order and entries in title order — the order `SpecTree` promises — so what is read *is* a
-branch of the tree, and the type is built on `CapabilityNode` rather than restated so it
-cannot quietly stop being one.
+**Reading gives back the description, and sorts one half of the file.** The description is
+prose no consumer needs yet, but a read that silently discarded half the file would be a lie,
+and `locate`'s "the whole tree can be read at once" is the named consumer. Entries come back
+in title order — the order `SpecTree` holds them in — so what is read *is* a branch of the
+tree, and the type is built on `CapabilityNode` rather than restated so it cannot quietly stop
+being one. Requirements come back in the file's own order; §28 says why that half is not the
+read's to sort.
 
 **The capability's name comes from the caller, not the file's title.** The CLI knows the
 file it opened. Making an H1 load-bearing would let a typo in a heading detach a whole
@@ -1174,3 +1175,44 @@ any directory named `coverage`, which silently swallowed the collector's own sou
 was renamed to `src/test-run`. Both are now in `docs/coverage.md`, because a tool whose
 answer quietly depends on how its input was built has to say so where its user is looking.
 
+## 28. Whose order a capability file comes back in
+
+The read sorted a file's requirements by title. It looked like the careful choice — the same
+`compareStrings` the tree and the guard use, applied one layer earlier — and it was wrong,
+because the render reads the same result. `render.ts` deliberately does not sort inside a
+capability, and its comment said so ("the requirement and scenario order is spec-file's,
+kept as given"); what it was given had already been re-ordered. Every rendered page shipped
+the requirements alphabetically, and nothing said so.
+
+**The cost is prose, which is why it went unnoticed.** A description is the human's half of
+the file, and prose refers to its neighbours. In a repo using this tool five descriptions
+said "the requirement below" or "the next requirement" about a requirement the page had
+moved *above* the sentence naming it. Every scenario was recorded correctly, every position
+was right, the check passed — and the document lied about its own shape.
+
+**The two halves of a file have two different owners, so they have two different orders.**
+The scenario entries are written by the tool, and they stay in title order: the writer sorts
+them (`write.ts`), so reading them sorted is reading them as written, and the same tests give
+the same file on any machine. The requirements are written by a person, in an order that is
+part of what they wrote. The read gives each half back the way its owner left it.
+
+**Determinism was never the reason to sort here.** That was the assumption worth checking,
+and it did not survive: `diffTree` keys scenarios by identity and sorts the keys itself, the
+guard reads committed requirements into `Set`s and `Map`s and sorts every finding through
+`compareFindings`, and `updateScenarioBlocks` walks the file's own sections in file order.
+Not one consumer compares requirements positionally. A guard that regenerates a tree in CI
+still compares it against the committed one identically.
+
+**What the sort had been quietly holding up was tested instead of assumed.** The guard's
+report order rested on two things at once — `compareFindings`, and a read that happened to
+hand requirements over sorted — and removing one left the other unwitnessed. So "two runs
+over the same tests report the same findings" now also promises a fixed order whatever order
+a capability file declares its requirements in, with a scenario that feeds the guard the same
+capability written both ways round. It fails if `compareFindings` is ever weakened to sort by
+kind alone; the scan-order scenario beside it does not.
+
+**The scenario that pins it is at the CLI, not at the read.** A unit test on
+`readCapabilityFile` states that the read keeps the order; only an end-to-end render says the
+*page* does, which is the thing that was broken and the thing a reader sees. Both exist: the
+read's scenario is where the rule lives, the render command's scenario is where its
+consequence is visible.

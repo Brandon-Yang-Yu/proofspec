@@ -12,12 +12,16 @@ import type { CapabilitySpec, RequirementSpec } from './types.ts'
  * The capability's name comes from the caller, which knows the file it opened, rather than
  * from the file's own title. A title is prose the human owns, and making it load-bearing
  * would let a typo in a heading detach a whole capability from the tests that prove it.
+ *
+ * Requirements come back in the order the file declares them. That order is the human's:
+ * descriptions refer to their neighbours, so a requirement re-ordered here turns "the
+ * requirement below" into one above it on every page rendered from this read. Nothing
+ * downstream compares requirements positionally — the guard keys them by name and the diff
+ * by identity — so the read owes them no order of its own.
  */
 export function readCapabilityFile(source: string, options: { capability: string }): CapabilitySpec {
   const markdown = readMarkdown(source)
-  const requirements = findSections(markdown)
-    .map(section => toRequirementSpec(section, markdown.lines))
-    .sort((a, b) => compareStrings(a.requirement, b.requirement))
+  const requirements = findSections(markdown).map(section => toRequirementSpec(section, markdown.lines))
   return { capability: options.capability, requirements }
 }
 

@@ -118,9 +118,10 @@ ${FENCE}
 // GIVEN a capability file that declares its requirements in an order other than by name,
 //       one of them recording its entries in an order other than by title
 // WHEN the file is read
-it('reads a file into the order the tree uses', () => {
-  // "Zebra" before "apple": a capital sorts first by code unit and second in most locales,
-  // so this pair fails if the order ever becomes the machine's rather than the tree's.
+it('reads requirements in the order the file declares them and entries in title order', () => {
+  // The file declares "apple" first, and `compareStrings` would put "Zebra" there: a capital
+  // sorts first by code unit. So the requirements fail this test the moment anything sorts
+  // them again, and the entries fail it if that sort is ever the machine's rather than ours.
   const source = `### Requirement: apple
 
 Its description.
@@ -141,14 +142,16 @@ Its description.
   const spec = readCapabilityFile(source, { capability: CAPABILITY })
 
   // Requirement: Reading a file yields its requirements and what they record
-  // Scenario: Requirements come back in name order, not the file's order
-  // THEN the requirements come back in name order, which is the order the tree uses, so
-  //      what was read is already a branch of it and reads the same on every machine
-  expect.soft(requirementNames(spec)).toEqual(['Zebra', 'apple'])
+  // Scenario: Requirements come back in the file's own order
+  // THEN the requirements come back in the order the file declares them, because that order
+  //      is the human's: a description that says "the requirement below" has to still have
+  //      that requirement below it
+  expect.soft(requirementNames(spec)).toEqual(['apple', 'Zebra'])
 
   // Requirement: Reading a file yields its requirements and what they record
   // Scenario: Entries come back in title order, not the file's order
-  // THEN a requirement's entries come back in title order, for the same reason
+  // THEN a requirement's entries come back in title order, the order the tree holds them in,
+  //      so what was read is already a branch of it and reads the same on every machine
   expect.soft(entriesOf(spec, 'Zebra')).toEqual([
     { scenario: 'Zebra is recorded first', file: 'tests/spec-file/read.test.ts' },
     { scenario: 'apple is recorded second', file: 'tests/spec-file/write.test.ts' },

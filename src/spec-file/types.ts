@@ -18,9 +18,9 @@ export type RequirementSpec = RequirementNode & {
 /**
  * One capability file, read. It is built on `CapabilityNode` rather than restated, so a
  * file that was read *is* a branch of the tree the guard compares against and cannot drift
- * away from that shape without the compiler saying so. Requirements come in name order and
- * their entries in title order, which is the order the tree holds them in, so nothing
- * downstream sorts them a second time.
+ * away from that shape without the compiler saying so. Requirements come in the file's own
+ * order and their entries in title order — `readCapabilityFile` says why each half is
+ * ordered the way it is — so nothing downstream sorts either of them a second time.
  */
 export type CapabilitySpec = Omit<CapabilityNode, 'requirements'> & {
   readonly requirements: readonly RequirementSpec[]

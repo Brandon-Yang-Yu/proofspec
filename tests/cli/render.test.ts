@@ -19,6 +19,48 @@ function inSync(): Readonly<Record<string, string>> {
   }
 }
 
+// Two requirements whose file order and name order disagree, so a page that sorts them by
+// name puts the second one first. The descriptions point at each other on purpose: prose is
+// the human's half of the file, and "the requirement below" is only true if it stays below.
+const UPLOAD_REQUIREMENT = 'Uploading a material'
+const AMEND_REQUIREMENT = 'Amending a material'
+const UPLOAD_SCENARIO = 'A material is uploaded'
+const AMEND_SCENARIO = 'An uploaded material is amended'
+const UPLOAD_TEST_PATH = 'tests/upload.test.ts'
+const AMEND_TEST_PATH = 'tests/amend.test.ts'
+
+/**
+ * A repo whose one capability file declares the upload requirement first and the amend one
+ * second, each proven by its own test. The file is written out here rather than through
+ * `specFile`, which declares a single requirement and would have to grow a second shape to
+ * express this one.
+ */
+function outOfNameOrder(): Readonly<Record<string, string>> {
+  const specSource = [
+    `# ${CAPABILITY}`,
+    '',
+    `### Requirement: ${UPLOAD_REQUIREMENT}`,
+    'The tool SHALL upload a material, which the requirement below then amends.',
+    '',
+    '<!-- scenarios: generated -->',
+    `- "${UPLOAD_SCENARIO}" → ${UPLOAD_TEST_PATH}`,
+    '<!-- /scenarios -->',
+    '',
+    `### Requirement: ${AMEND_REQUIREMENT}`,
+    'The tool SHALL amend the material the requirement above uploaded.',
+    '',
+    '<!-- scenarios: generated -->',
+    `- "${AMEND_SCENARIO}" → ${AMEND_TEST_PATH}`,
+    '<!-- /scenarios -->',
+    '',
+  ].join('\n')
+  return {
+    [`specs/${CAPABILITY}.md`]: specSource,
+    [UPLOAD_TEST_PATH]: testFile([UPLOAD_SCENARIO], { requirement: UPLOAD_REQUIREMENT }),
+    [AMEND_TEST_PATH]: testFile([AMEND_SCENARIO], { requirement: AMEND_REQUIREMENT }),
+  }
+}
+
 // Requirement: A command renders the spec into an output directory
 // Scenario: The render command writes to the default directory when none is given
 // GIVEN a repo whose capability files and tests agree
@@ -102,4 +144,28 @@ it('reports cannot-run when its inputs cannot be read', async () => {
 
   expect(missingSpecs.kind).toBe('cannot-run')
   expect(unreadableTest.kind).toBe('cannot-run')
+})
+
+// Requirement: A command renders the spec into an output directory
+// Scenario: The rendered page lists requirements in the capability file's order
+// GIVEN a repo whose capability file declares two requirements in an order other than by
+//       name, the first one's description referring to the requirement below it
+// WHEN the render command runs
+// THEN the capability page and the full-spec page both head the requirements in the order
+//      the file declares them, so a description that points at its neighbour still points
+//      at the right one
+it('renders requirements in the order the capability file declares them', async () => {
+  const repo = await makeRepo(outOfNameOrder())
+
+  await render({ cwd: repo.root })
+
+  for (const path of [`build/${CAPABILITY}.md`, 'build/spec.md']) {
+    const page = await repo.read(path)
+    const uploadAt = page.indexOf(`Requirement: ${UPLOAD_REQUIREMENT}`)
+    const amendAt = page.indexOf(`Requirement: ${AMEND_REQUIREMENT}`)
+    // Both pages are checked: the full spec renders the same requirements a second time, and
+    // a view that could disagree with the other about their order is the bug twice over.
+    expect.soft(uploadAt, path).toBeGreaterThan(-1)
+    expect.soft(amendAt, path).toBeGreaterThan(uploadAt)
+  }
 })

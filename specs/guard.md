@@ -168,12 +168,15 @@ not read is known by its position and by what the scan said about it.
 
 ### Requirement: Two runs over the same tests report the same findings
 
-The findings SHALL come in a fixed order, whatever order the tests were scanned in.
+The findings SHALL come in a fixed order, whatever order the tests were scanned in and
+whatever order a capability file declares its requirements.
 
 A report whose order changes from run to run cannot be diffed, so a reader who has already
 seen it has to read it again from the top to find what is new. The order is the tool's to
-choose, not the file walk's.
+choose, not the file walk's — and not the author's either: a capability file's requirements
+arrive in the order they were written, so the report has to put them in order itself.
 
 <!-- scenarios: generated -->
+- "Findings come in a fixed order whatever order a file declares its requirements" → tests/guard/order.test.ts
 - "Findings come in a fixed order whatever order the tests were scanned" → tests/guard/order.test.ts
 <!-- /scenarios -->

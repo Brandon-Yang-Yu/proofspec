@@ -48,9 +48,9 @@ export function renderSite(
   // The proof sites are joined by the same collision rule locate uses, so the position the
   // site shows is the one the rest of the tool agrees on.
   const proven = firstSiteByIdentity(sites)
-  // Name order here and nowhere else in the render: the file order the specs were read in
-  // must not change the site, but the requirement and scenario order is spec-file's, kept as
-  // given so the ordering rule stays in one place.
+  // Name order here and nowhere else in the render: the order the spec files happened to be
+  // read in must not change the site. Inside a capability the order is the one `spec-file`
+  // handed over, kept as given, so the ordering rule stays in one place.
   const capabilities = [...specs].sort((a, b) => compareStrings(a.capability, b.capability))
 
   const index: RenderedPage = { path: 'index.md', content: renderIndex(capabilities) }

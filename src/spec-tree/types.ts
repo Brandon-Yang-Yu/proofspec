@@ -25,7 +25,12 @@ export type RequirementNode = {
 
 export type CapabilityNode = {
   readonly capability: string
-  /** In requirement-name order. */
+  /**
+   * In whatever order the node was built in: name order from the tests, the file's own order
+   * from a capability file, where the order is the human's. Nothing compares requirements
+   * positionally — the guard keys them by name and the diff by identity — so the two
+   * producers are free to differ.
+   */
   readonly requirements: readonly RequirementNode[]
 }
 

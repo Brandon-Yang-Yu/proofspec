@@ -102,11 +102,16 @@ elsewhere. The pages are a generated output, so a project gitignores that direct
 than committing it. Inputs it cannot read are refused the way the check and the write refuse
 them.
 
+A capability's requirements are headed in the order its file declares them, not by name. A
+description is prose the human owns, and prose refers to its neighbours: a page that sorts
+the requirements makes every "the requirement below" point at one above it.
+
 <!-- scenarios: generated -->
 - "An absolute output directory is written to exactly" → tests/cli/render.test.ts
 - "The render command reports it cannot run on unreadable inputs" → tests/cli/render.test.ts
 - "The render command writes into a chosen directory" → tests/cli/render.test.ts
 - "The render command writes to the default directory when none is given" → tests/cli/render.test.ts
+- "The rendered page lists requirements in the capability file's order" → tests/cli/render.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command says which scenarios a change touched

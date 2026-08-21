@@ -40,8 +40,43 @@ const COMMITTED: SpecTree = {
   ],
 }
 
+/**
+ * A capability declaring two requirements nothing proves, in an order other than by name.
+ * They yield two findings of one kind, so their order in the report can only be the guard's
+ * own doing — the read hands requirements over in the order the file wrote them.
+ */
+const DECLARED_OUT_OF_NAME_ORDER: SpecTree = {
+  capabilities: [
+    {
+      capability: CAPABILITY,
+      requirements: [
+        { requirement: REQUIREMENT, scenarios: [{ scenario: 'claimed twice', file: 'tests/a.test.ts' }] },
+        { requirement: 'apple, proven by nothing', scenarios: [] },
+        { requirement: 'Zebra, proven by nothing', scenarios: [] },
+      ],
+    },
+  ],
+}
+
 function kindsOf(report: GuardReport): readonly string[] {
   return report.findings.map(finding => finding.kind)
+}
+
+/** The same tree with every capability declaring its requirements the other way round. */
+function inReverseOrder(tree: SpecTree): SpecTree {
+  return {
+    capabilities: tree.capabilities.map(capability => ({
+      ...capability,
+      requirements: [...capability.requirements].reverse(),
+    })),
+  }
+}
+
+/** The requirements the report calls uncovered, in the order it reported them. */
+function uncoveredIn(report: GuardReport): readonly string[] {
+  return report.findings.flatMap(finding =>
+    finding.kind === 'uncovered-requirement' ? [finding.requirement] : [],
+  )
 }
 
 // Requirement: Two runs over the same tests report the same findings
@@ -65,4 +100,20 @@ it('reports findings in a fixed order whatever order the tests were scanned', ()
     'scenario-added',
     'duplicate-requirement',
   ])
+})
+
+// Requirement: Two runs over the same tests report the same findings
+// Scenario: Findings come in a fixed order whatever order a file declares its requirements
+// GIVEN one committed capability whose requirements are declared in an order other than by
+//       name, and the same capability declaring them the other way round
+// WHEN the guard runs on each
+// THEN both runs report the same findings in the same order, and the two requirements
+//      nothing proves are reported in name order either way, so the report's order is the
+//      guard's and not the order someone happened to write the file in
+it('reports findings in a fixed order whatever order a file declares its requirements', () => {
+  const asDeclared = guard({ scans: SCANS, committed: DECLARED_OUT_OF_NAME_ORDER })
+  const reversed = guard({ scans: SCANS, committed: inReverseOrder(DECLARED_OUT_OF_NAME_ORDER) })
+
+  expect(reversed.findings).toEqual(asDeclared.findings)
+  expect(uncoveredIn(asDeclared)).toEqual(['Zebra, proven by nothing', 'apple, proven by nothing'])
 })

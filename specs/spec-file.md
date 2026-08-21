@@ -20,9 +20,13 @@ A requirement with no recorded entries reads as a requirement with none. That is
 ordinary state, not an error. It is what a requirement looks like before anything proves
 it.
 
-Requirements come back in name order and entries in title order — the order the tree
-uses, so what is read is already a branch of it. The file keeps its own order; that order
-is the human's.
+Requirements come back in the order the file declares them. That order is the human's:
+descriptions refer to their neighbours, so a requirement re-ordered on the way out turns
+"the requirement below" into one written above it. Nothing downstream compares
+requirements positionally, so the read owes them no order of its own.
+
+Entries come back in title order — the order the tree holds them in, so what is read is
+already a branch of it and reads the same on every machine.
 
 <!-- scenarios: generated -->
 - "A file that declares no requirements reads as a capability with none" → tests/spec-file/read.test.ts
@@ -31,7 +35,7 @@ is the human's.
 - "A requirement that records nothing reads as one with no entries" → tests/spec-file/read.test.ts
 - "A requirement's description and its recorded entries are read together" → tests/spec-file/read.test.ts
 - "Entries come back in title order, not the file's order" → tests/spec-file/read.test.ts
-- "Requirements come back in name order, not the file's order" → tests/spec-file/read.test.ts
+- "Requirements come back in the file's own order" → tests/spec-file/read.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Writing back touches only the generated block
