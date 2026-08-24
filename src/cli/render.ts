@@ -1,16 +1,20 @@
 import { assertNever } from '../assert-never.ts'
-import { compareStrings } from '../order.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
+import type { ReviewEntry } from '../review/index.ts'
 import type {
   GoneScenario,
   ImpactReport,
   Outcome,
+  ReachedRequirement,
   SpecLocation,
+  StandingReview,
   TestProves,
   TouchedReport,
   TouchedRequirement,
   TouchedScenarioReport,
+  TouchedSummary,
+  TouchedUnmatched,
   UnmatchedLines,
 } from './types.ts'
 
@@ -34,10 +38,19 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     case 'checked':
       return outcome.report.status === 'fail' ? EXIT_DRIFT : EXIT_OK
     case 'wrote':
+    case 'reviewed':
       return EXIT_OK
-    // A report, not a verdict: naming a promise this change touched — even one nothing proves
-    // any more — is not the tool saying the build is wrong. That is the check's answer to give.
+    // Naming a promise this change touched — even one nothing proves any more — is not the tool
+    // saying the build is wrong; that verdict is the check's to give. What the work list does
+    // hold is a gate on the reviewing: while a promise it reached is unjudged it exits the same
+    // 1 the check uses, and no reader is left guessing which to fix, because the two commands
+    // send them to different places — the check to the spec, this to the review.
+    //
+    // Only the work list holds it. Fetching one requirement, or the lines that prove nothing,
+    // is how a reviewer collects the work, and an agent that read every fetch as a failed tool
+    // would stop partway through the job the gate exists to make it finish.
     case 'touched':
+      return unjudgedIn(outcome.report) ? EXIT_DRIFT : EXIT_OK
     case 'impact':
       return EXIT_OK
     case 'cannot-run':
@@ -45,6 +58,12 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     default:
       return assertNever(outcome)
   }
+}
+
+/** Whether the work list still counts a promise nobody has judged. */
+function unjudgedIn(report: TouchedReport): boolean {
+  if (report.kind !== 'summary') return false
+  return report.requirements.some(one => one.pending > 0)
 }
 
 /** The shapes an answer can take: one for a person, three for a program. */
@@ -100,6 +119,7 @@ function defaultFormatOf(outcome: Outcome): Format {
       return 'json'
     case 'checked':
     case 'wrote':
+    case 'reviewed':
     case 'impact':
     case 'cannot-run':
       return 'text'
@@ -121,6 +141,8 @@ export function renderText(outcome: Outcome): string {
         : [`wrote ${outcome.files.length} file(s):`, ...outcome.files.map(file => `  ${file}`)].join('\n')
     case 'touched':
       return renderTouched(outcome.report)
+    case 'reviewed':
+      return renderReviewed(outcome.entry)
     case 'impact':
       return renderImpact(outcome.report)
     case 'cannot-run':
@@ -144,6 +166,8 @@ export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string
     case 'touched':
     case 'impact':
       return stringify(outcome.report, layout)
+    case 'reviewed':
+      return stringify(outcome.entry, layout)
     case 'cannot-run':
       return stringify({ error: outcome.reason }, layout)
     default:
@@ -161,33 +185,55 @@ function stringify(value: unknown, layout: Layout): string {
   return layout === 'indented' ? JSON.stringify(value, undefined, JSON_INDENT) : JSON.stringify(value)
 }
 
-/**
- * What a change touched, as a person reads it. Each line a reader can act on starts with the
- * place to open — `file:line` — and the line under it names the promise and where it is
- * written, so the two questions a diff raises ("which claim is this?" and "where does it
- * live?") are answered without leaving the report.
- *
- * The report groups its scenarios under the requirement they prove, which is the shape the
- * program-readable answer keeps. Here that grouping is flattened back into one list in file
- * order: a person reading a terminal is walking their diff, not the spec tree, and every line
- * names its promise anyway.
- */
+/** What a change touched, as a person reads it — one form for each of the three answers. */
 function renderTouched(report: TouchedReport): string {
-  const scenarios = report.requirements
-    .flatMap(under => under.scenarios.map(scenario => ({ scenario, under })))
-    .sort((a, b) => compareStrings(a.scenario.file, b.scenario.file) || a.scenario.from - b.scenario.from)
-  const gone = report.requirements.flatMap(under => under.gone.map(scenario => ({ scenario, under })))
+  if (report.kind === 'summary') return renderWorkList(report)
+  if (report.kind === 'unmatched') return renderUnmatchedLines(report)
+  return renderOneRequirement(report)
+}
 
-  const nothing = scenarios.length === 0 && report.unmatched.length === 0 && gone.length === 0
-  if (nothing) return `nothing touched since ${report.base}`
-
-  const parts = [`touched since ${report.base}`]
-  if (scenarios.length > 0) {
-    parts.push(scenarios.map(one => renderTouchedScenario(one.scenario, one.under)).join('\n'))
+/**
+ * The work list. Each line carries the address to fetch it by, so a person reading this in a
+ * terminal can copy one and ask for it — the same move the agent makes, which is what keeps
+ * the two readers on one workflow rather than two.
+ */
+function renderWorkList(report: TouchedSummary): string {
+  if (report.requirements.length === 0 && report.unmatched === 0) {
+    return `nothing touched since ${report.base}`
   }
-  if (report.unmatched.length > 0) parts.push(report.unmatched.map(renderUnmatched).join('\n'))
-  if (gone.length > 0) {
-    parts.push(['no longer proven:', ...gone.map(one => renderGone(one.scenario, one.under))].join('\n'))
+
+  const unjudged = report.requirements.reduce((count, one) => count + one.pending, 0)
+  const parts = [`touched since ${report.base} — ${unjudged} promise(s) still unjudged`]
+  if (report.requirements.length > 0) parts.push(report.requirements.map(renderReached).join('\n'))
+  if (report.unmatched > 0) {
+    parts.push(`${report.unmatched} changed run(s) prove nothing — ask for them with --unmatched`)
+  }
+  return parts.join('\n\n')
+}
+
+function renderReached(one: ReachedRequirement): string {
+  const reached = `${one.scenarios} touched, ${one.gone} gone`
+  return `  ${one.key}  ${one.capability} → ${one.requirement}\n      ${reached}, ${one.pending} unjudged`
+}
+
+/**
+ * One requirement in full. Each line a reader can act on starts with the place to open —
+ * `file:line` — with the key to record a judgement against under it, so the two questions this
+ * answer raises ("which claim is this?" and "how do I say I have read it?") are both answered
+ * without leaving the report. The scenarios stay in file order, which is how a person walks a
+ * diff.
+ */
+function renderOneRequirement(report: TouchedRequirement): string {
+  const parts = [
+    `${report.capability} → ${report.requirement}${where(report.spec)}`,
+    // All three, not only the question. The terminal form is the one a person reads, and a
+    // person told what to look for but not how to answer goes off to find out — which is the
+    // errand carrying the protocol at all was meant to save.
+    [report.review.judge, '', `  pass:   ${report.review.pass}`, `  report: ${report.review.report}`].join('\n'),
+  ]
+  if (report.scenarios.length > 0) parts.push(report.scenarios.map(renderTouchedScenario).join('\n'))
+  if (report.gone.length > 0) {
+    parts.push(['no longer proven:', ...report.gone.map(renderGone)].join('\n'))
   }
   return parts.join('\n\n')
 }
@@ -202,23 +248,48 @@ const CHANGED_LABEL: Record<TouchedScenarioReport['changed'], string> = {
   both: '[claim and proof changed]',
 }
 
-function renderTouchedScenario(scenario: TouchedScenarioReport, under: TouchedRequirement): string {
+function renderTouchedScenario(scenario: TouchedScenarioReport): string {
   return [
     `${scenario.file}:${scenario.from}  ${scenario.scenario}  ${CHANGED_LABEL[scenario.changed]}`,
-    `    ${under.capability} → ${under.requirement}${where(under.spec)}`,
+    `    ${scenario.key}  ${judgement(scenario.reviewed)}`,
   ].join('\n')
 }
 
+function renderUnmatchedLines(report: TouchedUnmatched): string {
+  if (report.lines.length === 0) return `nothing outside every proof changed since ${report.base}`
+  return [`changed outside every proof, since ${report.base}`, ...report.lines.map(renderUnmatched)].join('\n')
+}
+
+/**
+ * One run of changed lines no promise owns, as written. Untrimmed: the indentation is part of
+ * what changed, and a reader deciding whether a helper edit matters reads it off the shape of
+ * the line. The run goes under its position rather than beside it, because a run of several
+ * lines beside a prefix puts the first at one column and the rest at another.
+ */
 function renderUnmatched(lines: UnmatchedLines): string {
   const at = lines.from === lines.to ? `${lines.from}` : `${lines.from}-${lines.to}`
-  return `${lines.file}:${at}  changed outside every proof`
+  return [`${lines.file}:${at}`, ...lines.source.split('\n').map(line => `    ${line}`)].join('\n')
 }
 
-function renderGone(scenario: GoneScenario, under: TouchedRequirement): string {
-  return [
-    `${scenario.file}  ${scenario.scenario}`,
-    `    ${under.capability} → ${under.requirement}${where(under.spec)}`,
-  ].join('\n')
+function renderGone(scenario: GoneScenario): string {
+  return `${scenario.file}  ${scenario.scenario}\n    ${scenario.key}  ${judgement(scenario.reviewed)}`
+}
+
+/** What a reviewer said about a promise, or that the gate is still waiting on one. */
+function judgement(reviewed: StandingReview | undefined): string {
+  return reviewed === undefined ? 'unjudged' : `${reviewed.verdict} — ${reviewed.by}`
+}
+
+/** One recorded judgement, said back so the reviewer sees what went into the ledger. */
+function renderReviewed(entry: ReviewEntry): string {
+  return `${entry.verdict}  ${entry.scenario}\n    ${backingOf(entry)}\n    by ${entry.by}`
+}
+
+/** What a recorded judgement rests on. A pass on a removed proof rests on nothing left to cite. */
+function backingOf(entry: ReviewEntry): string {
+  if (entry.verdict !== 'ok') return entry.note
+  if (entry.cites === undefined) return 'the promise was meant to die'
+  return `cites ${entry.cites.line}: ${entry.cites.source.trim()}`
 }
 
 /** Where a requirement is written, or nothing when no capability file declares it. */

@@ -46,7 +46,8 @@ npm install -D proofspec   # or: pnpm add -D proofspec
 npx proofspec check    # rebuild the spec tree from the tests and report drift
 npx proofspec write    # record what the tests prove into specs/
 npx proofspec render   # write the readable spec site to build/ (build/spec.md is the whole spec in one page)
-npx proofspec touched  # name the scenarios this branch's changes touched
+npx proofspec touched  # what this branch touched, and what nobody has reviewed yet
+npx proofspec review   # record one reviewer's judgement of one promise it reached
 npx proofspec impact   # walk from changed source, up the call graph, to the tests that reach it
 ```
 
@@ -54,39 +55,73 @@ Tests are read from `tests/` and capability files from `specs/` by default
 (`--tests` / `--specs` to change). `write` fills the scenario blocks of capability
 files you author, so create `specs/<capability>.md` before the first write.
 
-### What did this change touch?
+### What did this change touch, and has anyone looked at it?
 
-`touched` reads the changes to your tests and names the promises they reached:
+`touched` reads the changes to your tests and says which promises they reached. Asked for
+nothing in particular it answers with the work list — one line per requirement, with the
+address to fetch it by and how much of it nobody has judged:
 
 ```sh
-npx proofspec touched              # since this branch left main
+npx proofspec touched              # the work list, since this branch left main
 npx proofspec touched --since HEAD # since the last commit
-npx proofspec touched --pretty     # the same JSON, indented for a person to read
+npx proofspec touched --format text
 ```
 
 ```
-touched since 7cdd20f
+touched since 7cdd20f — 4 promise(s) still unjudged
 
-tests/cli/touched.test.ts:32  A change inside a proof names the scenario  [the claim changed]
-    cli → A command says which scenarios a change touched  → specs/cli.md:112
-tests/cli/support.ts:128-161  changed outside every proof
+  891ce322a64d  cli → A command says which scenarios a change touched
+      3 touched, 1 gone, 4 unjudged
+
+14 changed run(s) prove nothing — ask for them with --unmatched
 ```
 
-Given as JSON — the default, since an agent reads this report more often than a person does —
-the answer is grouped by requirement: each one carries where it is written and the prose written
-there, and under it every scenario the change touched, with the Gherkin claim and the proving
-lines as they stand. That is everything needed to judge whether a test still does what its claim
-says, and whether the claim still serves its requirement, without opening a file the report
-points at. The terminal form above stays one list in file order.
+Then fetch one requirement and judge what is under it:
+
+```sh
+npx proofspec touched --requirement 891ce322a64d   # the claims, the proofs, and the standard
+npx proofspec touched --unmatched                  # the changed lines no promise owns
+```
+
+The fetched requirement carries everything judging it takes: the prose written under it, every
+scenario the change touched with its Gherkin claim and the proving lines as they stand, the key
+each is judged under, and the question to judge them by. That is enough to decide whether a
+test still does what its claim says without opening a file the report points at.
+
+Splitting the list from the fetch is what makes the loop affordable. This repo's own report was
+64,919 bytes when it was one shape; the work list is 2,078, and no fetch on it passes 25KB.
+
+### Recording a review, and holding the gate
+
+Each judgement goes into `.proofspec/reviews.jsonl`, which is committed:
+
+```sh
+npx proofspec review <key> --verdict ok    --proves 42 --by "$USER"
+npx proofspec review <key> --verdict gap   --note "the THEN promises an order the test never asserts" --by "$USER"
+npx proofspec review <key> --verdict drift --note "the claim and the test describe different things" --by "$USER"
+```
+
+A pass has to name the line that proves the claim, and the citation is checked against the
+proof's own lines and rejected if blank; reporting a problem needs a sentence. The asymmetry is
+deliberate — the reviewer is usually the same agent the gate blocks, so the cheapest answer
+available has to be an honest one. A `gap` or a `drift` settles its promise just as a pass does:
+a reviewer who cannot report a problem without blocking their own branch has a reason to write a
+pass instead.
+
+A judgement is filed under a digest of what it judged — the scenario's identity, its
+requirement's prose, its claim, and its proving source. Edit any of them and it is no longer
+that key, so it comes back unjudged. There is no staleness rule to get wrong.
+
+**The work list exits non-zero while anything it reached is unjudged**, so a pre-push hook can
+hold the gate. Fetching a requirement always exits zero — collecting the work is not the gate.
+Naming what a change touched is still a report and not a verdict: the command that fails a build
+over drift is `check`.
 
 A proof runs from its `// Requirement:` line to the last line of its test, so editing the
-Gherkin counts as touching the scenario — and is reported as the claim changing, not the
-proof. Changes to a helper or a fixture are listed as touching nothing, with the changed lines
-themselves alongside them. A proof the change
-deleted is read back from the base revision and reported as no longer proven.
-
-It counts the working tree and files git has never seen, not only what is committed, and it
-always exits zero: it reports, it does not judge. The command that fails a build is `check`.
+Gherkin counts as touching the scenario — and is reported as the claim changing, not the proof.
+A proof the change deleted is read back from the base revision and reported as no longer
+proven; a pass on one cites nothing, because there is nothing left to point at. It counts the
+working tree and files git has never seen, not only what is committed.
 
 ### What does a change to the source reach?
 
@@ -160,7 +195,7 @@ npx proofspec check --format diagnostics # LSP diagnostics format (JSON)
 ```
 
 `touched` answers as JSON unless another format is named, since an agent reads it far more
-often than a person does. Add `--pretty` to any JSON answer to have it indented over several
+often than a person does; `--format text` gives the form written for a terminal. Add `--pretty` to any JSON answer to have it indented over several
 lines for reviewing by eye; without it the JSON stays on the one line a program parses.
 
 ### Neovim integration

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, impact, render, touched, write } from './run.ts'
+import { check, impact, render, review, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
 import type { Format, Layout } from './render.ts'
-import type { Outcome, RunOptions } from './types.ts'
+import type { Outcome, ProposedInput, RunOptions, TouchedAsk } from './types.ts'
 
 /**
  * The command line the commands are actually run from. This is thin glue: it parses the
@@ -25,8 +25,12 @@ Commands:
   write    Record what the tests prove into the committed capability files.
   render   Write the readable spec site (an index, the full spec in one page, and one
            page per capability).
-  touched  Name the scenarios this branch's changes touched, and where each one's
-           requirement is written. Always exits zero: it reports, it does not judge.
+  touched  Say what this branch's changes touched. Given nothing in particular, it answers
+           with the work list — one line per requirement reached, with the address to fetch
+           it by and how much of it nobody has judged — and exits non-zero while anything is
+           left unjudged, so a hook can hold the gate. Fetching always exits zero.
+  review   Record one reviewer's judgement of one promise the change reached, into
+           .proofspec/reviews.jsonl. A pass has to cite the line that proves the claim.
   impact   Walk from the source this branch changed, up the call graph, to the tests that
            reach it and the requirements they prove. Needs a codebase-memory index.
 
@@ -39,6 +43,14 @@ Options:
   --project <id>  The indexed project impact reads (default: derived from the directory)
   --depth <n>     How far up the call chain impact walks (default: 4)
   --coverage <f>  What a test run recorded, narrowing impact to the scenarios that ran
+  --requirement <key>  Ask touched for one requirement in full, by the address the work
+                  list gives it
+  --unmatched     Ask touched for the changed lines that fall in no proof
+  --verdict <v>   What a review concluded: ok, gap, or drift
+  --proves <line> The line that proves the claim. Required by a pass, and checked
+  --note <text>   What is wrong with the claim. Required by a gap or a drift
+  --by <who>      Who made the review. Always required: an unsigned judgement is one
+                  nobody can be asked about
   --format <fmt>  Output format: text, json, quickfix, diagnostics. Left out, touched
                   answers as JSON and everything else as text.
   --json          The legacy spelling of --format json; touched answers that way anyway
@@ -61,6 +73,12 @@ try {
       project: { type: 'string' },
       depth: { type: 'string' },
       coverage: { type: 'string' },
+      requirement: { type: 'string' },
+      unmatched: { type: 'boolean', default: false },
+      verdict: { type: 'string' },
+      proves: { type: 'string' },
+      note: { type: 'string' },
+      by: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
       pretty: { type: 'boolean', default: false },
@@ -91,8 +109,20 @@ if (values.help || positionals[0] === undefined) {
   process.exit(0)
 }
 
+// Which of touched's three answers was asked for. `TouchedAsk` is a union, so two of these
+// flags at once is not something it can hold — refused here for the same reason an unknown
+// --format is: this is the one thing the parser decides, and it decides only what the options
+// can represent. What a verdict may *be* is a decision about a value, so `review` makes it.
+if (values.requirement !== undefined && values.unmatched) {
+  process.stderr.write(`Ask for one requirement or for the unmatched lines, not both.\n\n${USAGE}\n`)
+  process.exit(2)
+}
+const ask: TouchedAsk | undefined = askedFor(values.requirement, values.unmatched)
+
 const options: RunOptions = {
   cwd: process.cwd(),
+  ask,
+  review: values.verdict === undefined ? undefined : reviewOf(values.verdict, positionals[1]),
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,
@@ -111,15 +141,43 @@ process.stdout.write(`${answer}\n`)
 // report of a real branch passes easily. Nothing keeps the loop alive, so it ends anyway.
 process.exitCode = exitCodeOf(outcome)
 
+/**
+ * The review as typed. `review` takes the key as its one positional, so a missing one is
+ * reported as missing rather than left to surface as a promise nothing is filed at. Whether
+ * the verdict names anything is not decided here — that is a value, and `review` owns it.
+ */
+function reviewOf(verdict: string, key: string | undefined): ProposedInput {
+  if (key === undefined) {
+    process.stderr.write(`review needs the key of the promise to judge.\n\n${USAGE}\n`)
+    process.exit(2)
+  }
+  return {
+    key,
+    verdict,
+    proves: values.proves === undefined ? undefined : Number(values.proves),
+    note: values.note,
+    by: values.by,
+  }
+}
+
+function askedFor(requirement: string | undefined, unmatched: boolean): TouchedAsk | undefined {
+  if (requirement !== undefined) return { kind: 'requirement', key: requirement }
+  if (unmatched) return { kind: 'unmatched' }
+  return undefined
+}
+
 function runCommand(command: string | undefined, options: RunOptions): Promise<Outcome> {
   if (command === 'check') return check(options)
   if (command === 'write') return write(options)
   if (command === 'render') return render(options)
   if (command === 'touched') return touched(options)
+  if (command === 'review') return review(options)
   if (command === 'impact') return impact(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", "touched", or "impact".`,
+    reason: `${named}. Use "check", "write", "render", "touched", "review", or "impact".`,
   })
 }
+
+

@@ -70,12 +70,15 @@ one line of it is the thing they reach for another tool to reformat. Laying it o
 choice the caller makes, so the answer a script already reads does not change under it.
 
 <!-- scenarios: generated -->
+- "A format named on the command line is the one used" → tests/cli/touched.test.ts
+- "A verdict still answers as text when no format is asked for" → tests/cli/touched.test.ts
 - "An answer larger than a pipe holds reaches its reader whole" → tests/cli/e2e.test.ts
 - "The JSON answer is laid out over indented lines when a person asks for it" → tests/cli/touched.test.ts
 - "The JSON answer stays on one line when no layout is asked for" → tests/cli/touched.test.ts
 - "The check's findings are returned as LSP diagnostics a modern editor shows inline" → tests/cli/format.test.ts
 - "The check's findings are returned in quickfix form for an editor to jump to" → tests/cli/format.test.ts
 - "The check's verdict is returned as JSON carrying the same findings" → tests/cli/json.test.ts
+- "The touched command answers as JSON when no format is asked for" → tests/cli/touched.test.ts
 - "The write's answer is returned as JSON naming the changed files" → tests/cli/json.test.ts
 <!-- /scenarios -->
 
@@ -126,10 +129,9 @@ them.
 
 ### Requirement: A command says which scenarios a change touched
 
-The CLI SHALL provide a command that reads the changes to the tests and names every
-scenario whose proof they touched, the requirement each scenario proves, where that
-requirement is written, and — in the form written for a program — the claim each scenario
-makes together with the proving lines as they are written.
+The CLI SHALL provide a command that reads the changes to the tests and says which promises
+they reached, in one of three shapes: the work list, one requirement in full, or the changed
+lines that fall in no proof. Asked for nothing in particular it SHALL give the work list.
 
 Its report SHALL be given as JSON unless another format is named, and the format named SHALL
 be the one used. This report is read by an agent far more often than by a person, and an
@@ -139,51 +141,57 @@ answers as text, because what a person reads in the log of a build that just fai
 verdict. A command that could not run answers the way every command reports being unable to
 run, and a caller branches on the exit code rather than on the shape of that answer.
 
-The report SHALL be grouped by requirement: every scenario it names, and every proof the
-change removed, sits under the requirement it proves. A claim is judged against the standard
-it serves, and grouping is what puts that standard beside every claim under it — once,
-however many of its scenarios the change reached, and with nothing repeated onto the
-scenarios themselves.
+**The work list SHALL count each requirement the change reached rather than write it out**,
+carrying its capability, its name, how many of its scenarios were touched, how many of its
+proofs were removed, how many of those promises nobody has judged, and the address the rest of
+it is fetched by. It also SHALL carry how many changed runs fall in no proof, as a number.
+
+One shape used to carry everything at once, and the reason that stopped working is worth
+writing down. Reviewing is per scenario, so it is a loop, and the work list is read on every
+turn of it — carrying the claims and the proving source there charged the whole branch's worth
+of context for the question "what is left". Measured on this tool's own branch the two shapes
+are 716 bytes and 65 kilobytes. The saving is not in total: a reviewer who works through
+everything reads all of it either way. It is that the reading is now bounded by one
+requirement at a time, and that the answer to "what is left" gets cheaper as the work is done.
+
+**One requirement asked for by address SHALL carry everything judging it takes**: the prose
+written under it, every scenario of it the change touched with the claim it makes and the
+lines that prove it as they are written, every proof of it the change removed, the key each of
+those is judged under, whatever judgement already stands against each, and how they are to be
+judged. Carrying the source is what makes one call enough — an agent asked whether a test still
+does what its claim says would otherwise open every file the report named. A scenario proven
+inside a shared test is proven by more than one run of lines, and the answer SHALL carry every
+one of them, since handing over only the first would leave an agent judging a claim against
+half its evidence. A sibling's lines are not among them.
+
+Each requirement SHALL carry where it is written together with the prose written there. The
+two arrive together or not at all: a requirement no capability file declares has neither, and
+its scenarios are still named under it, because a promise nothing declares is exactly what the
+reader has to see. Judging that gap is the check's job, not this one's.
+
+An address that names no requirement the change reached SHALL be a cannot-run rather than an
+empty answer. A stale key handed back as "nothing to judge here" is how a reviewer works
+through a list and reviews none of it.
+
+**The changed lines that fall in no proof SHALL be asked for on their own**, carrying their
+source, and a run of them that is nothing but whitespace SHALL not be reported at all. They are
+the helper, the import and the fixture edits, and they are usually a line or two — the read
+that fetches them costs a reader more than the lines are worth, so they are carried as written.
+But nothing judges them, and on a change that adds tests there are more of them than there are
+promises, so they are not in the work list beyond their number. A blank line is worth nothing
+either way: git hands one back with every block inserted beside it, and they would bury the
+runs worth reading. The file they are in is often not a test, so it is read back for them; one
+git names as changed but that cannot be read is a cannot-run, because reporting those lines as
+blank is a claim about them and a wrong one.
 
 Requirements SHALL come back in capability then requirement order, and the scenarios under
 each in file order. Git lists what it already tracks ahead of what it has never seen, so the
 order a diff arrives in is not an order at all; a report that is read again on the next run
 has to be comparable with the last one.
 
-Changed lines that fall in no proof SHALL carry their source too, and a run of them that is
-nothing but whitespace SHALL not be reported at all. They are the helper, the import and the
-fixture edits, and they are usually a line or two — the read that fetches them costs a reader
-more than the lines are worth. A blank line is the exception that is worth nothing either way:
-git hands one back with every block inserted beside it, and on a change that adds several
-tests there are more of those than there are edits, burying the ones worth reading. The file they are in is often not a test, so it
-is read back for them; one git names as changed but that cannot be read is a cannot-run,
-because reporting those lines as blank is a claim about them and a wrong one.
-
-Carrying the source is what makes one call enough. An agent asked to judge whether a test
-still does what its claim says would otherwise open every file the report named, which costs
-a read per scenario; the tool already holds those lines, so it hands them over. A scenario
-proven inside a shared test is proven by more than one run of lines, and the answer SHALL
-carry every one of them — the setup its test shares as well as its own statements — since
-handing over only the first would leave an agent judging a claim against half its evidence.
-
-Each requirement SHALL carry where it is written together with the prose written there. The
-tool has already read every capability file it names, so handing the prose over costs the
-reader nothing and saves them the read. The two arrive together or not at all: a requirement
-no capability file declares has neither, and its scenarios are still named under it, because
-a promise nothing declares is exactly what the reader has to see. Judging that gap is the
-check's job, not this one's.
-
-The terminal form SHALL stay one list in file order. A person reading a report in a terminal
-is walking their diff, not the spec tree, and each of its lines names the promise it belongs
-to anyway.
-
-This is the one place the program-readable answer carries more than the terminal one. A
-person reading a report in a terminal opens the file the report points at, and printing the
-proof under every scenario would bury the list they came for; an agent cannot open a file
-without paying for another turn. The general rule that both forms carry the same content
-holds for what the report *is* — the scenarios, their requirements, and where they are — and
-the proving source and the requirement's prose are delivery, not content. So is the shape:
-the same findings grouped for one reader and flattened for the other.
+The terminal form SHALL say the same things as the JSON one in each of the three shapes. A
+person reading a work list wants the address to fetch by; one reading a requirement is walking
+their diff, so its scenarios stay in file order there.
 
 It compares against the branch point with `main` by default, so run inside a task's
 worktree it answers "what did this branch touch"; `--since` names another revision. It
@@ -193,10 +201,11 @@ what is committed — because in a worktree most of the work is uncommitted most
 A change that removed a proof is read from the base revision and named too, so a promise
 left with nothing behind it is reported rather than silently missing.
 
-It only reports. Whatever it finds, it SHALL exit zero: "your change touched this promise"
-is not a verdict, and the command that gives verdicts is the check. A repo it cannot read —
-not a git repository, or a revision it cannot resolve — SHALL exit the same cannot-run code
-the other commands use.
+It reports what it found and does not judge it. Whatever the change touched — including a
+promise nothing proves any more — that is not this command saying the build is wrong, and the
+command that gives that verdict is the check. What it does hold a gate on is the reviewing,
+which is the requirement below. A repo it cannot read — not a git repository, or a revision it
+cannot resolve — SHALL exit the same cannot-run code the other commands use.
 
 <!-- scenarios: generated -->
 - "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
@@ -204,21 +213,94 @@ the other commands use.
 - "A changed file that cannot be read back cannot run" → tests/cli/touched.test.ts
 - "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
-- "A format named on the command line is the one used" → tests/cli/touched.test.ts
+- "A key no touched requirement carries cannot run" → tests/cli/touched.test.ts
 - "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
 - "A requirement no capability file declares carries no prose" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
 - "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
 - "A touched scenario carries the source of the lines that prove it" → tests/cli/touched.test.ts
-- "A verdict still answers as text when no format is asked for" → tests/cli/touched.test.ts
-- "Changed lines that fall in no proof carry the source of those lines" → tests/cli/touched.test.ts
-- "Changed lines that prove nothing are reported as touching no scenario" → tests/cli/touched.test.ts
 - "One requirement holds every scenario of it the change touched" → tests/cli/touched.test.ts
+- "Requirements come back in capability then requirement order" → tests/cli/touched.test.ts
+- "The lines that prove nothing are counted in the work list and asked for on their own" → tests/cli/touched.test.ts
 - "The requirement a touched scenario proves carries the prose written under it" → tests/cli/touched.test.ts
-- "The touched command answers as JSON when no format is asked for" → tests/cli/touched.test.ts
+- "The terminal form of one requirement says how to record either verdict" → tests/cli/touched.test.ts
+- "The terminal form of the lines that prove nothing carries them" → tests/cli/touched.test.ts
+- "The touched command answers with one entry for each requirement it reached" → tests/cli/touched.test.ts
 - "Touched scenarios come back in file order" → tests/cli/touched.test.ts
-- "Whatever it touched, the command exits zero" → tests/cli/touched.test.ts
+<!-- /scenarios -->
+
+### Requirement: The touched command holds the gate until every promise it reached has been judged
+
+The work list SHALL exit non-zero while any promise the change reached has no review standing
+against it, and zero when none is left. Asking for one requirement, or for the lines that prove
+nothing, SHALL exit zero however much is unjudged.
+
+This is what lets a hook hold the gate: a branch cannot be pushed with a promise on it nobody
+has looked at. It is not the tool judging the change. It is the tool saying nobody has, which
+is a fact about this branch's reviewing rather than about its code — and it is why the check
+keeping its own non-zero code is no ambiguity. The two send a reader to different places: the
+check to the spec, this to the review.
+
+Only the work list SHALL hold it. Fetching one requirement is how a reviewer collects the work,
+and an agent that read every fetch as a failed tool would stop partway through the very job the
+gate exists to make it finish.
+
+A promise SHALL count as judged whatever the judgement said. The gate asks whether every
+promise was looked at, not whether every judgement was favourable. A reviewer who cannot report
+a problem without blocking their own branch has a reason to write a pass instead, and what the
+gate would then measure is their willingness to let themselves through.
+
+<!-- scenarios: generated -->
+- "A work list with a promise left unjudged exits non-zero" → tests/cli/touched.test.ts
+- "A work list with every promise judged exits zero" → tests/cli/touched.test.ts
+- "Asking for one requirement exits zero however much is unjudged" → tests/cli/touched.test.ts
+<!-- /scenarios -->
+
+### Requirement: A command records a review of one touched scenario
+
+The CLI SHALL provide a command that records one reviewer's judgement of one promise the change
+reached, appending it to `.proofspec/reviews.jsonl`. A key naming no promise the change reached
+SHALL be a cannot-run, and a review that `review` turns away SHALL be a cannot-run that writes
+nothing.
+
+A verdict the tool does not know SHALL be a cannot-run, refused before anything is written.
+It is a decision about a value rather than about what the options can represent, so it is the
+command's to make and not the argument parser's — which is also what puts it somewhere a test
+can reach.
+
+The promise is looked up rather than taken on trust because a pass has to be checked against
+the lines it cites, and those lines are only in hand once the change has been read. A key
+matching nothing is what a stale key looks like — the scenario moved out from under the
+judgement — and filing it anyway would write a record nothing ever reads back.
+
+The ledger is committed rather than ignored, unlike the coverage recording beside it. A page of
+bare passes with nothing cited is visible in a pull request in a way no mechanical rule could
+make it, and CI cannot hold a gate against a record that only ever existed on one machine.
+
+<!-- scenarios: generated -->
+- "A ledger that cannot be read cannot run" → tests/cli/review.test.ts
+- "A pass citing a line outside the proof cannot run" → tests/cli/review.test.ts
+- "A recorded review is appended to the ledger" → tests/cli/review.test.ts
+- "A review of a promise the change did not reach cannot run" → tests/cli/review.test.ts
+- "A reviewed scenario is no longer pending in the work list" → tests/cli/review.test.ts
+- "A verdict the tool does not know cannot run" → tests/cli/review.test.ts
+<!-- /scenarios -->
+
+### Requirement: The requirement asked for carries how its scenarios are to be judged
+
+One requirement asked for in full SHALL carry the question its scenarios are to be judged by,
+along with what to run to record either answer.
+
+The asking is not incidental. A reviewer asked "is this claim honest?" answers yes; one asked
+to find where the claim promises more than the proof asserts goes looking. Only one of those
+two questions finds anything, and which one gets asked cannot be left to whoever remembers to
+ask it — the same argument that put the proving source in the payload rather than an address
+to it.
+
+<!-- scenarios: generated -->
+- "The pass the protocol hands over is one the command line accepts" → tests/cli/review.test.ts
+- "The requirement asked for carries how its scenarios are to be judged" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command walks from changed source to the tests that reach it

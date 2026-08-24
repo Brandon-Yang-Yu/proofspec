@@ -1574,3 +1574,185 @@ lines — so an off-by-one there reports a rewritten shared GIVEN as a changed *
 of a changed *claim*. The exact opposite answer, silently, with everything green. A capability
 can be wrong in the one direction that inverts its meaning and still pass, if the input shape
 that reaches that code path is the one the suite never builds.
+
+## 32. The report became a gate
+
+§30 made the touched report an answer an agent could act on, and §28 drew the line that it
+reports rather than orchestrates. Both hold. What neither anticipated is what happens when the
+answer is taken seriously enough to be acted on *every* time: the reading becomes a loop, and
+a report built to be read once is the wrong shape for a loop.
+
+**The measurement that started it.** This repo's own touched report was 64,919 bytes: 21.6KB of
+proving source, 17.2KB of claim, 11.0KB of requirement prose, 6.6KB of unmatched lines. §30
+argued that was the right trade — "extra context is cheap and extra round trips are not" — and
+it was, under its own premise, which is that the reader reads it once and is done.
+
+**Reviewing is per scenario, so it is a loop.** Every scenario under every requirement a change
+reached wants the same judgement made of it, one at a time. Under a loop the premise inverts:
+the work list is read on every turn, so carrying the claims and the proving source there
+charges the whole branch's context to answer "what is left". Split into a list and a fetch, the
+same branch answers that in 2,078 bytes.
+
+**The saving is not in the total, and saying otherwise would be a lie.** A reviewer who works
+through everything reads all of it either way, and the fetches add round trips §30 was right to
+count. What changes is that the reading is bounded by one requirement at a time rather than by
+the branch, and that "what is left" gets cheaper as the work gets done. On the worst requirement
+of this branch the bound is 24KB rather than 65KB; most are under 5KB.
+
+**Nothing recorded the answer, so nothing could enforce it.** This is the defect §30 left
+behind, and it is the same *kind* of defect: not a missing feature, a fact the tool held and
+threw away. A report said which promises a change reached; nothing said which had been looked
+at. A change reviewed carefully and one merely reported on read identically, so no hook could
+tell them apart, and the review step was advisory in exactly the way an advisory step always is.
+
+**Addressability solves both, because they are one problem.** The report was stateless *and*
+unaddressable: there was no way to say "give me the seventeenth" and no way to say "I have
+judged the seventeenth". Giving each promise a key answers both at once. §30 had already
+written down the condition under which this would come due — "when the queries become genuinely
+selective … a question about one scenario rather than all of them" — and this is it.
+
+### The key is the content, so a stale review cannot exist
+
+A judgement is filed under a digest of what it judged: the scenario's identity, the description
+written under its requirement, its claim, and the source of the lines that prove it. Change any
+of them and the scenario is not the key its review was filed under, so it comes back unjudged.
+
+This is deliberately *not* an expiry rule. A rule that has to notice staleness fails silently
+when it fails to notice, and failing silently here means a promise passing the gate unlooked-at
+— the one outcome the whole apparatus exists to prevent. There is no such rule to get wrong.
+
+The line a step or a proof sits on is not in the key: a blank line inserted above a test moved
+nothing anyone judged. The requirement's description is, and that was a decision with a cost —
+fixing a typo in a SHALL sentence re-opens every scenario under it. It was taken because the
+description is the standard a claim is judged against, so a reworded SHALL is a different
+question being asked, and answering the old one does not answer the new one.
+
+A removed proof is keyed by its name alone. Nothing of it is left to weigh, so the only question
+it raises — was this promise meant to die — is answered once and stays answered.
+
+### The gate's strength is what a pass costs, not what a report of a problem costs
+
+The reviewer and the party the gate blocks are the same agent. That is the whole difficulty, and
+most of the design follows from taking it seriously.
+
+The obvious move — block the branch when a reviewer reports drift — is exactly wrong. It makes
+lying pay: the agent is stopped by its own finding and holds the key to unblock itself, so what
+the gate then measures is its willingness to let itself through rather than what it found. A
+reported gap or drift therefore settles its promise just as a pass does.
+
+The strength comes from the other side. A pass has to cite the line that proves the claim, and
+the citation is checked against the proof's own line ranges and rejected if blank. Reporting a
+problem needs a sentence. So the cheapest answer available is an honest one, and there is no
+answer that is both cheap and false.
+
+**What the citation buys is less than it looks, and it is worth being exact.** It does not prove
+the reviewer read anything: the proving source is handed to them, so any line of it is theirs to
+quote. What it does is force a commitment to one claim-to-assertion correspondence — and the
+commonest real drift, a claim promising something no line asserts, is precisely the one that
+cannot be pointed at. It is a forcing function on the reasoning, not evidence of effort. The
+cited line is carried into the ledger as written, because that is what lets a person reading a
+pull request see at a glance whether a reviewer pointed at an assertion or at an import.
+
+Whether a line *is* an assertion is not judged. That needs to know the language, and `test-scan`
+is the only capability that does.
+
+**Four other things carry weight, and only one of them is mechanical.** Every review names its
+reviewer, because the first question a reader of the ledger has is whether the reviewer was the
+author — the author being the worst possible reviewer of their own work, having already convinced
+themselves. Whether they were the same party is not decided here: the tool does not know who
+wrote the change, and spawning a reviewer that never watched it get written is the harness's job.
+The requirement payload carries the *question* rather than leaving it to the caller, because a
+reviewer asked "is this claim honest?" answers yes and one asked to find the overstatement goes
+looking. And the ledger is committed, so a page of bare passes is visible to a human in a diff
+in a way no mechanical rule could make it.
+
+### A ledger of lines, not a database
+
+The record is `.proofspec/reviews.jsonl`: one review to a line, appended, committed.
+
+A store was considered and turned down. The data is a few dozen rows a branch and the only query
+is "does a judgement stand for this key", which a `Map` answers. What a database would cost is
+everything this project values about the rest of its storage: a text merge of an append-only
+file of content-addressed lines *is* the right merge, because two branches that both reviewed
+produce lines that either say the same thing or concern different keys. A correction is a later
+line, which is why the last one stands. And the record is read by people in pull requests, which
+a binary file is not.
+
+A line it cannot read stops the read rather than being skipped. Skipping a damaged record is how
+a promise gets through unjudged, and a half-resolved merge is exactly what that damage looks like.
+
+### Why this is not a walk-back of §25, §28 or "the count stays six"
+
+**§25 — "it reports, it never judges."** Intact. What §25 forbade was failing a build over
+`gone`, which is judging the *code*. The gate judges whether anyone *looked*, which is a fact
+about this branch's reviewing. And §25's real test was whether two commands exiting non-zero
+would leave a reader unsure which to fix: the check sends them to the spec, this sends them to
+the review. Different remedies, no ambiguity, so the same exit code carries no confusion.
+
+The gate is on the work list alone. Fetching a requirement is how a reviewer collects the work,
+and an agent reading every fetch as a failed tool would stop partway through the job the gate
+exists to make it finish.
+
+**§28 — "reports, does not orchestrate."** Intact. The ledger does not run a reviewer, decide
+who reviews, or retry. It records a fact and answers a question about the facts recorded.
+
+**§30 — "extra context is cheap."** Amended, on the condition §30 itself wrote down.
+
+**§25 — "the count stays six."** Already spent, on `impact`. The test was never the number; it
+is whether a genuinely new question has arrived. "Has this been judged" is not "where is it"
+(`locate`), not "do these agree" (`guard`), and not "what does this file look like"
+(`spec-file`). So `review` is the eighth, and it reads no files: `cli` owns the ledger on disk
+the way it owns every other boundary.
+
+### What one pass of the loop caught
+
+Running the gate on the branch that built it,
+with a fresh subagent per requirement, is the only evidence here that any of the above works.
+Eleven findings came back, and their shape is worth recording because it is one shape: a THEN
+promising that something was *refused*, or *named*, or *reported*, proven by an assertion that
+only shows some failure occurred. Four of them were `expect(x.ok).toBe(false)` with the reason
+never read, so the same test passes when the code refuses for an unrelated cause. One was
+`stringContaining('2')` standing in for "it says which line". One was a substring that appears
+in both output formats standing in for "this is the text form, not the JSON". One promised the
+answer lists the verdicts and never checked that half of the message. One had a WHEN describing
+an experiment the test could not run, comparing a value with itself. Two were claims of "as
+written" against a renderer that trimmed, and of "named" against an assertion that counted.
+The last was a scenario about ordering whose own explanatory comment was false.
+
+Two reviewers independently hit the removed-proof bug — a pass was structurally unreachable
+for a proof the change deleted, so any branch that deleted one could never clear the gate — and
+both refused to record a `drift` to get past it, saying in as many words that they would not
+file a problem they had not found. That is the asymmetry doing the job it was built for, and it
+is also the argument for it: the failure mode of an unclearable gate is not a blocked branch, it
+is a reviewer who starts writing whichever verdict goes through.
+
+### What is deliberately not built
+
+**Sampling.** A second reviewer re-judging a random share, with the disagreement rate recorded,
+is the only thing that would answer "is this batch of reviews worth anything" — every mechanism
+above raises the floor without measuring where the floor ended up. It is the obvious next move
+and it is not built, because the first thing to learn is whether the loop gets used at all.
+
+**Mutation.** §31 is this repo's own record of two wrong answers that review could not find and
+breaking the code did. `--verdict proven` — mutated, and the test caught it — is the only
+verdict that would mean what a pass is trying to mean. It is far too heavy to ask of every
+touched scenario, and it is the right escalation for a contested one.
+
+It stopped being theoretical while this section was being written. Building the gate meant
+adding scenarios for SHALLs that had no test, and several of those tests passed the moment they
+were written — which is the shape a coverage test takes when the behavior was already right, so
+it looks like nothing to check. One of them was checking nothing. The claim was that
+requirements come back in capability then requirement order; deleting the sort left the test
+green, because the fixture's file names happened to agree with the answer and the diff is
+separately sorted by path. §31 had already recorded that this exact guarantee is made twice and
+that removing either alone changes nothing, and the fixture walked into it anyway. The repair
+was to name the files so their order disagrees with the answer at every position, and the check
+that the repair worked was the mutation, not the reading.
+
+So: a test written after the code, and passing on the first run, is unverified until something
+breaks the code and watches it go red. That is cheap enough to be a habit rather than an
+escalation, and it is what `--verdict proven` would make recordable.
+
+**The hook itself.** The command can be held to now; whether `.githooks/pre-push` holds it is a
+separate decision. Pre-push rather than pre-commit, when it comes: a gate that blocks a WIP
+commit gets `--no-verify` into muscle memory, and a bypassed gate measures nothing at all.

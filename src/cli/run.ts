@@ -6,17 +6,30 @@ import type { GraphNode, ImpactNode, TestReach } from '../impact/index.ts'
 import { renderSite, scenariosTouched } from '../locate/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import { compareStrings } from '../order.ts'
+import {
+  goneKey,
+  isVerdict,
+  pendingPromises,
+  recordReview,
+  requirementKey,
+  REVIEW_PROTOCOL,
+  scenarioKey,
+  standingReviews,
+  VERDICTS,
+} from '../review/index.ts'
+import type { JudgedPromise, JudgedScenario, ProvingLines, ReviewEntry } from '../review/index.ts'
 import { readCapabilityFile, requirementLines, updateScenarioBlocks } from '../spec-file/index.ts'
 import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
-import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
+import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { readChangedFiles, readFileAt } from './diff.ts'
 import type { ChangedFile } from './diff.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
+import { appendReview, readReviews } from './reviews.ts'
 import type {
   GoneScenario,
   Outcome,
@@ -24,9 +37,10 @@ import type {
   RequirementDeclaration,
   RunOptions,
   SpecLocation,
+  StandingReview,
   TestProves,
-  TouchedRequirement,
   TouchedScenarioReport,
+  TouchedSummary,
   UnmatchedLines,
 } from './types.ts'
 
@@ -127,22 +141,195 @@ export async function render(options: RunOptions): Promise<Outcome> {
 }
 
 /**
- * Names every scenario the changes since a base revision touched, and where each one's
- * requirement is written. It is the inverse of the check: not "do the tests and the files
- * agree", but "what promises did this branch put its hands on".
+ * Names what the changes since a base revision touched, in the shape it was asked for: the
+ * work list, one requirement in full, or the changed lines no promise owns. It is the inverse
+ * of the check — not "do the tests and the files agree", but "what promises did this branch
+ * put its hands on, and has anybody looked at them".
  *
- * It reports and never judges — `gone` names a promise nothing proves any more, and even that
- * exits zero, because failing a build on it is the check's job.
+ * It still reports rather than judging what it finds: `gone` names a promise nothing proves
+ * any more and this does not fail on it, because that verdict is the check's to give. What the
+ * work list does hold is a gate on the *reviewing* — whether every promise reached has been
+ * looked at, which is a fact about this branch's process and not about its code.
  */
 export async function touched(options: RunOptions): Promise<Outcome> {
+  const reached = await reachedBy(options)
+  if (!reached.ok) return { kind: 'cannot-run', reason: reached.reason }
+
+  const ask = options.ask ?? { kind: 'summary' }
+  if (ask.kind === 'summary') return { kind: 'touched', report: workList(reached) }
+  if (ask.kind === 'unmatched') {
+    return { kind: 'touched', report: { kind: 'unmatched', base: reached.base, lines: reached.unmatched } }
+  }
+
+  const found = reached.requirements.find(one => one.key === ask.key)
+  // Cannot-run rather than an empty requirement. An address that matches nothing is what a
+  // stale key looks like, and handing it back as "nothing to judge here" is how a reviewer
+  // works through a list and reviews none of it.
+  if (found === undefined) {
+    return { kind: 'cannot-run', reason: `cannot touched: no requirement this change reached is at ${ask.key}` }
+  }
+  return { kind: 'touched', report: { kind: 'requirement', base: reached.base, ...found, review: REVIEW_PROTOCOL } }
+}
+
+/**
+ * The work list: every requirement reached, counted rather than written out.
+ *
+ * What is still unjudged is `review`'s answer rather than a filter written here. The rule that
+ * a reported problem settles its promise just as a pass does is a real decision with a reason
+ * behind it, and a second copy of it in this file is a second place for it to be got wrong.
+ */
+function workList(reached: ReachedNow): TouchedSummary {
+  const promises = reached.requirements.flatMap(promisesIn)
+  const pending = new Set(
+    pendingPromises({
+      scenarios: promises.filter(one => one.kind === 'touched').map(one => one.scenario),
+      gone: promises.filter(one => one.kind === 'gone').map(one => one.scenario),
+      entries: reached.entries,
+    }).map(one => one.key),
+  )
+
+  return {
+    kind: 'summary',
+    base: reached.base,
+    requirements: reached.requirements.map(one => ({
+      key: one.key,
+      capability: one.capability,
+      requirement: one.requirement,
+      scenarios: one.scenarios.length,
+      gone: one.gone.length,
+      pending: [...one.scenarios, ...one.gone].filter(promise => pending.has(promise.key)).length,
+    })),
+    unmatched: reached.unmatched.length,
+  }
+}
+
+/** Every promise one requirement holds, in the shape `review` judges them in. */
+function promisesIn(group: ReachedGroup): readonly JudgedPromise[] {
+  const under = judgedUnder(group)
+  return [
+    ...group.scenarios.map(one => ({ kind: 'touched' as const, scenario: judgeable(under, one) })),
+    ...group.gone.map(one => ({
+      kind: 'gone' as const,
+      scenario: { capability: under.capability, requirement: under.requirement, scenario: one.scenario },
+    })),
+  ]
+}
+
+/** What a requirement's scenarios are judged under: its identity, and the standard it sets. */
+type JudgedUnder = {
+  readonly capability: string
+  readonly requirement: string
+  readonly description: string | undefined
+}
+
+function judgedUnder(group: {
+  readonly capability: string
+  readonly requirement: string
+  readonly spec: RequirementDeclaration | undefined
+}): JudgedUnder {
+  return { capability: group.capability, requirement: group.requirement, description: group.spec?.description }
+}
+
+/**
+ * One promise as `review` judges it. The description comes from the requirement above it rather
+ * than from the promise, which is why nothing can key one without the group it sits under.
+ *
+ * A removed proof reaches this with neither half: there is nothing of it left to weigh, which
+ * is exactly why its key never moves once it has been answered.
+ */
+function judgeable(
+  under: JudgedUnder,
+  promise: { readonly scenario: string; readonly claim: readonly Step[]; readonly proof: readonly ProvingLines[] },
+): JudgedScenario {
+  return {
+    capability: under.capability,
+    requirement: under.requirement,
+    scenario: promise.scenario,
+    description: under.description,
+    claim: promise.claim,
+    proof: promise.proof,
+  }
+}
+
+/**
+ * Records one reviewer's judgement of one promise this change reached, and appends it to the
+ * ledger. The promise is looked up by the key rather than taken on trust, because a pass has
+ * to be checked against the lines it cites — and a key matching nothing is a review of
+ * something this change did not touch, which would file a judgement nothing ever reads.
+ */
+export async function review(options: RunOptions): Promise<Outcome> {
+  const proposed = options.review
+  if (proposed === undefined) return { kind: 'cannot-run', reason: 'cannot review: no review was given' }
+
+  // A value the tool does not know, refused before anything is read. The argument parser turns
+  // flags into options; deciding what a verdict may be belongs to whoever owns verdicts.
+  if (!isVerdict(proposed.verdict)) {
+    return { kind: 'cannot-run', reason: `cannot review: ${proposed.verdict} is not a verdict. Use ${VERDICTS.join(', ')}.` }
+  }
+
+  const reached = await reachedBy(options)
+  if (!reached.ok) return { kind: 'cannot-run', reason: reached.reason }
+
+  const judging = judgedAt(reached, proposed.key)
+  if (judging === undefined) {
+    return { kind: 'cannot-run', reason: `cannot review: no promise this change reached is at ${proposed.key}` }
+  }
+
+  const recorded = recordReview({
+    proposed: { ...proposed, verdict: proposed.verdict, at: new Date().toISOString() },
+    promise: judging,
+  })
+  if (!recorded.ok) return { kind: 'cannot-run', reason: `cannot review: ${recorded.reason}` }
+
+  await appendReview({ cwd: options.cwd, entry: recorded.entry })
+  return { kind: 'reviewed', entry: recorded.entry }
+}
+
+/**
+ * The promise one key names, as `review` needs it — and which of the two kinds it is, since a
+ * removed proof has no lines a pass could cite and that has to be said rather than inferred.
+ */
+function judgedAt(reached: ReachedNow, key: string): JudgedPromise | undefined {
+  for (const group of reached.requirements) {
+    const identity = { capability: group.capability, requirement: group.requirement }
+    const under = judgedUnder(group)
+    const touchedHere = group.scenarios.find(one => one.key === key)
+    if (touchedHere !== undefined) return { kind: 'touched', scenario: judgeable(under, touchedHere) }
+    const goneHere = group.gone.find(one => one.key === key)
+    if (goneHere !== undefined) return { kind: 'gone', scenario: { ...identity, scenario: goneHere.scenario } }
+  }
+  return undefined
+}
+
+/** Everything a change reached, before it is narrowed to the answer that was asked for. */
+type ReachedNow = {
+  readonly ok: true
+  readonly base: string
+  readonly requirements: readonly ReachedGroup[]
+  readonly unmatched: readonly UnmatchedLines[]
+  /** The ledger as it stands, so the work list can ask `review` what is left rather than guess. */
+  readonly entries: readonly ReviewEntry[]
+}
+
+/** One requirement and everything under it, keyed and with any standing judgements attached. */
+type ReachedGroup = {
+  readonly key: string
+  readonly capability: string
+  readonly requirement: string
+  readonly spec: RequirementDeclaration | undefined
+  readonly scenarios: readonly TouchedScenarioReport[]
+  readonly gone: readonly GoneScenario[]
+}
+
+async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly ok: false; readonly reason: string }> {
   const inputs = await gather(options)
-  if (!inputs.ok) return { kind: 'cannot-run', reason: inputs.reason }
+  if (!inputs.ok) return inputs
 
   const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
   // A test the scan could not read may hold the very proof the change touched, so the answer
   // would be quietly incomplete — refused the way `write` and `render` refuse it.
   const unreadable = scans.flatMap(scan => scan.errors)
-  if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'touched') }
+  if (unreadable.length > 0) return { ok: false, reason: reasonFor(unreadable, 'touched') }
   const sites = scans.flatMap(scan => scan.sites)
 
   const diff = await readChangedFiles({
@@ -150,14 +337,17 @@ export async function touched(options: RunOptions): Promise<Outcome> {
     paths: [options.testsDir ?? DEFAULT_TESTS_DIR],
     since: options.since,
   })
-  if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
+  if (!diff.ok) return diff
+
+  const ledger = await readReviews(options.cwd)
+  if (!ledger.ok) return ledger
 
   const specs = specLocations(inputs.specs)
   const held = new Map(inputs.tests.map(test => [test.path, test.source]))
   const read = await changedLines(diff.files, { cwd: options.cwd, held })
-  if (!read.ok) return { kind: 'cannot-run', reason: read.reason }
+  if (!read.ok) return read
   const proven = new Set(sites.filter(hasCapability).map(site => identityKey(site)))
-  const found = new Map<string, Reached>()
+  const found = new Map<string, Gathering>()
   const unmatched: UnmatchedLines[] = []
 
   for (const file of diff.files) {
@@ -184,12 +374,11 @@ export async function touched(options: RunOptions): Promise<Outcome> {
   }
 
   return {
-    kind: 'touched',
-    report: {
-      base: diff.base,
-      requirements: requirementsReached(found, specs),
-      unmatched: unmatched.sort(byFileThenLine),
-    },
+    ok: true,
+    base: diff.base,
+    requirements: requirementsReached(found, { specs, entries: ledger.entries }),
+    unmatched: unmatched.sort(byFileThenLine),
+    entries: ledger.entries,
   }
 }
 
@@ -246,15 +435,21 @@ async function readWorkingCopy(path: string): Promise<string | undefined> {
   }
 }
 
+/** A touched scenario before it is keyed: the key needs the standard, which its group holds. */
+type UnkeyedScenario = Omit<TouchedScenarioReport, 'key' | 'reviewed'>
+
+/** A removed proof before it is keyed. */
+type UnkeyedGone = Omit<GoneScenario, 'key' | 'reviewed'>
+
 /** One requirement's findings while the report is still being gathered, before they are ordered. */
-type Reached = RequirementIdentity & {
-  readonly scenarios: TouchedScenarioReport[]
-  readonly gone: GoneScenario[]
+type Gathering = RequirementIdentity & {
+  readonly scenarios: UnkeyedScenario[]
+  readonly gone: UnkeyedGone[]
 }
 
 /** The entry everything under a requirement is collected in, opened the first time one is reached. */
-function reached(found: Map<string, Reached>, identity: RequirementIdentity): Reached {
-  const key = requirementKey(identity)
+function reached(found: Map<string, Gathering>, identity: RequirementIdentity): Gathering {
+  const key = groupKey(identity)
   const held = found.get(key) ?? {
     capability: identity.capability,
     requirement: identity.requirement,
@@ -266,22 +461,50 @@ function reached(found: Map<string, Reached>, identity: RequirementIdentity): Re
 }
 
 /**
- * What the change reached, by requirement, with the prose each capability file writes under it.
+ * What the change reached, by requirement, with the prose each capability file writes under it
+ * and any judgement already standing against each promise.
+ *
  * The order is the tree's own — capability, then requirement — rather than the diff's, so two
  * runs of the same branch are comparable; inside a requirement the scenarios keep file order,
  * which is the order a person walks a diff in.
+ *
+ * The keys are struck here rather than where the scenarios were collected, because a key takes
+ * in the description written under the requirement, and that is a fact about the group rather
+ * than about any one scenario under it.
  */
 function requirementsReached(
-  found: ReadonlyMap<string, Reached>,
-  specs: SpecLocations,
-): TouchedRequirement[] {
-  return [...found.values()].sort(byRequirement).map(one => ({
-    capability: one.capability,
-    requirement: one.requirement,
-    spec: declarationFor(one, specs),
-    scenarios: [...one.scenarios].sort(byFileThenLine),
-    gone: [...one.gone].sort((a, b) => compareStrings(a.scenario, b.scenario)),
-  }))
+  found: ReadonlyMap<string, Gathering>,
+  read: { readonly specs: SpecLocations; readonly entries: readonly ReviewEntry[] },
+): ReachedGroup[] {
+  const standing = standingReviews(read.entries)
+  return [...found.values()].sort(byRequirement).map(one => {
+    const identity = { capability: one.capability, requirement: one.requirement }
+    const spec = declarationFor(one, read.specs)
+    const under = judgedUnder({ ...identity, spec })
+    return {
+      // The address a reader asks for this requirement by, not the key it was gathered under:
+      // one is a digest a person can type, the other a map key private to the gathering.
+      key: requirementKey(identity),
+      ...identity,
+      spec,
+      scenarios: [...one.scenarios]
+        .sort(byFileThenLine)
+        .map(scenario => ({ ...scenario, ...judgedBy(standing, scenarioKey(judgeable(under, scenario))) })),
+      gone: [...one.gone]
+        .sort((a, b) => compareStrings(a.scenario, b.scenario))
+        .map(was => ({ ...was, ...judgedBy(standing, goneKey({ ...identity, scenario: was.scenario })) })),
+    }
+  })
+}
+
+/** A promise's key and whatever judgement stands against it, which is nothing until one is made. */
+function judgedBy(
+  standing: ReadonlyMap<string, ReviewEntry>,
+  key: string,
+): { readonly key: string; readonly reviewed: StandingReview | undefined } {
+  const entry = standing.get(key)
+  if (entry === undefined) return { key, reviewed: undefined }
+  return { key, reviewed: { verdict: entry.verdict, by: entry.by, at: entry.at } }
 }
 
 /**
@@ -390,7 +613,7 @@ function groupByRequirement(
   const byRequirement = new Map<string, ProvenRequirement>()
   for (const scenario of scenarios) {
     const identity = { capability: scenario.capability, requirement: scenario.requirement }
-    const key = requirementKey(identity)
+    const key = groupKey(identity)
     const held = byRequirement.get(key) ?? { ...identity, spec: specFor(identity, specs), scenarios: [] }
     if (held.scenarios.includes(scenario.scenario)) continue
     byRequirement.set(key, { ...held, scenarios: [...held.scenarios, scenario.scenario] })
@@ -431,7 +654,7 @@ function provenBy(
       // reports that gap on its own.
       if (capability === undefined) continue
       const identity = { capability, requirement: site.requirement }
-      const key = requirementKey(identity)
+      const key = groupKey(identity)
       const held = byRequirement.get(key) ?? {
         ...identity,
         spec: specFor(identity, from.specs),
@@ -474,7 +697,12 @@ type RequirementIdentity = {
 }
 
 /** The two names as one map key. A NUL cannot appear in either, so nothing can collide. */
-function requirementKey(identity: RequirementIdentity): string {
+/**
+ * Not `requirementKey`, which is imported above. That one is a digest a person types on a
+ * command line and the ledger files judgements under, so it has to stay stable and
+ * content-addressed. This one only has to be unique inside one run's `Map`.
+ */
+function groupKey(identity: RequirementIdentity): string {
   return `${identity.capability}\u0000${identity.requirement}`
 }
 
@@ -519,8 +747,11 @@ function readRequirements(spec: SpecFileRead): {
  * `locate` names those lines and stops, because it reads no files; cutting them is this
  * capability's job, since it owns the filesystem. The capability and the requirement come off
  * here — the entry this scenario is filed under carries them for every scenario at once.
+ *
+ * Unkeyed: a key takes in the description written under the requirement, which is not in hand
+ * until the scenarios have been grouped under it.
  */
-function withSource(scenario: TouchedScenario, lines: readonly string[]): TouchedScenarioReport {
+function withSource(scenario: TouchedScenario, lines: readonly string[]): UnkeyedScenario {
   const { proves, capability, requirement, ...rest } = scenario
   return { ...rest, proof: proves.map(range => ({ ...range, source: sourceOf(lines, range) })) }
 }
