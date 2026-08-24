@@ -104,3 +104,85 @@ it('fails on a stale capability file', () => {
 
   expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: The guard fails'))
 })
+
+// Requirement: Every proof site reports its current position
+// Scenario: A block site reports the line its test opens on
+// GIVEN a test whose body tags two statements, under a GIVEN the two of them share
+// WHEN the file is scanned
+// THEN each block reports the line its test opens on, which is the only line telling a
+//      reader where the prelude the blocks share ends and each block's own claim begins
+it('reports the line the test opens on for a site tagged inside the body', () => {
+  const source = `// GIVEN a document with one version
+it('posting a turn', async () => {
+  const res = await post('/turn')
+
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream
+  expect.soft(res.status).toBe(200)
+
+  // Requirement: A successful turn appends a version
+  // Scenario: A successful turn appends one version
+  // THEN exactly one new version is appended
+  expect.soft(await listVersions(docId)).toHaveLength(2)
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(scan.sites.map(site => site.testLine)).toEqual([
+    lineOf(source, "it('posting a turn'"),
+    lineOf(source, "it('posting a turn'"),
+  ])
+})
+
+// Requirement: Every proof site reports its current position
+// Scenario: A block site opens where its own tag block does, below the steps it shares
+// GIVEN a test whose body tags a statement, under a GIVEN the whole test shares
+// WHEN the file is scanned
+// THEN the block opens on its own `// Requirement:` line rather than on the shared step above
+//      the test, because the shared prelude is where every block starts and none of them opens
+it('reports the line a block opens on, below the prelude it shares', () => {
+  const source = `// GIVEN a document with one version
+it('posting a turn', async () => {
+  const res = await post('/turn')
+
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream
+  expect.soft(res.status).toBe(200)
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: A turn streams the reply'))
+})
+
+// Requirement: Every proof site reports its current position
+// Scenario: A block site reports the lines of the steps its test shares
+// GIVEN a test whose body tags a statement, under a GIVEN and a WHEN the whole test shares
+// WHEN the file is scanned
+// THEN the shared steps report the lines they are written on, which is what tells a block
+//      which of its steps came from above its test and where its shared claim opens
+it('reports the line of each step a block shares with its test', () => {
+  const source = `// GIVEN a document with one version
+// WHEN a turn is posted
+it('posting a turn', async () => {
+  const res = await post('/turn')
+
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream
+  expect.soft(res.status).toBe(200)
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(onlySite(scan).steps.map(step => step.line)).toEqual([
+    lineOf(source, '// GIVEN a document with one version'),
+    lineOf(source, '// WHEN a turn is posted'),
+    lineOf(source, '// THEN the response is an SSE stream'),
+  ])
+})

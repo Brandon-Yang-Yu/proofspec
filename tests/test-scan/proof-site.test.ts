@@ -50,6 +50,7 @@ it('posting a turn', async () => {
   // THEN exactly one new version is appended to the document
   const versions = await listVersions(docId)
   expect.soft(versions).toHaveLength(2)
+
 })
 `
 
@@ -76,7 +77,7 @@ it('posting a turn', async () => {
   expect.soft(firstBlock.line).toBe(lineOf(source, "expect.soft(res.headers"))
   expect.soft(firstBlock.endLine).toBe(lineOf(source, "expect.soft(res.headers"))
   expect.soft(secondBlock.line).toBe(lineOf(source, 'const versions = await listVersions'))
-  expect.soft(secondBlock.endLine).toBe(lineOf(source, 'expect.soft(versions)'))
+  expect.soft(secondBlock.endLine).toBe(lineOf(source, '})'))
 })
 
 // Requirement: A tag pair's layer decides the proof site

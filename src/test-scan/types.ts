@@ -29,6 +29,12 @@ export type ProofSite = {
   readonly tagLine: number
   /** 1-based line of the tagged code: the test, or the statement that opens the block. */
   readonly line: number
+  /**
+   * 1-based line the enclosing test opens on. Equal to `line` when the tag sits above the
+   * test, and above it when the tag sits inside the body — which is the only way to tell
+   * where a block's shared prelude ends and its own claim begins.
+   */
+  readonly testLine: number
   /** 1-based last line of the site: the end of the test, or of the block. */
   readonly endLine: number
 }

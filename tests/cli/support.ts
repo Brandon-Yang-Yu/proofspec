@@ -159,3 +159,33 @@ export async function makeGitRepo(files: Readonly<Record<string, string>>): Prom
     },
   }
 }
+
+/**
+ * A test file proving two scenarios inside one test — the layout that shares a GIVEN/WHEN.
+ * The shared steps sit above the `it(` and the shared setup below it, while each scenario
+ * tags a statement of its own. Every other fixture here tags a whole test, so this is the
+ * only one that can hold a report to account for keeping one scenario's lines out of
+ * another's.
+ */
+export function sharedTestFile(scenarios: readonly [string, string], tags: Tags = {}): string {
+  const requirement = tags.requirement ?? REQUIREMENT
+  return [
+    `// Capability: ${tags.capability ?? CAPABILITY}`,
+    '',
+    '// GIVEN a shared arrangement',
+    '// WHEN the shared action runs',
+    `it('one action, two promises', () => {`,
+    '  const outcome = act()',
+    '',
+    `  // Requirement: ${requirement}`,
+    `  // Scenario: ${scenarios[0]}`,
+    '  // THEN the first demonstrated claim holds',
+    '  expect(outcome.first).toBe(true)',
+    '',
+    `  // Requirement: ${requirement}`,
+    `  // Scenario: ${scenarios[1]}`,
+    '  // THEN the second demonstrated claim holds',
+    '  expect(outcome.second).toBe(true)',
+    '})',
+  ].join('\n')
+}

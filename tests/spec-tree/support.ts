@@ -26,6 +26,7 @@ export function site(fields: {
     file: fields.file ?? FILE,
     line,
     tagLine: line,
+    testLine: line,
     endLine: line,
   }
 }

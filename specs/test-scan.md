@@ -94,8 +94,8 @@ when it is needed most.
 
 ### Requirement: Every proof site reports its current position
 
-The scan SHALL report the line of each proof site, the line its tag block opens on, and
-the line of each of its steps.
+The scan SHALL report the line of each proof site, the line its tag block opens on, the
+line of each of its steps, and the line the test it sits in opens on.
 `locate` needs them to answer where a scenario is. `guard` needs them to point at what
 caused an error.
 
@@ -104,10 +104,19 @@ A site starts where its claim is written, not where its code is: the `### Requir
 line is what lets a reader ask which promises a change reached, since editing a claim edits
 the site.
 
+The test's own line is what separates a block from the prelude it shares. Several scenarios
+proven inside one test each carry the steps written above that test, so without the line the
+test opens on there is no telling where the shared prelude ends and a block's own claim
+begins — and a reader asking which promise a change reached would be told about promises the
+change never came near.
+
 Positions SHALL be right in files containing non-ASCII text. A spec written in any
 language is still a spec.
 
 <!-- scenarios: generated -->
+- "A block site opens where its own tag block does, below the steps it shares" → tests/test-scan/position.test.ts
+- "A block site reports the line its test opens on" → tests/test-scan/position.test.ts
+- "A block site reports the lines of the steps its test shares" → tests/test-scan/position.test.ts
 - "A proof site reports the line its tag block opens on" → tests/test-scan/position.test.ts
 - "A proof site reports the line of the code it tags" → tests/test-scan/position.test.ts
 - "Each step reports its own line" → tests/test-scan/position.test.ts

@@ -735,7 +735,7 @@ prose no consumer needs yet, but a read that silently discarded half the file wo
 and `locate`'s "the whole tree can be read at once" is the named consumer. Entries come back
 in title order — the order `SpecTree` holds them in — so what is read *is* a branch of the
 tree, and the type is built on `CapabilityNode` rather than restated so it cannot quietly stop
-being one. Requirements come back in the file's own order; §28 says why that half is not the
+being one. Requirements come back in the file's own order; §33 says why that half is not the
 read's to sort.
 
 **The capability's name comes from the caller, not the file's title.** The CLI knows the
@@ -1185,7 +1185,590 @@ any directory named `coverage`, which silently swallowed the collector's own sou
 was renamed to `src/test-run`. Both are now in `docs/coverage.md`, because a tool whose
 answer quietly depends on how its input was built has to say so where its user is looking.
 
-## 28. Whose order a capability file comes back in
+
+## 28. Spec drift at scale, and who repairs it
+
+Everything up to here has been about building the tree and keeping it honest. This section
+is about what happens once the tree is large — and about a scope boundary that took three
+wrong turns to find.
+
+**The problem is arithmetic.** One scenario per proof site means a suite of 1,900 tests
+carries 1,900 scenarios. If every test edit obliges a person to re-read its scenario, then
+even a 10% touch rate is 190 reviews per change set. Any policy that puts a human on the
+default path does not survive contact with a real suite. The goal is not to make review
+faster; it is to take the human off the default path entirely.
+
+### The source of truth moves between phases
+
+The two phases run in opposite directions, and conflating them is what makes the question
+look unanswerable.
+
+**Development** — the test does not exist yet, so it cannot be the authority:
+
+```
+intent → spec → test → production code
+```
+
+**Maintenance** — the test exists, executes, passes or fails, and constrains production
+code. The Gherkin does not execute:
+
+```
+production code → impact → test → touch → spec
+```
+
+So in maintenance the **test is the executable source of truth, and the Gherkin is its
+human-readable interpretation**. That is not a demotion of the Gherkin. Its value was never
+enforcement; it is that a person can learn what the system does without reading the test
+body. It is an interpretation layer, and the point of an interpretation layer is to be
+cheap to regenerate.
+
+This does not mean the development flow should be inverted into `test → summarise → spec`.
+New behavior still starts with a human stating intent. Two phases, two directions.
+
+### The repair loop
+
+Because the Gherkin is a reading of the test, and because we trust an AI to read a test
+honestly, the AI may rewrite it:
+
+```
+test changes
+     ↓
+AI reads the new test and states what it now proves
+     ↓
+compare against the Gherkin sitting above it
+     ↓ agrees    → nothing happens
+     ↓ differs   → the AI rewrites the Gherkin
+```
+
+The trust is load-bearing. It is what removes the human from the default path; without it
+every step below collapses back into a review queue.
+
+The check is entirely local to one proof site. `specs/` records only scenario titles and
+locations — the Gherkin body lives in the test, above the `it(` — so the AI is handed a
+bounded span and asked one question about it. This is the bijection paying off in a new
+place: re-interpretation is tractable *because* a proof site is a bounded span rather than
+a file.
+
+### Three wrong turns, recorded so they are not re-walked
+
+**(a) Gating on whether the Gherkin text changed.** `scenariosTouched` already reports
+`claim: 'changed' | 'unchanged'` (`src/locate/touched.ts`), and it is tempting to read that
+as a triage signal: the claim moved, so a human must look. Wrong direction. The source of
+truth is the test, so the trigger is *the test changing*; the claim moving is an effect, not
+a cause. A mechanical text-diff filter is cheap but the wrong shape.
+
+**(b) Reserving Gherkin rewrites for a human, on the grounds that Gherkin is intent.** True
+in development, false in maintenance. Once the test exists, the Gherkin is a reading of it,
+not an authority over it. Forbidding the AI to rewrite it reinstates the 190 reviews.
+
+**(c) Building an escalation ladder.** Having granted the AI the rewrite, the next instinct
+is to ask when a human gets pulled back in, and to answer it with machinery: identity-versus-
+wording rules, a requirement that a changed meaning must change the scenario title so the
+guard trips, an exception taxonomy for split scenarios and collisions. All of it is
+unnecessary, because of the boundary below.
+
+### The boundary: ProofSpec reports, it does not orchestrate
+
+Every rewritten Gherkin does get read by a person. But that reading happens in the commit
+diff and the pull request — a channel that already exists and that ProofSpec did not build
+and must not duplicate. ProofSpec has no business owning an approval gate, a review queue,
+or a taxonomy of exceptions.
+
+Its whole obligation is one signal:
+
+> **this scenario's claim moved, and it moved because these tests moved.**
+
+That causal half is what makes the review cheap. A reviewer who sees a Gherkin edit floating
+in a diff has to reconstruct why it is there; a reviewer told which test change produced it
+knows exactly what to check it against.
+
+Half of this exists. `claim: 'changed' | 'unchanged'` is the reporting primitive — after two
+attempts to promote it into a decision gate, it turns out to have been the right field all
+along, doing the job it was named for. What is missing is the causality: `touch` currently
+says which scenarios a set of changed lines reached, not that a claim moved *because* a test
+moved.
+
+### The graph is an index, not a second source of truth
+
+A related conclusion, about lifetime. The dangerous design is a long-lived graph that every
+change is folded into:
+
+```
+Index₀ → Diff₁ → Index₁ → Diff₂ → Index₂ → ...
+```
+
+Run long enough and the stored graph diverges from the code it describes. That is **graph
+drift**, and it is worse than spec drift, because the tool reports it with the same
+confidence as the truth.
+
+The rule that prevents it: `graph = f(current repository)`. Deleting the graph and rebuilding
+must produce the same graph. Incremental update from a git diff is then a performance
+detail, not a source of truth — if the incremental path corrupts itself, the repair is
+`delete cache; full rebuild`.
+
+ProofSpec largely satisfies this already, by an accident of an earlier decision. `impact`
+receives the call graph as plain values and never learns where they came from (see the
+header of `src/impact/types.ts`), so there is no persistent graph here to drift. The thing
+that *can* drift is `specs/` — the committed record of where scenarios are — which is
+precisely why `spec:check` and `spec:write` exist. Rebuild-and-compare **is** this rule,
+already implemented, for ProofSpec's own index.
+
+### The index provider is replaceable; the semantic model is not
+
+Where the call graph comes from should stay an implementation choice:
+
+```
+compiler / codebase-memory / other indexer
+                 ↓
+           adapter layer
+                 ↓
+      ProofSpec semantic model
+                 ↓
+          impact / touch
+```
+
+A language's own compiler gives the most precise answer within its language — for
+TypeScript, exact symbols, references and call sites — but it stops at the language
+boundary, and a real repository is rarely one language. A cross-language index earns its
+place there. Depending on such an index directly is a reasonable engineering choice; there
+is no value in reimplementing a worse one for the sake of independence. What must not happen
+is ProofSpec's semantics being defined in terms of some index's internals.
+
+**One constraint to verify before committing to any provider:** `impact` is line-precise —
+`CallEdge` carries the line a call is written on, `GraphNode` carries `from`/`to`
+(`src/impact/types.ts`). A symbol-level cross-language index may not supply call-site lines.
+If it cannot, it supplements the compiler for other languages rather than replacing it.
+
+### AI reads the graph through queries, not by swallowing it
+
+A graph of any real size does not fit in a context window, and pasting it in would be the
+wrong move even if it did. The right interface is a query surface —"which tests does this
+change reach", "which scenario does this test prove", "trace source → test → scenario" —
+which is close to a thin wrapper over the commands already in `src/cli/`. An agent does not
+need to hold the graph; it needs to know which edge to follow next.
+
+### Not built yet
+
+Deliberately absent, per YAGNI: the interpret-and-compare step itself, the causal half of
+`touch`'s output, any adapter to an external indexer, and any MCP surface. The first of
+these is the one with the shortest path — its inputs already exist, in the span from
+`scenariosTouched` and the Gherkin steps from `test-scan`.
+
+## 29. Which half of a proof a change reached
+
+§28 settled what `touched` owes its reader: *this scenario's claim moved, and it moved
+because these tests moved*. This section is that obligation built, and a defect it uncovered.
+
+**Two states were not enough.** `claim: 'changed' | 'unchanged'` said whether the Gherkin
+moved. But the maintenance loop needs to tell apart a test that moved while its promise
+stayed behind — the case an AI must re-read and possibly rewrite — from an author who moved
+both together, where the only question left is whether the two still agree. Both spelled
+`changed`. The field is now `changed: 'claim' | 'proof' | 'both'`, a union rather than two
+booleans, because `both` is a situation and not the conjunction of two flags.
+
+**Building it exposed a wrong answer underneath.** A site's lines were computed as one span,
+`min(tagLine, line, ...steps) .. endLine`. For a site tagged inside a test body that is
+wrong twice over, because such a site carries the GIVEN/WHEN written above the whole test:
+the span therefore starts at the top of the test and **swallows every earlier sibling**. On
+a two-block test, changing the first block's assertion reported the *second* block's *claim*
+as rewritten — the wrong scenario and the wrong half. The `hit.from < site.line` test read
+as "above my code, so it is my claim", which holds only when nothing else is up there.
+
+Nothing caught it because every proof site in this repo's own suite tags a whole test, so
+layout B had never reached `scenariosTouched`. A capability can be wrong for a whole layer
+of its input and stay green, if the suite only ever exercises the other layer.
+
+**The fix is ownership, not a wider span.** Four zones, and what a test shares is shared in
+*both* directions:
+
+| lines | whose | half |
+|---|---|---|
+| the GIVEN/WHEN above the `it(` | every block in the test | claim |
+| the setup between the `it(` and the first block | every block in the test | proof |
+| a block's own tag and THEN | that block alone | claim |
+| a block's own statements | that block alone | proof |
+
+The symmetry is the point and it is not an implementation convenience. A shared GIVEN is
+part of every sentence written under it — rewrite it and every scenario below promises
+something else, so every one of them is reported. A shared setup is part of how every one of
+them is proven — rewrite it and the promises stand while the evidence moved, which is the
+`proof` state for all of them, not the `claim` state the old code gave. A site tagging its
+whole test has no prelude to share, so both shared zones fall away and it reduces to exactly
+the old behavior; that is why the existing suite stayed green through the change.
+
+**The scanner had to give up one more fact.** Only the scan knows where the enclosing test
+opens, and without that line there is no boundary between the shared prelude and a block's
+own claim. `ProofSite` gained `testLine`, equal to `line` for a site tagging its whole test —
+which doubles as the discriminator for having no prelude at all, so no flag was needed.
+
+**A site now reports its own opening line.** `from` was the span minimum, so every block in
+a shared test pointed at the same shared GIVEN. It is now the site's own `tagLine`,
+which sends a reader to the scenario named rather than to the prelude its siblings share.
+
+**What is still not built:** the interpret-and-compare step itself — an AI reading a moved
+proof and judging whether the claim above it is still an honest reading. `touched` now
+reports the three states that step consumes, and stops there, which is the boundary §28 drew.
+
+## 30. The report is read by an agent
+
+§28 drew the boundary — `touched` reports, it does not orchestrate — and §29 built the three
+states. This section is about who reads that report, and what changes once you take the
+answer seriously.
+
+**The reader is an agent, and an agent's costs are not a person's.** A person reading
+`touched` in a terminal wants the shortest thing that points them at a file; they will open
+it themselves, and one file is one keystroke. An agent pays differently: extra context is
+cheap and extra round trips are not. Handing it thirty file positions and making it read
+thirty files is the expensive shape, and it is exactly the shape a terminal report has.
+
+So the report now carries what the reading is *for*. The judgement §28 asks for — *is this
+Gherkin still an honest reading of this test?* — needs the Gherkin and the test in hand.
+`test-scan` had already parsed both, and `touched` was already holding them, and the report
+handed over neither. That was the whole defect: not a missing feature, a payload thrown away
+one step before delivery.
+
+**Two defaults, and deliberately no third thing.** `touched` answers as JSON without being
+asked, and that JSON carries the claim and the proving source. No new command, no
+`--with-source`, no `--agent` mode. A flag an agent must remember is a flag it will not use,
+and a second command is a second thing to keep true.
+
+**The requirement's prose, carried once.** The report handed over the claim and the proving
+lines as values and the requirement as a `file:line` — an address, which is the shape this
+section exists to argue against. The reason it survived a while is real and worth writing
+down: the cost is not the same on both sides. Proving source is a read *per scenario*, so
+thirty scenarios were thirty reads; a capability file is one read that serves every scenario
+under it, and the tool had already done that read to find the heading line. So the address
+was cheap to redeem — but "cheap" is not "free", and the thing being addressed is the
+standard the claim is judged against. It is now carried, and `spec-file` already parsed it:
+`RequirementSpec.description` existed, and `touched` was throwing it away one step before
+delivery. The same defect §30 opens with, one field over.
+
+**Grouped under the requirement, not pointing at it.** The first attempt carried the prose
+once in a `requirements` list and left every scenario pointing at it — no duplication, but an
+indirection. The question that killed it: if the parent is going to hold the prose, why is it
+not holding the scenarios too? Grouping removes the pointer *and* a duplication the flat list
+had carried all along — each scenario's own copy of `spec: {file, line}`, thirty-seven times
+on this branch for five distinct positions. So the report is now the tree it always described:
+requirement → its touched scenarios, its removed proofs. A scenario carries only what is its
+own, and its capability, requirement and position are read from the entry above it.
+
+**The flat file-ordered walk was the one real objection, and it belongs to the other form.**
+The spec had required scenarios in file order, because that is how a person walks a diff and
+because two runs of a branch have to be comparable. Grouping breaks that walk in the JSON —
+and does not touch the terminal form, which flattens the groups back into one file-ordered
+list on the way out. §30's whole argument is that these are two readers; this is the first
+time the two forms differ in *shape* rather than in payload, and the reason is the same one.
+Comparability survives in the JSON by ordering requirements the tree's way, capability then
+requirement, and the scenarios inside each by file.
+
+**The lines that prove nothing carry their source too.** `unmatched` — the helper, import and
+fixture edits that fall outside every proof — was the last thing in the report given as an
+address, and it is the one where the address is worst value: 35 of the 39 runs on this branch
+are one or two lines long, so the read costs more than the lines. The wrinkle is that the file
+is often *not* a test: the scan reads `*.test.ts` and nothing else, so `tests/cli/support.ts`
+was never in hand and has to be read back. A changed file that cannot be read back is now a
+cannot-run rather than a run of blank lines — blank is a claim about those lines, and a wrong
+one. Only files with lines to cut are read, so a deleted file cannot refuse a run.
+
+**And most of what it reported was blank lines.** Carrying the source made that visible
+immediately: 29 of the 39 runs on this branch were a single empty line. Git hands one back with
+every block inserted beside it, so a change that adds tests reports mostly blank lines — they
+belong to no promise, say nothing to a reader, and outnumber the edits worth reading. A run
+that is nothing but whitespace is now dropped from the report in both forms. That is a small
+retreat from `locate`'s rule that lines outside every proof must be named rather than dropped,
+taken deliberately at the `cli` boundary: the rule exists so a helper edit is never hidden, and
+a blank line is not one. A change that adds only blank lines now answers "nothing touched",
+which for a tool that reports on promises is the true answer.
+
+**A position and its prose are one field.** `spec` is now `{file, line, description} |
+undefined` rather than a location beside an optional paragraph. They are read from the same
+heading in the same pass, and a requirement either is declared or is not — two optional fields
+that are always both present or both absent is the shape the style rules exist to prevent.
+
+**The answer was being cut at 64KB, and only the new flag made it show.** `main.ts` wrote the
+answer and called `process.exit`. A write to a pipe is asynchronous, so the process ended
+before it drained and the reader got exactly 65536 bytes — a truncated JSON document, which
+parses as a syntax error rather than as a short answer. The bug was always there; a compact
+report of a small branch just never reached the buffer. Indenting the answer and carrying the
+requirement prose made it ordinary to pass it: this repo's own `touched` answer is 68130
+bytes. The fix is `process.exitCode`, letting the process end on its own once nothing holds
+the loop.
+
+This is the first thing in `cli` that `main.ts` being untested actually cost. The file is
+"the one piece of `cli` that does not need a test to be right" because every decision was
+moved out of it — but this was not a decision, it was the process boundary itself, and a
+function call cannot have this failure mode. So the suite gained its one end-to-end test:
+spawn the real entry point, read its output through a real pipe, and parse it. It is pinned
+the way §31 says to pin things — the mutation was run, `process.exit` put back, and the test
+fails.
+
+**A flag for the person, never for the agent.** `--pretty` lays the JSON out over indented
+lines, and it is not a walk-back of the paragraph above. The rule there is that an agent must
+not have to remember a flag to be answered well; this flag is for the person who runs
+`touched` in a terminal and reads the answer with their eyes. Nothing about the content moves
+with it — the same report, the same keys — and without it the output is byte for byte what it
+was, so no script reading the answer today notices the flag exists. The layout is applied in
+one place, so a second command cannot lay out differently from the first.
+
+**The proving lines are a list, not a span.** A scenario proven inside a shared test is
+proven by the setup that test shares *and* by its own statements, with its siblings' lines in
+between belonging to them. Those are the proof zones §29 already computes, so the answer fell
+out of work already done. A sibling's lines are deliberately excluded: handing them over
+invites judging one claim against another's evidence, which is the same class of error §29
+fixed in the ownership walk.
+
+**The format default follows the kind of answer, not the tool.** A touched report defaults to
+JSON; a verdict defaults to text. These are not one setting with an exception — they are two
+readers. What a person reads in the log of a build that just failed is a verdict, and
+`check`'s machine interface was always its exit code rather than its stdout, so nothing is
+gained by making that JSON. `impact` stays text as a decision rather than an oversight: it is
+a tree read top-down, and nobody has yet asked to consume it as data. The switch is
+exhaustive over the outcome kinds so that a sixth kind cannot inherit a default nobody chose.
+
+**Where the decision lives matters.** `main.ts` is deliberately untested — "the one piece of
+`cli` that does not need a test to be right" — which means a default cannot live there. It
+moved into `render.ts` alongside the renderers, and the old `renderByFormat` came with it, so
+the untested surface got smaller rather than larger while gaining a decision worth pinning.
+
+**What this says about MCP.** The obvious next move from here looks like a query interface,
+and §13 argues for one. It is still not the move. Nothing an agent needed here was blocked by
+the transport; it was blocked by the answer being an address instead of a value. A query
+protocol built over an answer of the wrong shape would have frozen that shape in. When the
+queries become genuinely selective — a graph too large to serialise, a question about one
+scenario rather than all of them — the transport will start earning its keep, and by then
+what to define will be visible rather than guessed at.
+
+## 31. Two wrong answers, found by mutation rather than by reading
+
+§29 and §30 built the three states and the payload. Neither was found to be wrong by review;
+both were found to be wrong by deliberately breaking the code and seeing what the suite let
+through. This section records the two answers that were wrong, and what the exercise taught
+about reading a green suite.
+
+**A block stopped one line short of its own test.** A site tagged inside a test body ended at
+its last *statement*, while a site tagging a whole test ended at its closing line. So on a
+test proving several scenarios, the `})` belonged to nobody: turning it into `}, 10_000)` —
+adding a timeout — reported *nothing touched*.
+
+The rule that settles it was already written down twice. `specs/test-scan.md` says a block
+ends "at the next tagged statement, or **at the end of the test**", and it also says
+"untagged statements belong to the block above them". The closing line sits below the last
+tag, so it belongs to the block above it for the same reason every untagged statement before
+it does.
+
+**And the tool's own suite was carrying the drift it exists to catch.** The scenario "A block
+ends at the statement before the next tagged one" says in its THEN that the second block
+"runs on through the untagged statement below it *to the end of the test*", and then asserted
+the last statement's line. The Gherkin was right and the assertion was wrong, and nothing
+noticed, because the assertion is what runs. This is the argument for co-location stated in
+the negative: putting the claim beside the proof does not make them agree, it makes the
+disagreement *visible to a reader* — and here nobody had read it since it was written.
+
+**A changed run of lines is not all one promise.** `touched` marked a whole `LineRange`
+matched the moment any part of it overlapped a proof, so the rest of the run vanished from
+the report. Git hands out contiguous runs, so a helper edited just above the test it serves
+arrives in the same run as the proof below it — and `specs/locate.md` is explicit that those
+lines must be named, not dropped. The answer is to subtract what proofs own from each run
+rather than discard the run whole, which is why `unproven` exists and why `unmatched` can now
+come back as more runs than it was given.
+
+**On reading a mutation report.** Five decisions survived their mutants. Four were genuinely
+unpinned. The fifth — the ordering of the report — was not: it is guaranteed twice, once
+where the diff is read and once where the report is assembled, so removing either alone
+changed nothing. *Survived* means "this line is redundant" just as often as it means "this
+behavior is unguarded", and the two call for opposite responses. Removing both sorts made the
+scenario fail, which is the check that tells them apart.
+
+**The pin that mattered most** was not on either fix. A block's shared step lines had no test
+at all, and `halvesOf` splits the shared claim from the block's own claim purely on those
+lines — so an off-by-one there reports a rewritten shared GIVEN as a changed *proof* instead
+of a changed *claim*. The exact opposite answer, silently, with everything green. A capability
+can be wrong in the one direction that inverts its meaning and still pass, if the input shape
+that reaches that code path is the one the suite never builds.
+
+## 32. The report became a gate
+
+§30 made the touched report an answer an agent could act on, and §28 drew the line that it
+reports rather than orchestrates. Both hold. What neither anticipated is what happens when the
+answer is taken seriously enough to be acted on *every* time: the reading becomes a loop, and
+a report built to be read once is the wrong shape for a loop.
+
+**The measurement that started it.** This repo's own touched report was 64,919 bytes: 21.6KB of
+proving source, 17.2KB of claim, 11.0KB of requirement prose, 6.6KB of unmatched lines. §30
+argued that was the right trade — "extra context is cheap and extra round trips are not" — and
+it was, under its own premise, which is that the reader reads it once and is done.
+
+**Reviewing is per scenario, so it is a loop.** Every scenario under every requirement a change
+reached wants the same judgement made of it, one at a time. Under a loop the premise inverts:
+the work list is read on every turn, so carrying the claims and the proving source there
+charges the whole branch's context to answer "what is left". Split into a list and a fetch, the
+same branch answers that in 2,078 bytes.
+
+**The saving is not in the total, and saying otherwise would be a lie.** A reviewer who works
+through everything reads all of it either way, and the fetches add round trips §30 was right to
+count. What changes is that the reading is bounded by one requirement at a time rather than by
+the branch, and that "what is left" gets cheaper as the work gets done. On the worst requirement
+of this branch the bound is 24KB rather than 65KB; most are under 5KB.
+
+**Nothing recorded the answer, so nothing could enforce it.** This is the defect §30 left
+behind, and it is the same *kind* of defect: not a missing feature, a fact the tool held and
+threw away. A report said which promises a change reached; nothing said which had been looked
+at. A change reviewed carefully and one merely reported on read identically, so no hook could
+tell them apart, and the review step was advisory in exactly the way an advisory step always is.
+
+**Addressability solves both, because they are one problem.** The report was stateless *and*
+unaddressable: there was no way to say "give me the seventeenth" and no way to say "I have
+judged the seventeenth". Giving each promise a key answers both at once. §30 had already
+written down the condition under which this would come due — "when the queries become genuinely
+selective … a question about one scenario rather than all of them" — and this is it.
+
+### The key is the content, so a stale review cannot exist
+
+A judgement is filed under a digest of what it judged: the scenario's identity, the description
+written under its requirement, its claim, and the source of the lines that prove it. Change any
+of them and the scenario is not the key its review was filed under, so it comes back unjudged.
+
+This is deliberately *not* an expiry rule. A rule that has to notice staleness fails silently
+when it fails to notice, and failing silently here means a promise passing the gate unlooked-at
+— the one outcome the whole apparatus exists to prevent. There is no such rule to get wrong.
+
+The line a step or a proof sits on is not in the key: a blank line inserted above a test moved
+nothing anyone judged. The requirement's description is, and that was a decision with a cost —
+fixing a typo in a SHALL sentence re-opens every scenario under it. It was taken because the
+description is the standard a claim is judged against, so a reworded SHALL is a different
+question being asked, and answering the old one does not answer the new one.
+
+A removed proof is keyed by its name alone. Nothing of it is left to weigh, so the only question
+it raises — was this promise meant to die — is answered once and stays answered.
+
+### The gate's strength is what a pass costs, not what a report of a problem costs
+
+The reviewer and the party the gate blocks are the same agent. That is the whole difficulty, and
+most of the design follows from taking it seriously.
+
+The obvious move — block the branch when a reviewer reports drift — is exactly wrong. It makes
+lying pay: the agent is stopped by its own finding and holds the key to unblock itself, so what
+the gate then measures is its willingness to let itself through rather than what it found. A
+reported gap or drift therefore settles its promise just as a pass does.
+
+The strength comes from the other side. A pass has to cite the line that proves the claim, and
+the citation is checked against the proof's own line ranges and rejected if blank. Reporting a
+problem needs a sentence. So the cheapest answer available is an honest one, and there is no
+answer that is both cheap and false.
+
+**What the citation buys is less than it looks, and it is worth being exact.** It does not prove
+the reviewer read anything: the proving source is handed to them, so any line of it is theirs to
+quote. What it does is force a commitment to one claim-to-assertion correspondence — and the
+commonest real drift, a claim promising something no line asserts, is precisely the one that
+cannot be pointed at. It is a forcing function on the reasoning, not evidence of effort. The
+cited line is carried into the ledger as written, because that is what lets a person reading a
+pull request see at a glance whether a reviewer pointed at an assertion or at an import.
+
+Whether a line *is* an assertion is not judged. That needs to know the language, and `test-scan`
+is the only capability that does.
+
+**Four other things carry weight, and only one of them is mechanical.** Every review names its
+reviewer, because the first question a reader of the ledger has is whether the reviewer was the
+author — the author being the worst possible reviewer of their own work, having already convinced
+themselves. Whether they were the same party is not decided here: the tool does not know who
+wrote the change, and spawning a reviewer that never watched it get written is the harness's job.
+The requirement payload carries the *question* rather than leaving it to the caller, because a
+reviewer asked "is this claim honest?" answers yes and one asked to find the overstatement goes
+looking. And the ledger is committed, so a page of bare passes is visible to a human in a diff
+in a way no mechanical rule could make it.
+
+### A ledger of lines, not a database
+
+The record is `.proofspec/reviews.jsonl`: one review to a line, appended, committed.
+
+A store was considered and turned down. The data is a few dozen rows a branch and the only query
+is "does a judgement stand for this key", which a `Map` answers. What a database would cost is
+everything this project values about the rest of its storage: a text merge of an append-only
+file of content-addressed lines *is* the right merge, because two branches that both reviewed
+produce lines that either say the same thing or concern different keys. A correction is a later
+line, which is why the last one stands. And the record is read by people in pull requests, which
+a binary file is not.
+
+A line it cannot read stops the read rather than being skipped. Skipping a damaged record is how
+a promise gets through unjudged, and a half-resolved merge is exactly what that damage looks like.
+
+### Why this is not a walk-back of §25, §28 or "the count stays six"
+
+**§25 — "it reports, it never judges."** Intact. What §25 forbade was failing a build over
+`gone`, which is judging the *code*. The gate judges whether anyone *looked*, which is a fact
+about this branch's reviewing. And §25's real test was whether two commands exiting non-zero
+would leave a reader unsure which to fix: the check sends them to the spec, this sends them to
+the review. Different remedies, no ambiguity, so the same exit code carries no confusion.
+
+The gate is on the work list alone. Fetching a requirement is how a reviewer collects the work,
+and an agent reading every fetch as a failed tool would stop partway through the job the gate
+exists to make it finish.
+
+**§28 — "reports, does not orchestrate."** Intact. The ledger does not run a reviewer, decide
+who reviews, or retry. It records a fact and answers a question about the facts recorded.
+
+**§30 — "extra context is cheap."** Amended, on the condition §30 itself wrote down.
+
+**§25 — "the count stays six."** Already spent, on `impact`. The test was never the number; it
+is whether a genuinely new question has arrived. "Has this been judged" is not "where is it"
+(`locate`), not "do these agree" (`guard`), and not "what does this file look like"
+(`spec-file`). So `review` is the eighth, and it reads no files: `cli` owns the ledger on disk
+the way it owns every other boundary.
+
+### What one pass of the loop caught
+
+Running the gate on the branch that built it,
+with a fresh subagent per requirement, is the only evidence here that any of the above works.
+Eleven findings came back, and their shape is worth recording because it is one shape: a THEN
+promising that something was *refused*, or *named*, or *reported*, proven by an assertion that
+only shows some failure occurred. Four of them were `expect(x.ok).toBe(false)` with the reason
+never read, so the same test passes when the code refuses for an unrelated cause. One was
+`stringContaining('2')` standing in for "it says which line". One was a substring that appears
+in both output formats standing in for "this is the text form, not the JSON". One promised the
+answer lists the verdicts and never checked that half of the message. One had a WHEN describing
+an experiment the test could not run, comparing a value with itself. Two were claims of "as
+written" against a renderer that trimmed, and of "named" against an assertion that counted.
+The last was a scenario about ordering whose own explanatory comment was false.
+
+Two reviewers independently hit the removed-proof bug — a pass was structurally unreachable
+for a proof the change deleted, so any branch that deleted one could never clear the gate — and
+both refused to record a `drift` to get past it, saying in as many words that they would not
+file a problem they had not found. That is the asymmetry doing the job it was built for, and it
+is also the argument for it: the failure mode of an unclearable gate is not a blocked branch, it
+is a reviewer who starts writing whichever verdict goes through.
+
+### What is deliberately not built
+
+**Sampling.** A second reviewer re-judging a random share, with the disagreement rate recorded,
+is the only thing that would answer "is this batch of reviews worth anything" — every mechanism
+above raises the floor without measuring where the floor ended up. It is the obvious next move
+and it is not built, because the first thing to learn is whether the loop gets used at all.
+
+**Mutation.** §31 is this repo's own record of two wrong answers that review could not find and
+breaking the code did. `--verdict proven` — mutated, and the test caught it — is the only
+verdict that would mean what a pass is trying to mean. It is far too heavy to ask of every
+touched scenario, and it is the right escalation for a contested one.
+
+It stopped being theoretical while this section was being written. Building the gate meant
+adding scenarios for SHALLs that had no test, and several of those tests passed the moment they
+were written — which is the shape a coverage test takes when the behavior was already right, so
+it looks like nothing to check. One of them was checking nothing. The claim was that
+requirements come back in capability then requirement order; deleting the sort left the test
+green, because the fixture's file names happened to agree with the answer and the diff is
+separately sorted by path. §31 had already recorded that this exact guarantee is made twice and
+that removing either alone changes nothing, and the fixture walked into it anyway. The repair
+was to name the files so their order disagrees with the answer at every position, and the check
+that the repair worked was the mutation, not the reading.
+
+So: a test written after the code, and passing on the first run, is unverified until something
+breaks the code and watches it go red. That is cheap enough to be a habit rather than an
+escalation, and it is what `--verdict proven` would make recordable.
+
+**The hook itself.** The command can be held to now; whether `.githooks/pre-push` holds it is a
+separate decision. Pre-push rather than pre-commit, when it comes: a gate that blocks a WIP
+commit gets `--no-verify` into muscle memory, and a bypassed gate measures nothing at all.
+
+## 33. Whose order a capability file comes back in
 
 The read sorted a file's requirements by title. It looked like the careful choice — the same
 `compareStrings` the tree and the guard use, applied one layer earlier — and it was wrong,

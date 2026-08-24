@@ -5,6 +5,7 @@
  */
 
 import type { ScenarioIdentity } from '../spec-tree/index.ts'
+import type { Step } from '../test-scan/index.ts'
 
 /**
  * Where a scenario is now, or that no tagged test carries it. A discriminated union rather
@@ -45,19 +46,36 @@ export type LineRange = {
 }
 
 /**
- * A scenario a change reached, and how far in it got. `claim` is the whole point of the
- * distinction: a change to the Gherkin rewrites the promise, a change below it only rewrites
- * the proof, and a reader reviewing a diff has to tell those apart.
+ * A scenario a change reached, and which of its two halves the change moved. A change to the
+ * Gherkin rewrites the promise, a change below it rewrites the proof, and a reader reviewing a
+ * diff has to tell those apart.
+ *
+ * `both` is an answer of its own rather than two flags to read together: an author who moved
+ * the promise and the evidence at once is a different case from one who moved the test and
+ * left the promise above it saying what the test no longer does.
  */
 export type TouchedScenario = {
   readonly capability: string
   readonly requirement: string
   readonly scenario: string
   readonly file: string
-  /** The proof's first line, the Gherkin above the code included. */
+  /** Where this site opens: its own tag block, not the prelude it may share with siblings. */
   readonly from: number
   readonly to: number
-  readonly claim: 'changed' | 'unchanged'
+  readonly changed: 'claim' | 'proof' | 'both'
+  /**
+   * The claim in full: every step of the Gherkin, the ones written above the test and shared
+   * with its siblings included. Delivered rather than pointed at, because the question this
+   * report exists to raise — does the test still do what its claim says — cannot be asked
+   * without the sentence in hand.
+   */
+  readonly claim: readonly Step[]
+  /**
+   * The lines that prove it. More than one run when the scenario is proven inside a shared
+   * test: the setup that test shares, and the site's own statements, with its siblings' lines
+   * in between belonging to them. Lines rather than source, because `locate` reads no files.
+   */
+  readonly proves: readonly LineRange[]
 }
 
 /** What a set of changed lines touched: the scenarios, and the lines that proved nothing. */

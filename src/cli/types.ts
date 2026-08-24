@@ -9,6 +9,7 @@
 import type { GuardReport } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
+import type { ProvingLines, ReviewEntry, ReviewProtocol } from '../review/index.ts'
 
 /** Where a repo keeps its capability files and its tests, both as directories under the root. */
 export type Locations = {
@@ -36,6 +37,10 @@ export type RunOptions = {
   readonly depth?: number
   /** What a test run recorded, narrowing `impact` from test files to scenarios. */
   readonly coverage?: string
+  /** Which of its three answers `touched` is asked for; left out, the work list. */
+  readonly ask?: TouchedAsk
+  /** The review `review` is asked to record. */
+  readonly review?: ProposedInput
 } & Partial<Locations>
 
 /** Where a requirement is written: the capability file, and the line of its heading. */
@@ -44,37 +49,170 @@ export type SpecLocation = {
   readonly line: number
 }
 
-/** A scenario a change touched, plus where the requirement it proves is written. */
-export type TouchedScenarioReport = TouchedScenario & {
-  /** Absent when no capability file declares the requirement — a gap the check reports. */
-  readonly spec: SpecLocation | undefined
-}
-
-/** Changed lines that fall in no proof: a helper, an import, a fixture. */
-export type UnmatchedLines = LineRange & {
-  readonly file: string
-}
-
-/** A scenario the change stopped proving, read from the base revision. */
-export type GoneScenario = {
-  readonly capability: string
-  readonly requirement: string
-  readonly scenario: string
-  /** The file that used to prove it. */
-  readonly file: string
-  readonly spec: SpecLocation | undefined
+/** A judgement standing against a promise, as the report shows it. */
+export type StandingReview = {
+  readonly verdict: ReviewEntry['verdict']
+  readonly by: string
+  readonly at: string
 }
 
 /**
- * What a change touched. It is a report, never a verdict: `gone` names a promise nothing
- * proves any more, but deciding whether that fails a build is the check's job, not this one's.
+ * A scenario a change touched, carrying what it takes to judge it: the claim it makes (passed
+ * through from `locate` untouched) and the proving lines themselves. `locate` names those
+ * lines; `cli` owns the filesystem, so this is where they become the text an agent reads
+ * without a second read of the file.
+ *
+ * Which requirement it proves is not on it. The report groups scenarios under the requirement
+ * they prove, so the capability, the requirement and where it is written are read from the
+ * one entry above them rather than copied onto every scenario under it.
  */
-export type TouchedReport = {
+export type TouchedScenarioReport = Omit<TouchedScenario, 'proves' | 'capability' | 'requirement'> & {
+  /** The key a judgement of it is filed under — what `review` is given to record against. */
+  readonly key: string
+  readonly proof: readonly ProvingLines[]
+  /** The judgement standing against it, or nothing when none does. */
+  readonly reviewed: StandingReview | undefined
+}
+
+/** Where a requirement is written and what it says there. The two are read together or not at all. */
+export type RequirementDeclaration = SpecLocation & {
+  /** The prose between the heading and the generated block, as written. */
+  readonly description: string
+}
+
+/**
+ * A requirement this change reached, with everything it reached under it: the scenarios whose
+ * proofs moved, and the proofs it removed outright.
+ *
+ * The report is grouped this way rather than kept as one flat list because a claim is judged
+ * against the requirement it serves, and this puts that standard beside every claim under it —
+ * once, whether the change touched one scenario of it or twenty. The terminal form still reads
+ * as one file-ordered list, which is how a person walks a diff.
+ *
+ * It is also the unit a reviewer is handed, which is why the protocol comes with it: one
+ * requirement is one sitting of work, judged against one standard, under one set of
+ * instructions.
+ */
+export type TouchedRequirement = {
+  readonly kind: 'requirement'
+  readonly base: string
+  /** The address it was asked for by. */
+  readonly key: string
+  readonly capability: string
+  readonly requirement: string
+  /** Absent when no capability file declares it — a gap the check reports. */
+  readonly spec: RequirementDeclaration | undefined
+  /** Its scenarios the change touched, in file order. */
+  readonly scenarios: readonly TouchedScenarioReport[]
+  /** Its proofs the change removed, in title order. */
+  readonly gone: readonly GoneScenario[]
+  /** How the scenarios above are to be judged, delivered rather than remembered. */
+  readonly review: ReviewProtocol
+}
+
+/**
+ * One requirement as the work list counts it. Three numbers rather than its contents: the
+ * summary is what a reviewer reads to decide what to fetch, and a list that carried the claims
+ * would be the whole report again — which is the thing this shape exists to stop being.
+ */
+export type ReachedRequirement = {
+  /** The address its scenarios are fetched by. */
+  readonly key: string
+  readonly capability: string
+  readonly requirement: string
+  /** How many of its scenarios the change touched. */
+  readonly scenarios: number
+  /** How many of its proofs the change removed. */
+  readonly gone: number
+  /** How many of those promises no judgement stands against. */
+  readonly pending: number
+}
+
+/**
+ * Changed lines that fall in no proof: a helper, an import, a fixture. They carry their source
+ * for the reason a touched scenario carries its proof — the tool is holding the lines, and the
+ * reader would otherwise open the file to see an edit that is usually two lines long.
+ */
+export type UnmatchedLines = LineRange & {
+  readonly file: string
+  readonly source: string
+}
+
+/**
+ * A scenario the change stopped proving, read from the base revision. Like a touched scenario
+ * it is named under the requirement it used to prove, so it carries only what is its own.
+ */
+export type GoneScenario = {
+  /** The key a judgement of it is filed under. Its name alone: nothing of it is left to weigh. */
+  readonly key: string
+  readonly scenario: string
+  /** The file that used to prove it. */
+  readonly file: string
+  readonly reviewed: StandingReview | undefined
+}
+
+/**
+ * The work list: which requirements the change reached and how much of each is still unjudged.
+ * This is the answer `touched` gives when it is not asked for anything in particular, and it
+ * is the only one that holds the gate.
+ */
+export type TouchedSummary = {
+  readonly kind: 'summary'
   /** The revision everything here was measured against. */
   readonly base: string
-  readonly scenarios: readonly TouchedScenarioReport[]
-  readonly unmatched: readonly UnmatchedLines[]
-  readonly gone: readonly GoneScenario[]
+  /** What the change reached, in capability then requirement order. */
+  readonly requirements: readonly ReachedRequirement[]
+  /** How many runs of changed lines fall in no proof. They are asked for on their own. */
+  readonly unmatched: number
+}
+
+/**
+ * The changed lines no promise owns — a helper, an import, a fixture. Asked for on their own
+ * rather than carried in the work list, because they are not work: nothing judges them, and on
+ * a real branch there are more of them than there are promises.
+ */
+export type TouchedUnmatched = {
+  readonly kind: 'unmatched'
+  readonly base: string
+  readonly lines: readonly UnmatchedLines[]
+}
+
+/**
+ * What a change touched, in the shape it was asked for.
+ *
+ * Three answers rather than one, because the report has two readers with opposite costs. The
+ * summary is what a reviewer reads to decide what to do next, and it has to be small enough to
+ * read on every run; a requirement is one sitting of work, and it has to carry everything that
+ * sitting needs. Handing over both at once — which is what one shape meant — made every run
+ * cost the whole branch.
+ *
+ * On what it judges: naming a promise, even one nothing proves any more, is still a report and
+ * not a verdict. What the summary does judge is whether every promise the change reached has
+ * been *looked at*, which is a fact about the reviewing rather than about the code.
+ */
+export type TouchedReport = TouchedSummary | TouchedRequirement | TouchedUnmatched
+
+/**
+ * Which of the three answers `touched` is being asked for. A union rather than a flag pile, so
+ * a caller cannot ask for a requirement and the unmatched lines at once and leave the command
+ * to decide which it meant.
+ */
+export type TouchedAsk =
+  | { readonly kind: 'summary' }
+  | { readonly kind: 'requirement'; readonly key: string }
+  | { readonly kind: 'unmatched' }
+
+/**
+ * A review as the command line gives it, before `review` turns it into an entry or turns it
+ * away. There is no `at`: the clock is a boundary, and `cli` owns the boundaries.
+ */
+export type ProposedInput = {
+  readonly key: string
+  /** As typed, not yet known to name a verdict: `review` is what refuses one that does not. */
+  readonly verdict: string
+  readonly proves: number | undefined
+  readonly note: string | undefined
+  readonly by: string | undefined
 }
 
 /** One requirement a test file proves, and every scenario of it that file holds. */
@@ -123,6 +261,7 @@ export type ImpactReport = {
 export type Outcome =
   | { readonly kind: 'checked'; readonly report: GuardReport }
   | { readonly kind: 'touched'; readonly report: TouchedReport }
+  | { readonly kind: 'reviewed'; readonly entry: ReviewEntry }
   | { readonly kind: 'impact'; readonly report: ImpactReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
   | { readonly kind: 'cannot-run'; readonly reason: string }

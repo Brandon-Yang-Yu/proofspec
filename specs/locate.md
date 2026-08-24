@@ -108,21 +108,59 @@ delivered from the tests each run, never stored, so it is not a second copy of b
 
 ### Requirement: The scenarios proven at a set of lines can be found
 
-Given a file's proof sites and a set of its lines, locate SHALL name every scenario whose
-proof those lines fall in, and report the lines that fall in none.
+Given a file's proof sites and a set of its lines, locate SHALL name every scenario those
+lines reached, SHALL say for each whether the change moved its claim, its proof, or both,
+SHALL carry each scenario's claim in full together with the lines that prove it, and SHALL
+report the lines that reached none.
 
-This is the inverse of asking where a scenario is: it asks what a change touched. A
-scenario's claim sits *above* its code — the Gherkin comment block comes before the test —
-so the span a line is matched against runs from the first step to the last line of the
-proof. Matching only the test body would miss the one change that matters most: a rewritten
-GIVEN/WHEN/THEN is the promise itself changing, so locate SHALL say which of the two a
-change reached. Lines that fall in no proof are reported rather than dropped, because a
-helper, an import, or a fixture is a real change with no promise behind it.
+This is the inverse of asking where a scenario is: it asks what a change touched. A proof
+has two halves — the claim sits *above* the code, since the Gherkin comment block comes
+before the test, and the proof is the code below it. Matching only the test body would miss
+the change that matters most: a rewritten GIVEN/WHEN/THEN is the promise itself changing.
+
+The three answers are three different situations, which is why `both` is an answer of its
+own and not two flags read together. A moved proof under an unmoved claim is a promise that
+may no longer describe what its test does. A moved claim over an unmoved proof is a promise
+restated with the same evidence behind it. Both moved is an author who already brought the
+two along together, leaving only the question of whether they still agree.
+
+Which lines a scenario owns SHALL follow the layer its tag sits at. A site tagging its whole
+test owns its tag block and its body. A site tagging a statement inside a body shares a
+prelude with the other scenarios in that test, and shares it in both directions: the
+GIVEN/WHEN above the test is part of every sentence written under it, so a change there
+moves every one of their claims, and the setup between the test's first line and the first
+block is part of how every one of them is proven, so a change there moves every one of their
+proofs. What a block writes between its own tag and the next one is nobody else's, so a
+change there SHALL name that block alone. Lines that fall in no proof are reported rather
+than dropped, because a helper, an import, or a fixture is a real change with no promise
+behind it.
+
+The answer carries the claim and names the proving lines rather than pointing at them,
+because the question this report exists to raise — does the test still do what its claim
+says — cannot be asked without both in hand. A scenario proven inside a shared test is
+proven by more than one run of lines: the setup its test shares, and its own statements.
+A sibling's lines SHALL NOT be among them, since evidence for another scenario is the wrong
+thing to judge this one by. Lines rather than source, because locate reads no files.
 
 <!-- scenarios: generated -->
-- "A line changed in the Gherkin above a proof says the claim changed" → tests/locate/touched.test.ts
-- "A line changed inside a proof names the scenario it proves" → tests/locate/touched.test.ts
+- "A block reports the line its own tag opens on, not the prelude it shares" → tests/locate/touched.test.ts
+- "A change in one block's own Gherkin names that block alone" → tests/locate/touched.test.ts
+- "A change in one block's own code says its proof changed" → tests/locate/touched.test.ts
+- "A change in the Gherkin alone says the claim changed" → tests/locate/touched.test.ts
+- "A change in the test body alone says the proof changed" → tests/locate/touched.test.ts
+- "A change reaching both halves of one block says both changed" → tests/locate/touched.test.ts
+- "A change reaching both shared halves changes both for every scenario in the test" → tests/locate/touched.test.ts
+- "A change reaching the Gherkin and the body says both changed" → tests/locate/touched.test.ts
+- "A change to the line a scenario is named on says the claim changed" → tests/locate/touched.test.ts
 - "A line changed outside every proof is reported as matching none" → tests/locate/touched.test.ts
+- "A line that reached a proof is not also reported as matching none" → tests/locate/touched.test.ts
 - "A proof with no capability names no scenario" → tests/locate/touched.test.ts
 - "A scenario is named once however many changed lines fall in it" → tests/locate/touched.test.ts
+- "A shared step is claim down to the line the test opens on" → tests/locate/touched.test.ts
+- "A step shared above the blocks changes the claim of every scenario in the test" → tests/locate/touched.test.ts
+- "A touched scenario carries the Gherkin it claims" → tests/locate/touched.test.ts
+- "A touched scenario names the lines that prove it" → tests/locate/touched.test.ts
+- "Every part of a changed run that no proof owns is reported" → tests/locate/touched.test.ts
+- "Setup shared above the blocks changes the proof of every scenario in the test" → tests/locate/touched.test.ts
+- "The line between two blocks belongs to the block above it" → tests/locate/touched.test.ts
 <!-- /scenarios -->
