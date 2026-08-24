@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Pre-merge-commit gate: hold a merge into main while any promise it carries
+# into main is still unjudged.
+#
+# `proofspec touched` exits 1 while the work list counts an unjudged promise,
+# and 2 when it cannot run; this hook blocks the merge on either, so the gate
+# fails closed (design.md §32). To work through the list: fetch a requirement
+# with `proofspec touched --requirement <key>`, judge it with `proofspec
+# review`, and commit .proofspec/reviews.jsonl.
+#
+# Only merges into main are gated — that is a branch going home. Merging main
+# into a task branch is a sync, and its content was gated when it merged here.
+#
+# The base is HEAD, main's tip as it stands here: this hook runs with the
+# working tree already holding the merged result, so `HEAD..worktree` is
+# exactly what the merge is about to add to main — neither more (the branch
+# point would re-ask promises main has already judged) nor less. The promises
+# are judged against the *merged* ledger, so a reviews.jsonl that merged badly
+# stops here instead of passing silently. MERGE_HEAD is deliberately not used:
+# recent git writes it only after this hook has run.
+#
+# A fast-forward merge makes no merge commit, so this hook never sees it:
+# merge back with `git merge --no-ff <branch>`.
+# Emergency bypass: git merge --no-verify.
+
+set -euo pipefail
+
+# The same integration branch proofspec measures from (src/cli/diff.ts).
+[ "$(git branch --show-current)" = "main" ] || exit 0
+
+ROOT="$(git rev-parse --show-toplevel)"
+BASE="$(git rev-parse HEAD)"
+
+status=0
+pnpm --dir "$ROOT" proofspec touched --since "$BASE" --format text || status=$?
+
+if [ "$status" -eq 0 ]; then
+  exit 0
+fi
+
+echo >&2 ""
+echo >&2 "Merge held: a promise this merge carries into main is still unjudged, or proofspec could not run."
+echo >&2 "Work the list above, commit .proofspec/reviews.jsonl, then merge again."
+echo >&2 "Undo this merge with 'git merge --abort'."
+exit "$status"
