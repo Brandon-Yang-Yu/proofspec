@@ -70,3 +70,30 @@ it('checks a repo whose locations are given as absolute paths', async () => {
   if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')
   expect(outcome.report.status).toBe('pass')
 })
+
+// Requirement: It runs in a conventional repo with no configuration
+// Scenario: Tests given by the caller are read as they stand
+// GIVEN a repo whose recorded tests live under src/ui in .test.tsx files, with a test under tests/ the caller does not give
+// WHEN the check runs with those files given rather than a testsDir
+// THEN the verdict agrees with exactly the files given, which it could only do by standing
+//      the given tests in for discovery — a check that read tests/ too would report the
+//      ungiven test as drift, and this repo's verdict says pass
+it('checks a repo whose tests are given rather than discovered', async () => {
+  const testPath = 'src/ui/demo.test.tsx'
+  const repo = await makeRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: SCENARIOS, testPath }),
+    [testPath]: testFile(SCENARIOS),
+    // A test discovery would read but the caller does not give: if the check stood the
+    // given files beside discovery rather than in place of it, this scenario would be drift.
+    'tests/demo.test.ts': testFile(['An ungiven behavior']),
+  })
+
+  const outcome = await check({
+    cwd: repo.root,
+    tests: { roots: ['src/ui'], files: [{ path: testPath, source: await repo.read(testPath) }] },
+  })
+
+  expect(outcome.kind).toBe('checked')
+  if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')
+  expect(outcome.report.status).toBe('pass')
+})

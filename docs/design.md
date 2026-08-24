@@ -1072,6 +1072,16 @@ scenario that merely moved is still proven somewhere and is not reported gone; o
 proven nowhere now is named, so a promise left with nothing behind it surfaces at review time
 rather than at the next `check`.
 
+**A repo can hand its tests over.** Discovery walks one `tests/` of `.test.ts`, and a repo
+whose tests live elsewhere — several roots, component tests in `.test.tsx` under `src/` — is
+not walkable by it. Its promises are not worth less for that. `RunOptions.tests` takes the
+files the caller has already read and the roots they live under: the files stand in for
+discovery, and the diff is scoped to the roots, because a test file the branch deleted is not
+among the files and its removal is only visible when the diff is pointed at where tests live.
+The first consumer reads its tests its own way (it excludes screenshot folders the walk would
+read as files); the measuring stays one implementation. This is the same shape as §23's answer
+to absolute paths: the caller names where things are, the tool keeps saying what they mean.
+
 **It reports, it never judges.** Whatever it finds, it exits zero — including a promise
 nothing proves any more. Turning a fact into a failed build is `check`'s job, and giving two
 commands the power to fail CI for the same cause would make it ambiguous which one to fix.

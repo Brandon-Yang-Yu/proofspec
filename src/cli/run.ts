@@ -334,7 +334,9 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
 
   const diff = await readChangedFiles({
     cwd: options.cwd,
-    paths: [options.testsDir ?? DEFAULT_TESTS_DIR],
+    // Where the caller gave its tests, the diff follows them: a root outside the conventional
+    // tests/ is where this branch's test changes would otherwise hide from the work list.
+    paths: options.tests?.roots ?? [options.testsDir ?? DEFAULT_TESTS_DIR],
     since: options.since,
   })
   if (!diff.ok) return diff
@@ -810,10 +812,13 @@ type Gathered =
 /**
  * Reads the capability files and the tests a command works from. Either directory being
  * unreadable is a `cannot-run`, reported here once so neither command repeats the check.
+ * Tests given by the caller are read as they stand: a caller trusted to read its own tests
+ * is trusted to have read them all.
  */
 async function gather(options: RunOptions): Promise<Gathered> {
   const specs = await readSpecFiles(options.cwd, options.specsDir ?? DEFAULT_SPECS_DIR)
   if (!specs.ok) return specs
+  if (options.tests !== undefined) return { ok: true, specs: specs.files, tests: options.tests.files }
   const tests = await readTestFiles(options.cwd, options.testsDir ?? DEFAULT_TESTS_DIR)
   if (!tests.ok) return tests
   return { ok: true, specs: specs.files, tests: tests.files }

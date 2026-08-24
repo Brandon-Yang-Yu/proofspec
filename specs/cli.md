@@ -45,6 +45,7 @@ setting: there is no compiler to point at and no project to build.
 <!-- scenarios: generated -->
 - "Both locations can be pointed at where a repo keeps them" → tests/cli/locations.test.ts
 - "Locations given as absolute paths are read from exactly there" → tests/cli/locations.test.ts
+- "Tests given by the caller are read as they stand" → tests/cli/locations.test.ts
 - "The conventional layout is checked with no locations given" → tests/cli/locations.test.ts
 <!-- /scenarios -->
 
@@ -260,6 +261,24 @@ gate would then measure is their willingness to let themselves through.
 - "A work list with a promise left unjudged exits non-zero" → tests/cli/touched.test.ts
 - "A work list with every promise judged exits zero" → tests/cli/touched.test.ts
 - "Asking for one requirement exits zero however much is unjudged" → tests/cli/touched.test.ts
+<!-- /scenarios -->
+
+### Requirement: touched measures the tests a caller gives it
+
+A caller SHALL be able to hand the command the tests it has already read, with the roots they
+live under, in place of the conventional discovery. The diff SHALL then be scoped to those
+roots, so a change to a given test is measured wherever it lives.
+
+A repo whose tests sit outside `tests/` — several roots, another suffix — cannot be walked by
+the one conventional discovery, but its promises are not worth less for that. The caller reads
+its own tests its own way; this keeps the measuring — which promises the change reached, and
+whether anybody has looked — one implementation. The roots are given with the files because the
+diff needs a place to look: a test file the branch deleted is not among the files, and its
+removal is only visible when the diff is scoped to where tests live.
+
+<!-- scenarios: generated -->
+- "A test deleted from a given root is read back as no longer proven" → tests/cli/touched.test.ts
+- "Tests given with their root are scanned and diffed where they live" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command records a review of one touched scenario
