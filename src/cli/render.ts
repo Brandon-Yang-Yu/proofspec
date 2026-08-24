@@ -13,9 +13,10 @@ import type {
 } from './types.ts'
 
 /**
- * Turns an `Outcome` into the three things the process boundary needs: an exit code, a line
- * for a person, and a line for a program. This is where a verdict becomes a number — the
- * boundary `guard` deliberately stopped short of (design.md §18).
+ * Turns an `Outcome` into the things the process boundary needs: an exit code, a line for a
+ * person, a line for a program — and, when the caller named no format, the choice of which of
+ * those two an answer is given in. This is where a verdict becomes a number — the boundary
+ * `guard` deliberately stopped short of (design.md §18).
  */
 
 const EXIT_OK = 0
@@ -39,6 +40,55 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
       return EXIT_OK
     case 'cannot-run':
       return EXIT_CANNOT_RUN
+    default:
+      return assertNever(outcome)
+  }
+}
+
+/** The shapes an answer can take: one for a person, three for a program. */
+export type Format = 'text' | 'json' | 'quickfix' | 'diagnostics'
+export const FORMATS: readonly Format[] = ['text', 'json', 'quickfix', 'diagnostics']
+
+/** Whether a string off the command line names a format, so the boundary parses rather than casts. */
+export function isFormat(value: string): value is Format {
+  return FORMATS.includes(value as Format)
+}
+
+/** The answer in the format asked for, or in the one its reader expects when none is. */
+export function renderAnswer(outcome: Outcome, format?: Format): string {
+  const chosen = format ?? defaultFormatOf(outcome)
+  switch (chosen) {
+    case 'json':
+      return renderJson(outcome)
+    case 'quickfix':
+      return renderQuickfix(outcome)
+    case 'diagnostics':
+      return renderDiagnostics(outcome)
+    case 'text':
+      return renderText(outcome)
+    default:
+      return assertNever(chosen)
+  }
+}
+
+/**
+ * Which format an answer is given in when the caller named none.
+ *
+ * Only `touched` defaults to JSON. It is read by an agent far more often than by a person, and
+ * an agent should not have to remember a flag to be answered in its own language. Every other
+ * answer defaults to text, `impact` included — a decision rather than an oversight: `impact` is
+ * a tree a person reads down, and nobody has yet asked to consume it as data. This is a switch
+ * so that a sixth kind of answer cannot be absorbed into one branch without someone choosing.
+ */
+function defaultFormatOf(outcome: Outcome): Format {
+  switch (outcome.kind) {
+    case 'touched':
+      return 'json'
+    case 'checked':
+    case 'wrote':
+    case 'impact':
+    case 'cannot-run':
+      return 'text'
     default:
       return assertNever(outcome)
   }

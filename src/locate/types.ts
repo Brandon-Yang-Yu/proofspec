@@ -5,6 +5,7 @@
  */
 
 import type { ScenarioIdentity } from '../spec-tree/index.ts'
+import type { Step } from '../test-scan/index.ts'
 
 /**
  * Where a scenario is now, or that no tagged test carries it. A discriminated union rather
@@ -62,6 +63,19 @@ export type TouchedScenario = {
   readonly from: number
   readonly to: number
   readonly changed: 'claim' | 'proof' | 'both'
+  /**
+   * The claim in full: every step of the Gherkin, the ones written above the test and shared
+   * with its siblings included. Delivered rather than pointed at, because the question this
+   * report exists to raise — does the test still do what its claim says — cannot be asked
+   * without the sentence in hand.
+   */
+  readonly claim: readonly Step[]
+  /**
+   * The lines that prove it. More than one run when the scenario is proven inside a shared
+   * test: the setup that test shares, and the site's own statements, with its siblings' lines
+   * in between belonging to them. Lines rather than source, because `locate` reads no files.
+   */
+  readonly proves: readonly LineRange[]
 }
 
 /** What a set of changed lines touched: the scenarios, and the lines that proved nothing. */

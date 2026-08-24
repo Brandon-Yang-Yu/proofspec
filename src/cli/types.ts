@@ -44,10 +44,21 @@ export type SpecLocation = {
   readonly line: number
 }
 
-/** A scenario a change touched, plus where the requirement it proves is written. */
-export type TouchedScenarioReport = TouchedScenario & {
+/** A run of proving lines, as they are written. */
+export type ProvingLines = LineRange & {
+  readonly source: string
+}
+
+/**
+ * A scenario a change touched, carrying what it takes to judge it: the claim it makes (passed
+ * through from `locate` untouched), where the requirement it proves is written, and the proving
+ * lines themselves. `locate` names those lines; `cli` owns the filesystem, so this is where they
+ * become the text an agent reads without a second read of the file.
+ */
+export type TouchedScenarioReport = Omit<TouchedScenario, 'proves'> & {
   /** Absent when no capability file declares the requirement — a gap the check reports. */
   readonly spec: SpecLocation | undefined
+  readonly proof: readonly ProvingLines[]
 }
 
 /** Changed lines that fall in no proof: a helper, an import, a fixture. */

@@ -112,8 +112,31 @@ them.
 ### Requirement: A command says which scenarios a change touched
 
 The CLI SHALL provide a command that reads the changes to the tests and names every
-scenario whose proof they touched, the requirement each scenario proves, and where that
-requirement is written.
+scenario whose proof they touched, the requirement each scenario proves, where that
+requirement is written, and — in the form written for a program — the claim each scenario
+makes together with the proving lines as they are written.
+
+Its report SHALL be given as JSON unless another format is named, and the format named SHALL
+be the one used. This report is read by an agent far more often than by a person, and an
+agent should not have to remember a flag to be answered in its own language. The default
+follows the kind of answer rather than being one setting for the tool: a verdict still
+answers as text, because what a person reads in the log of a build that just failed is a
+verdict. A command that could not run answers the way every command reports being unable to
+run, and a caller branches on the exit code rather than on the shape of that answer.
+
+Carrying the source is what makes one call enough. An agent asked to judge whether a test
+still does what its claim says would otherwise open every file the report named, which costs
+a read per scenario; the tool already holds those lines, so it hands them over. A scenario
+proven inside a shared test is proven by more than one run of lines, and the answer SHALL
+carry every one of them — the setup its test shares as well as its own statements — since
+handing over only the first would leave an agent judging a claim against half its evidence.
+
+This is the one place the program-readable answer carries more than the terminal one. A
+person reading a report in a terminal opens the file the report points at, and printing the
+proof under every scenario would bury the list they came for; an agent cannot open a file
+without paying for another turn. The general rule that both forms carry the same content
+holds for what the report *is* — the scenarios, their requirements, and where they are — and
+the source is delivery, not content.
 
 It compares against the branch point with `main` by default, so run inside a task's
 worktree it answers "what did this branch touch"; `--since` names another revision. It
@@ -132,10 +155,15 @@ the other commands use.
 - "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
 - "A change inside a proof names the scenario and where its requirement is written" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
+- "A format named on the command line is the one used" → tests/cli/touched.test.ts
 - "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
+- "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
+- "A touched scenario carries the source of the lines that prove it" → tests/cli/touched.test.ts
+- "A verdict still answers as text when no format is asked for" → tests/cli/touched.test.ts
 - "Changed lines that prove nothing are reported as touching no scenario" → tests/cli/touched.test.ts
+- "The touched command answers as JSON when no format is asked for" → tests/cli/touched.test.ts
 - "Whatever it touched, the command exits zero" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 

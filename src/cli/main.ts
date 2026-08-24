@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
 import { check, impact, render, touched, write } from './run.ts'
-import { exitCodeOf, renderDiagnostics, renderJson, renderQuickfix, renderText } from './render.ts'
+import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
+import type { Format } from './render.ts'
 import type { Outcome, RunOptions } from './types.ts'
 
 /**
@@ -38,8 +39,9 @@ Options:
   --project <id>  The indexed project impact reads (default: derived from the directory)
   --depth <n>     How far up the call chain impact walks (default: 4)
   --coverage <f>  What a test run recorded, narrowing impact to the scenarios that ran
-  --format <fmt>  Output format: text (default), json, quickfix, diagnostics
-  --json          Print the answer as JSON instead of text (legacy, use --format json)
+  --format <fmt>  Output format: text, json, quickfix, diagnostics. Left out, touched
+                  answers as JSON and everything else as text.
+  --json          The legacy spelling of --format json; touched answers that way anyway
   -h, --help      Show this help`
 
 // parseArgs throws on an unknown flag; catch it so a mistyped option prints the usage rather
@@ -69,18 +71,14 @@ try {
 
 const { values, positionals } = parsed
 
-// The four shapes an answer can take. `text` is the person-readable default; the other
-// three are for programs that read the answer instead of parsing the terminal form.
-type Format = 'text' | 'json' | 'quickfix' | 'diagnostics'
-const FORMATS: readonly Format[] = ['text', 'json', 'quickfix', 'diagnostics']
-
-// Normalize format: --json is the legacy spelling of --format json, and text is the default.
-const rawFormat = values.format ?? (values.json ? 'json' : 'text')
-if (!FORMATS.includes(rawFormat as Format)) {
-  process.stderr.write(`Invalid format: ${rawFormat}. Use ${FORMATS.map(f => "'" + f + "'").join(', ')}.\n\n${USAGE}\n`)
+// Normalize format: --json is the legacy spelling of --format json. Left unnamed it stays
+// undefined, and `renderAnswer` picks the default the answer's reader expects.
+const rawFormat = values.format ?? (values.json ? 'json' : undefined)
+if (rawFormat !== undefined && !isFormat(rawFormat)) {
+  process.stderr.write(`Invalid format: ${rawFormat}. Use ${FORMATS.map(name => `'${name}'`).join(', ')}.\n\n${USAGE}\n`)
   process.exit(2)
 }
-const format = rawFormat as Format
+const format: Format | undefined = rawFormat
 
 // `--help`, or no command at all, prints the usage and stops before any file is touched.
 if (values.help || positionals[0] === undefined) {
@@ -101,23 +99,9 @@ const options: RunOptions = {
 }
 const outcome = await runCommand(positionals[0], options)
 
-const answer = renderByFormat(outcome, format)
+const answer = renderAnswer(outcome, format)
 process.stdout.write(`${answer}\n`)
 process.exit(exitCodeOf(outcome))
-
-function renderByFormat(outcome: Outcome, format: Format): string {
-  switch (format) {
-    case 'json':
-      return renderJson(outcome)
-    case 'quickfix':
-      return renderQuickfix(outcome)
-    case 'diagnostics':
-      return renderDiagnostics(outcome)
-    case 'text':
-    default:
-      return renderText(outcome)
-  }
-}
 
 function runCommand(command: string | undefined, options: RunOptions): Promise<Outcome> {
   if (command === 'check') return check(options)

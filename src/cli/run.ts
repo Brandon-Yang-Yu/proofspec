@@ -150,6 +150,7 @@ export async function touched(options: RunOptions): Promise<Outcome> {
   if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
 
   const specs = specLocations(inputs.specs)
+  const sources = new Map(inputs.tests.map(test => [test.path, test.source]))
   const proven = new Set(sites.filter(hasCapability).map(site => identityKey(site)))
   const scenarios: TouchedScenarioReport[] = []
   const unmatched: UnmatchedLines[] = []
@@ -163,7 +164,11 @@ export async function touched(options: RunOptions): Promise<Outcome> {
     const skipUnmatched = file.changed.kind === 'new-file'
 
     const hit = scenariosTouched(here, ranges)
-    scenarios.push(...hit.scenarios.map(scenario => withSpec(scenario, specs)))
+    // Split once per file rather than once per scenario. A file the scan never read holds no
+    // sites, so it yields no scenarios and nothing is ever cut from the empty fallback — but a
+    // deleted file still has removed lines to account for below, so this cannot skip the file.
+    const lines = (sources.get(file.path) ?? '').split('\n')
+    scenarios.push(...hit.scenarios.map(scenario => withSpecAndSource(scenario, { specs, lines })))
     if (!skipUnmatched) unmatched.push(...hit.unmatched.map(range => ({ file: file.path, ...range })))
 
     if (file.changed.kind === 'new-file' || file.changed.removed.length === 0) continue
@@ -380,8 +385,24 @@ function specLocations(specs: readonly SpecFileRead[]): SpecLocations {
   )
 }
 
-function withSpec(scenario: TouchedScenario, specs: SpecLocations): TouchedScenarioReport {
-  return { ...scenario, spec: specFor(scenario, specs) }
+/**
+ * A touched scenario as the report hands it over: where its requirement is written, and the
+ * lines that prove it as they are written. `locate` names those lines and stops, because it
+ * reads no files; cutting them is this capability's job, since it owns the filesystem.
+ */
+function withSpecAndSource(
+  scenario: TouchedScenario,
+  from: { readonly specs: SpecLocations; readonly lines: readonly string[] },
+): TouchedScenarioReport {
+  const { proves, ...rest } = scenario
+  // A `LineRange` counts from 1 and includes both ends; `slice` counts from 0 and excludes the
+  // end. So the start moves back one and the end does not.
+  const cut = (range: LineRange): string => from.lines.slice(range.from - 1, range.to).join('\n')
+  return {
+    ...rest,
+    spec: specFor(scenario, from.specs),
+    proof: proves.map(range => ({ ...range, source: cut(range) })),
+  }
 }
 
 function specFor(

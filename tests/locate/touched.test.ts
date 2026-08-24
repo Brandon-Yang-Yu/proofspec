@@ -266,7 +266,17 @@ it('reports where a block opens, not where its shared prelude does', () => {
   const { scenarios } = scenariosTouched(BLOCKS, [{ from: 14, to: 14 }])
 
   expect(scenarios).toEqual([
-    { capability: 'locate', requirement: 'A requirement', scenario: 'Second', file: SECOND.file, from: 11, to: 15, changed: 'proof' },
+    {
+      capability: 'locate',
+      requirement: 'A requirement',
+      scenario: 'Second',
+      file: SECOND.file,
+      from: 11,
+      to: 15,
+      changed: 'proof',
+      claim: SECOND.steps,
+      proves: [{ from: 3, to: 5 }, { from: 14, to: 15 }],
+    },
   ])
 })
 
@@ -300,4 +310,34 @@ it('does not report a line as unmatched when it reached a proof', () => {
   const { unmatched } = scenariosTouched([PROOF], [{ from: 14, to: 14 }])
 
   expect(unmatched).toEqual([])
+})
+
+// Requirement: The scenarios proven at a set of lines can be found
+// Scenario: A touched scenario carries the Gherkin it claims
+// GIVEN a test proving two scenarios under a shared GIVEN, and a change reaching the first
+// WHEN the touched scenarios are found
+// THEN the scenario carries every step of its claim, the ones its test shares included, so a
+//      reader judging it against its proof has the whole sentence without opening the file
+it('carries the whole claim, the steps its test shares included', () => {
+  const { scenarios } = scenariosTouched(BLOCKS, [{ from: 9, to: 9 }])
+
+  expect(scenarios.map(one => one.claim)).toEqual([
+    [
+      { keyword: 'GIVEN', text: 'a document with one version', line: 1 },
+      { keyword: 'WHEN', text: 'a turn is posted', line: 2 },
+      { keyword: 'THEN', text: 'the reply streams', line: 8 },
+    ],
+  ])
+})
+
+// Requirement: The scenarios proven at a set of lines can be found
+// Scenario: A touched scenario names the lines that prove it
+// GIVEN a test proving two scenarios, and a change reaching the first
+// WHEN the touched scenarios are found
+// THEN the lines named are the setup its test shares and its own statements, and no line of
+//      its sibling, because evidence for another scenario is the wrong thing to judge it by
+it('names the lines that prove a scenario and none that prove its sibling', () => {
+  const { scenarios } = scenariosTouched(BLOCKS, [{ from: 9, to: 9 }])
+
+  expect(scenarios.map(one => one.proves)).toEqual([[{ from: 3, to: 5 }, { from: 9, to: 10 }]])
 })

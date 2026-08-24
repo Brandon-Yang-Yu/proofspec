@@ -1,9 +1,9 @@
 // Capability: cli
 
 import { afterEach, expect, it } from 'vitest'
-import { exitCodeOf, touched } from '../../src/cli/index.ts'
+import { check, exitCodeOf, renderAnswer, touched } from '../../src/cli/index.ts'
 import type { Outcome, TouchedReport } from '../../src/cli/index.ts'
-import { CAPABILITY, cleanupRepos, makeGitRepo, makeRepo, REQUIREMENT, specFile, testFile, TEST_PATH } from './support.ts'
+import { CAPABILITY, cleanupRepos, makeGitRepo, makeRepo, REQUIREMENT, sharedTestFile, specFile, testFile, TEST_PATH } from './support.ts'
 
 afterEach(cleanupRepos)
 
@@ -51,6 +51,8 @@ it('names the scenario a changed proof proves and where its requirement is writt
       from: 3,
       to: 8,
       changed: 'proof',
+      claim: [{ keyword: 'THEN', text: 'the demonstrated claim holds', line: 5 }],
+      proof: [{ from: 6, to: 8, source: 'it("A first behavior", () => {\n  expect(1 + 1).toBe(2)\n})' }],
       spec: { file: `specs/${CAPABILITY}.md`, line: 3 },
     },
   ])
@@ -177,4 +179,90 @@ it('reports cannot-run where there is no git repository to read', async () => {
 
   expect(outcome.kind).toBe('cannot-run')
   expect(exitCodeOf(outcome)).toBe(2)
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: A touched scenario carries the source of the lines that prove it
+// GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
+// WHEN the touched command runs
+// THEN the scenario carries the proving lines as they are written, so an agent judging whether
+//      the test still does what its claim says needs no second read of the file
+it('carries the source of the lines that prove a touched scenario', async () => {
+  const repo = await makeGitRepo(inSync())
+  await repo.write(TEST_PATH, bodyEdited())
+
+  const report = reportOf(await touched({ cwd: repo.root }))
+
+  expect(report.scenarios.map(one => one.proof)).toEqual([
+    [{ from: 6, to: 8, source: 'it("A first behavior", () => {\n  expect(1 + 1).toBe(2)\n})' }],
+  ])
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: The touched command answers as JSON when no format is asked for
+// GIVEN a touched report and no format named on the command line
+// WHEN the answer is rendered
+// THEN it comes back as JSON, because this report is read by an agent far more often than by
+//      a person, and an agent should not have to remember a flag to be answered in its language
+it('answers a touched report as JSON when no format is named', async () => {
+  const repo = await makeGitRepo(inSync())
+  await repo.write(TEST_PATH, bodyEdited())
+
+  const answer = renderAnswer(await touched({ cwd: repo.root }))
+
+  expect(JSON.parse(answer)).toMatchObject({ scenarios: [{ scenario: FIRST, changed: 'proof' }] })
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: A verdict still answers as text when no format is asked for
+// GIVEN a checked outcome and no format named on the command line
+// WHEN the answer is rendered
+// THEN it comes back as text, because the default follows the kind of answer: a verdict is
+//      what a person reads in the log of a build that just failed
+it('answers a verdict as text when no format is named', async () => {
+  const repo = await makeRepo(inSync())
+
+  const answer = renderAnswer(await check({ cwd: repo.root }))
+
+  expect(answer).toBe('pass')
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: A scenario proven inside a shared test carries every run of lines that prove it
+// GIVEN a repo whose test proves two scenarios under a shared GIVEN, with one line rewritten
+//       inside the first scenario's own statement
+// WHEN the touched command runs
+// THEN that scenario carries both runs that prove it — the setup its test shares and its own
+//      statement — because half the evidence is the wrong thing to judge a claim against
+it('carries both runs of lines that prove a scenario inside a shared test', async () => {
+  const shared = sharedTestFile([FIRST, SECOND])
+  const repo = await makeGitRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: [FIRST, SECOND] }),
+    [TEST_PATH]: shared,
+  })
+  await repo.write(TEST_PATH, shared.replace('expect(outcome.first).toBe(true)', 'expect(outcome.first).toBe(1)'))
+
+  const report = reportOf(await touched({ cwd: repo.root }))
+
+  expect(report.scenarios.map(one => one.proof)).toEqual([
+    [
+      { from: 5, to: 7, source: "it('one action, two promises', () => {\n  const outcome = act()\n" },
+      { from: 11, to: 12, source: '  expect(outcome.first).toBe(1)\n' },
+    ],
+  ])
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: A format named on the command line is the one used
+// GIVEN a touched report, whose answer would otherwise be given as JSON
+// WHEN the answer is rendered with text named as the format
+// THEN it comes back as text, because a default is what happens when nobody chose, and
+//      naming a format is choosing
+it('gives the answer in the format named rather than the default', async () => {
+  const repo = await makeGitRepo(inSync())
+  await repo.write(TEST_PATH, bodyEdited())
+
+  const answer = renderAnswer(await touched({ cwd: repo.root }), 'text')
+
+  expect(answer).toContain('[the proof changed]')
 })

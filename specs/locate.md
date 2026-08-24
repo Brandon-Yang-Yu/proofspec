@@ -110,7 +110,8 @@ delivered from the tests each run, never stored, so it is not a second copy of b
 
 Given a file's proof sites and a set of its lines, locate SHALL name every scenario those
 lines reached, SHALL say for each whether the change moved its claim, its proof, or both,
-and SHALL report the lines that reached none.
+SHALL carry each scenario's claim in full together with the lines that prove it, and SHALL
+report the lines that reached none.
 
 This is the inverse of asking where a scenario is: it asks what a change touched. A proof
 has two halves — the claim sits *above* the code, since the Gherkin comment block comes
@@ -134,6 +135,13 @@ change there SHALL name that block alone. Lines that fall in no proof are report
 than dropped, because a helper, an import, or a fixture is a real change with no promise
 behind it.
 
+The answer carries the claim and names the proving lines rather than pointing at them,
+because the question this report exists to raise — does the test still do what its claim
+says — cannot be asked without both in hand. A scenario proven inside a shared test is
+proven by more than one run of lines: the setup its test shares, and its own statements.
+A sibling's lines SHALL NOT be among them, since evidence for another scenario is the wrong
+thing to judge this one by. Lines rather than source, because locate reads no files.
+
 <!-- scenarios: generated -->
 - "A block reports the line its own tag opens on, not the prelude it shares" → tests/locate/touched.test.ts
 - "A change in one block's own Gherkin names that block alone" → tests/locate/touched.test.ts
@@ -150,6 +158,8 @@ behind it.
 - "A scenario is named once however many changed lines fall in it" → tests/locate/touched.test.ts
 - "A shared step is claim down to the line the test opens on" → tests/locate/touched.test.ts
 - "A step shared above the blocks changes the claim of every scenario in the test" → tests/locate/touched.test.ts
+- "A touched scenario carries the Gherkin it claims" → tests/locate/touched.test.ts
+- "A touched scenario names the lines that prove it" → tests/locate/touched.test.ts
 - "Setup shared above the blocks changes the proof of every scenario in the test" → tests/locate/touched.test.ts
 - "The line between two blocks belongs to the block above it" → tests/locate/touched.test.ts
 <!-- /scenarios -->

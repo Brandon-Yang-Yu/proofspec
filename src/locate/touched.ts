@@ -40,6 +40,8 @@ export function scenariosTouched(
       from: site.tagLine,
       to: site.endLine,
       changed,
+      claim: site.steps,
+      proves: halves.proof,
     })
   }
 

@@ -1397,3 +1397,54 @@ which sends a reader to the scenario named rather than to the prelude its siblin
 **What is still not built:** the interpret-and-compare step itself — an AI reading a moved
 proof and judging whether the claim above it is still an honest reading. `touched` now
 reports the three states that step consumes, and stops there, which is the boundary §28 drew.
+
+## 30. The report is read by an agent
+
+§28 drew the boundary — `touched` reports, it does not orchestrate — and §29 built the three
+states. This section is about who reads that report, and what changes once you take the
+answer seriously.
+
+**The reader is an agent, and an agent's costs are not a person's.** A person reading
+`touched` in a terminal wants the shortest thing that points them at a file; they will open
+it themselves, and one file is one keystroke. An agent pays differently: extra context is
+cheap and extra round trips are not. Handing it thirty file positions and making it read
+thirty files is the expensive shape, and it is exactly the shape a terminal report has.
+
+So the report now carries what the reading is *for*. The judgement §28 asks for — *is this
+Gherkin still an honest reading of this test?* — needs the Gherkin and the test in hand.
+`test-scan` had already parsed both, and `touched` was already holding them, and the report
+handed over neither. That was the whole defect: not a missing feature, a payload thrown away
+one step before delivery.
+
+**Two defaults, and deliberately no third thing.** `touched` answers as JSON without being
+asked, and that JSON carries the claim and the proving source. No new command, no
+`--with-source`, no `--agent` mode. A flag an agent must remember is a flag it will not use,
+and a second command is a second thing to keep true.
+
+**The proving lines are a list, not a span.** A scenario proven inside a shared test is
+proven by the setup that test shares *and* by its own statements, with its siblings' lines in
+between belonging to them. Those are the proof zones §29 already computes, so the answer fell
+out of work already done. A sibling's lines are deliberately excluded: handing them over
+invites judging one claim against another's evidence, which is the same class of error §29
+fixed in the ownership walk.
+
+**The format default follows the kind of answer, not the tool.** A touched report defaults to
+JSON; a verdict defaults to text. These are not one setting with an exception — they are two
+readers. What a person reads in the log of a build that just failed is a verdict, and
+`check`'s machine interface was always its exit code rather than its stdout, so nothing is
+gained by making that JSON. `impact` stays text as a decision rather than an oversight: it is
+a tree read top-down, and nobody has yet asked to consume it as data. The switch is
+exhaustive over the outcome kinds so that a sixth kind cannot inherit a default nobody chose.
+
+**Where the decision lives matters.** `main.ts` is deliberately untested — "the one piece of
+`cli` that does not need a test to be right" — which means a default cannot live there. It
+moved into `render.ts` alongside the renderers, and the old `renderByFormat` came with it, so
+the untested surface got smaller rather than larger while gaining a decision worth pinning.
+
+**What this says about MCP.** The obvious next move from here looks like a query interface,
+and §13 argues for one. It is still not the move. Nothing an agent needed here was blocked by
+the transport; it was blocked by the answer being an address instead of a value. A query
+protocol built over an answer of the wrong shape would have frozen that shape in. When the
+queries become genuinely selective — a graph too large to serialise, a question about one
+scenario rather than all of them — the transport will start earning its keep, and by then
+what to define will be visible rather than guessed at.
