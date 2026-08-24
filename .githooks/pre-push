@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Pre-push gate: before main leaves for origin, every promise it carries
+# must have been judged.
+#
+# This is the second door. The first (.githooks/pre-merge-commit) holds a
+# merge into main; this one holds the push that publishes main to origin,
+# and so covers what the first cannot see: `merge --no-verify`, commits
+# made directly on main, and fast-forwards that never make a merge commit.
+#
+# Only pushes updating refs/heads/main are gated. A task branch is pushed
+# mid-work with promises still pending — that is the workflow, not a
+# bypass; the promises are judged on the branch before it merges home.
+#
+# The base is what origin/main holds now, handed to this hook on stdin:
+# the push's range is exactly what it is about to publish. Creating main
+# on a fresh remote has nothing behind it, so the root commit stands in
+# and the whole history is asked about once.
+#
+# Emergency bypass: git push --no-verify.
+
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+status=0
+gated=false
+
+# One line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$remote_ref" = "refs/heads/main" ] || continue
+  case "$local_sha" in
+    *[!0]*) ;;
+    *) continue ;; # all zeros: the push deletes main; not this gate's question
+  esac
+  case "$remote_sha" in
+    *[!0]*) base="$remote_sha" ;;
+    *) base="$(git rev-list --max-parents=0 "$local_sha" | tail -n 1)" ;;
+  esac
+  gated=true
+  pnpm --dir "$ROOT" proofspec touched --since "$base" --format text || status=$?
+done
+
+if [ "$gated" != true ]; then
+  exit 0
+fi
+if [ "$status" -eq 0 ]; then
+  exit 0
+fi
+
+echo >&2 ""
+echo >&2 "Push held: a promise main carries is still unjudged, or proofspec could not run."
+echo >&2 "Work the list above, commit .proofspec/reviews.jsonl, then push again."
+exit "$status"

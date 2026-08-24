@@ -21,6 +21,9 @@
 #
 # A fast-forward merge makes no merge commit, so this hook never sees it:
 # merge back with `git merge --no-ff <branch>`.
+# A merge that slips past this hook (--no-verify, a direct commit, a
+# fast-forward) is caught by the second door, .githooks/pre-push, before
+# main leaves for origin.
 # Emergency bypass: git merge --no-verify.
 
 set -euo pipefail
