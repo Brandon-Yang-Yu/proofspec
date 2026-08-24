@@ -45,19 +45,23 @@ export type LineRange = {
 }
 
 /**
- * A scenario a change reached, and how far in it got. `claim` is the whole point of the
- * distinction: a change to the Gherkin rewrites the promise, a change below it only rewrites
- * the proof, and a reader reviewing a diff has to tell those apart.
+ * A scenario a change reached, and which of its two halves the change moved. A change to the
+ * Gherkin rewrites the promise, a change below it rewrites the proof, and a reader reviewing a
+ * diff has to tell those apart.
+ *
+ * `both` is an answer of its own rather than two flags to read together: an author who moved
+ * the promise and the evidence at once is a different case from one who moved the test and
+ * left the promise above it saying what the test no longer does.
  */
 export type TouchedScenario = {
   readonly capability: string
   readonly requirement: string
   readonly scenario: string
   readonly file: string
-  /** The proof's first line, the Gherkin above the code included. */
+  /** Where this site opens: its own tag block, not the prelude it may share with siblings. */
   readonly from: number
   readonly to: number
-  readonly claim: 'changed' | 'unchanged'
+  readonly changed: 'claim' | 'proof' | 'both'
 }
 
 /** What a set of changed lines touched: the scenarios, and the lines that proved nothing. */

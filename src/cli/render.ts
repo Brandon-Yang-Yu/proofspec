@@ -104,12 +104,19 @@ function renderTouched(report: TouchedReport): string {
   return parts.join('\n\n')
 }
 
+/**
+ * The claim is the promise itself, so which half moved is the difference between "review this
+ * sentence", "review this test", and "the author moved both — check they still agree".
+ */
+const CHANGED_LABEL: Record<TouchedScenarioReport['changed'], string> = {
+  claim: '[the claim changed]',
+  proof: '[the proof changed]',
+  both: '[claim and proof changed]',
+}
+
 function renderTouchedScenario(scenario: TouchedScenarioReport): string {
-  // The claim is the promise itself; saying so is the difference between "review this
-  // sentence" and "review this test".
-  const claim = scenario.claim === 'changed' ? '  [the claim changed]' : ''
   return [
-    `${scenario.file}:${scenario.from}  ${scenario.scenario}${claim}`,
+    `${scenario.file}:${scenario.from}  ${scenario.scenario}  ${CHANGED_LABEL[scenario.changed]}`,
     `    ${scenario.capability} → ${scenario.requirement}${where(scenario.spec)}`,
   ].join('\n')
 }

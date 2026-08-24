@@ -113,7 +113,7 @@ function collectFromTest(
   }
 
   if (tagged.length > 0) {
-    return { sites: layoutBSites(body, tagged, above, context), errors }
+    return { sites: layoutBSites(body, tagged, above, { testLine, context }), errors }
   }
   return { sites: layoutASite(above, call, { tagLine: opensAt(aboveComments, testLine), testLine }, context), errors }
 }
@@ -140,6 +140,7 @@ function layoutASite(
       file: context.file,
       tagLine: at.tagLine,
       line: at.testLine,
+      testLine: at.testLine,
       endLine: context.lines.of(call.end),
     },
   ]
@@ -154,8 +155,9 @@ function layoutBSites(
   body: readonly TaggedStatement[],
   tagged: readonly TaggedStatement[],
   above: ParsedBlock,
-  context: FileContext,
+  at: { readonly testLine: number; readonly context: FileContext },
 ): ProofSite[] {
+  const { context } = at
   return tagged.flatMap((start, position): ProofSite[] => {
     if (!start.block.tag.tagged) return []
     const next = tagged[position + 1]
@@ -169,6 +171,7 @@ function layoutBSites(
         file: context.file,
         tagLine: start.tagLine,
         line: context.lines.of(start.statement.start),
+        testLine: at.testLine,
         endLine: context.lines.of(body[lastIndex]!.statement.end),
       },
     ]

@@ -1174,3 +1174,226 @@ any directory named `coverage`, which silently swallowed the collector's own sou
 was renamed to `src/test-run`. Both are now in `docs/coverage.md`, because a tool whose
 answer quietly depends on how its input was built has to say so where its user is looking.
 
+
+## 28. Spec drift at scale, and who repairs it
+
+Everything up to here has been about building the tree and keeping it honest. This section
+is about what happens once the tree is large — and about a scope boundary that took three
+wrong turns to find.
+
+**The problem is arithmetic.** One scenario per proof site means a suite of 1,900 tests
+carries 1,900 scenarios. If every test edit obliges a person to re-read its scenario, then
+even a 10% touch rate is 190 reviews per change set. Any policy that puts a human on the
+default path does not survive contact with a real suite. The goal is not to make review
+faster; it is to take the human off the default path entirely.
+
+### The source of truth moves between phases
+
+The two phases run in opposite directions, and conflating them is what makes the question
+look unanswerable.
+
+**Development** — the test does not exist yet, so it cannot be the authority:
+
+```
+intent → spec → test → production code
+```
+
+**Maintenance** — the test exists, executes, passes or fails, and constrains production
+code. The Gherkin does not execute:
+
+```
+production code → impact → test → touch → spec
+```
+
+So in maintenance the **test is the executable source of truth, and the Gherkin is its
+human-readable interpretation**. That is not a demotion of the Gherkin. Its value was never
+enforcement; it is that a person can learn what the system does without reading the test
+body. It is an interpretation layer, and the point of an interpretation layer is to be
+cheap to regenerate.
+
+This does not mean the development flow should be inverted into `test → summarise → spec`.
+New behavior still starts with a human stating intent. Two phases, two directions.
+
+### The repair loop
+
+Because the Gherkin is a reading of the test, and because we trust an AI to read a test
+honestly, the AI may rewrite it:
+
+```
+test changes
+     ↓
+AI reads the new test and states what it now proves
+     ↓
+compare against the Gherkin sitting above it
+     ↓ agrees    → nothing happens
+     ↓ differs   → the AI rewrites the Gherkin
+```
+
+The trust is load-bearing. It is what removes the human from the default path; without it
+every step below collapses back into a review queue.
+
+The check is entirely local to one proof site. `specs/` records only scenario titles and
+locations — the Gherkin body lives in the test, above the `it(` — so the AI is handed a
+bounded span and asked one question about it. This is the bijection paying off in a new
+place: re-interpretation is tractable *because* a proof site is a bounded span rather than
+a file.
+
+### Three wrong turns, recorded so they are not re-walked
+
+**(a) Gating on whether the Gherkin text changed.** `scenariosTouched` already reports
+`claim: 'changed' | 'unchanged'` (`src/locate/touched.ts`), and it is tempting to read that
+as a triage signal: the claim moved, so a human must look. Wrong direction. The source of
+truth is the test, so the trigger is *the test changing*; the claim moving is an effect, not
+a cause. A mechanical text-diff filter is cheap but the wrong shape.
+
+**(b) Reserving Gherkin rewrites for a human, on the grounds that Gherkin is intent.** True
+in development, false in maintenance. Once the test exists, the Gherkin is a reading of it,
+not an authority over it. Forbidding the AI to rewrite it reinstates the 190 reviews.
+
+**(c) Building an escalation ladder.** Having granted the AI the rewrite, the next instinct
+is to ask when a human gets pulled back in, and to answer it with machinery: identity-versus-
+wording rules, a requirement that a changed meaning must change the scenario title so the
+guard trips, an exception taxonomy for split scenarios and collisions. All of it is
+unnecessary, because of the boundary below.
+
+### The boundary: ProofSpec reports, it does not orchestrate
+
+Every rewritten Gherkin does get read by a person. But that reading happens in the commit
+diff and the pull request — a channel that already exists and that ProofSpec did not build
+and must not duplicate. ProofSpec has no business owning an approval gate, a review queue,
+or a taxonomy of exceptions.
+
+Its whole obligation is one signal:
+
+> **this scenario's claim moved, and it moved because these tests moved.**
+
+That causal half is what makes the review cheap. A reviewer who sees a Gherkin edit floating
+in a diff has to reconstruct why it is there; a reviewer told which test change produced it
+knows exactly what to check it against.
+
+Half of this exists. `claim: 'changed' | 'unchanged'` is the reporting primitive — after two
+attempts to promote it into a decision gate, it turns out to have been the right field all
+along, doing the job it was named for. What is missing is the causality: `touch` currently
+says which scenarios a set of changed lines reached, not that a claim moved *because* a test
+moved.
+
+### The graph is an index, not a second source of truth
+
+A related conclusion, about lifetime. The dangerous design is a long-lived graph that every
+change is folded into:
+
+```
+Index₀ → Diff₁ → Index₁ → Diff₂ → Index₂ → ...
+```
+
+Run long enough and the stored graph diverges from the code it describes. That is **graph
+drift**, and it is worse than spec drift, because the tool reports it with the same
+confidence as the truth.
+
+The rule that prevents it: `graph = f(current repository)`. Deleting the graph and rebuilding
+must produce the same graph. Incremental update from a git diff is then a performance
+detail, not a source of truth — if the incremental path corrupts itself, the repair is
+`delete cache; full rebuild`.
+
+ProofSpec largely satisfies this already, by an accident of an earlier decision. `impact`
+receives the call graph as plain values and never learns where they came from (see the
+header of `src/impact/types.ts`), so there is no persistent graph here to drift. The thing
+that *can* drift is `specs/` — the committed record of where scenarios are — which is
+precisely why `spec:check` and `spec:write` exist. Rebuild-and-compare **is** this rule,
+already implemented, for ProofSpec's own index.
+
+### The index provider is replaceable; the semantic model is not
+
+Where the call graph comes from should stay an implementation choice:
+
+```
+compiler / codebase-memory / other indexer
+                 ↓
+           adapter layer
+                 ↓
+      ProofSpec semantic model
+                 ↓
+          impact / touch
+```
+
+A language's own compiler gives the most precise answer within its language — for
+TypeScript, exact symbols, references and call sites — but it stops at the language
+boundary, and a real repository is rarely one language. A cross-language index earns its
+place there. Depending on such an index directly is a reasonable engineering choice; there
+is no value in reimplementing a worse one for the sake of independence. What must not happen
+is ProofSpec's semantics being defined in terms of some index's internals.
+
+**One constraint to verify before committing to any provider:** `impact` is line-precise —
+`CallEdge` carries the line a call is written on, `GraphNode` carries `from`/`to`
+(`src/impact/types.ts`). A symbol-level cross-language index may not supply call-site lines.
+If it cannot, it supplements the compiler for other languages rather than replacing it.
+
+### AI reads the graph through queries, not by swallowing it
+
+A graph of any real size does not fit in a context window, and pasting it in would be the
+wrong move even if it did. The right interface is a query surface —"which tests does this
+change reach", "which scenario does this test prove", "trace source → test → scenario" —
+which is close to a thin wrapper over the commands already in `src/cli/`. An agent does not
+need to hold the graph; it needs to know which edge to follow next.
+
+### Not built yet
+
+Deliberately absent, per YAGNI: the interpret-and-compare step itself, the causal half of
+`touch`'s output, any adapter to an external indexer, and any MCP surface. The first of
+these is the one with the shortest path — its inputs already exist, in the span from
+`scenariosTouched` and the Gherkin steps from `test-scan`.
+
+## 29. Which half of a proof a change reached
+
+§28 settled what `touched` owes its reader: *this scenario's claim moved, and it moved
+because these tests moved*. This section is that obligation built, and a defect it uncovered.
+
+**Two states were not enough.** `claim: 'changed' | 'unchanged'` said whether the Gherkin
+moved. But the maintenance loop needs to tell apart a test that moved while its promise
+stayed behind — the case an AI must re-read and possibly rewrite — from an author who moved
+both together, where the only question left is whether the two still agree. Both spelled
+`changed`. The field is now `changed: 'claim' | 'proof' | 'both'`, a union rather than two
+booleans, because `both` is a situation and not the conjunction of two flags.
+
+**Building it exposed a wrong answer underneath.** A site's lines were computed as one span,
+`min(tagLine, line, ...steps) .. endLine`. For a site tagged inside a test body that is
+wrong twice over, because such a site carries the GIVEN/WHEN written above the whole test:
+the span therefore starts at the top of the test and **swallows every earlier sibling**. On
+a two-block test, changing the first block's assertion reported the *second* block's *claim*
+as rewritten — the wrong scenario and the wrong half. The `hit.from < site.line` test read
+as "above my code, so it is my claim", which holds only when nothing else is up there.
+
+Nothing caught it because every proof site in this repo's own suite tags a whole test, so
+layout B had never reached `scenariosTouched`. A capability can be wrong for a whole layer
+of its input and stay green, if the suite only ever exercises the other layer.
+
+**The fix is ownership, not a wider span.** Four zones, and what a test shares is shared in
+*both* directions:
+
+| lines | whose | half |
+|---|---|---|
+| the GIVEN/WHEN above the `it(` | every block in the test | claim |
+| the setup between the `it(` and the first block | every block in the test | proof |
+| a block's own tag and THEN | that block alone | claim |
+| a block's own statements | that block alone | proof |
+
+The symmetry is the point and it is not an implementation convenience. A shared GIVEN is
+part of every sentence written under it — rewrite it and every scenario below promises
+something else, so every one of them is reported. A shared setup is part of how every one of
+them is proven — rewrite it and the promises stand while the evidence moved, which is the
+`proof` state for all of them, not the `claim` state the old code gave. A site tagging its
+whole test has no prelude to share, so both shared zones fall away and it reduces to exactly
+the old behavior; that is why the existing suite stayed green through the change.
+
+**The scanner had to give up one more fact.** Only the scan knows where the enclosing test
+opens, and without that line there is no boundary between the shared prelude and a block's
+own claim. `ProofSite` gained `testLine`, equal to `line` for a site tagging its whole test —
+which doubles as the discriminator for having no prelude at all, so no flag was needed.
+
+**A site now reports its own opening line.** `from` was the span minimum, so every block in
+a shared test pointed at the same shared GIVEN. It is now the site's own `tagLine`,
+which sends a reader to the scenario named rather than to the prelude its siblings share.
+
+**What is still not built:** the interpret-and-compare step itself — an AI reading a moved
+proof and judging whether the claim above it is still an honest reading. `touched` now
+reports the three states that step consumes, and stops there, which is the boundary §28 drew.

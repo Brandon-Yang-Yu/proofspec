@@ -15,6 +15,7 @@ export function site(fields: {
   readonly file?: string
   readonly line?: number
   readonly tagLine?: number
+  readonly testLine?: number
   readonly endLine?: number
   readonly steps?: readonly Step[]
 }): ProofSite {
@@ -27,6 +28,7 @@ export function site(fields: {
     file: fields.file ?? FILE,
     tagLine: fields.tagLine ?? line,
     line,
+    testLine: fields.testLine ?? line,
     endLine: fields.endLine ?? line,
   }
 }

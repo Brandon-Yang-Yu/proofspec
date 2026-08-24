@@ -50,7 +50,7 @@ it('names the scenario a changed proof proves and where its requirement is writt
       file: TEST_PATH,
       from: 3,
       to: 8,
-      claim: 'unchanged',
+      changed: 'proof',
       spec: { file: `specs/${CAPABILITY}.md`, line: 3 },
     },
   ])
@@ -96,7 +96,7 @@ it('compares against the revision given instead of the branch point', async () =
 // Scenario: A test file not yet added to git is counted
 // GIVEN a new test file written but never added to git
 // WHEN the touched command runs
-// THEN every scenario it proves is named with its claim changed, because a file git has
+// THEN every scenario it proves is named with both halves changed, because a file git has
 //      never seen is new in whole, claim and proof alike
 it('counts a test file that git has never seen', async () => {
   const repo = await makeGitRepo(inSync())
@@ -105,7 +105,7 @@ it('counts a test file that git has never seen', async () => {
   const report = reportOf(await touched({ cwd: repo.root }))
 
   expect(report.scenarios).toEqual([
-    expect.objectContaining({ scenario: 'A third behavior', file: 'tests/extra.test.ts', claim: 'changed' }),
+    expect.objectContaining({ scenario: 'A third behavior', file: 'tests/extra.test.ts', changed: 'both' }),
   ])
 })
 
