@@ -1,4 +1,5 @@
 import { assertNever } from '../assert-never.ts'
+import { compareStrings } from '../order.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type {
@@ -8,6 +9,7 @@ import type {
   SpecLocation,
   TestProves,
   TouchedReport,
+  TouchedRequirement,
   TouchedScenarioReport,
   UnmatchedLines,
 } from './types.ts'
@@ -54,16 +56,28 @@ export function isFormat(value: string): value is Format {
   return FORMATS.includes(value as Format)
 }
 
+/**
+ * How a JSON answer is laid out. One line is what a program parses and what a pipe carries;
+ * indented is the same answer with its structure visible, for the person reviewing it.
+ */
+export type Layout = 'compact' | 'indented'
+
+/** What shape an answer is asked for in: which format, and how a JSON one is laid out. */
+export type AnswerShape = {
+  readonly format?: Format
+  readonly layout?: Layout
+}
+
 /** The answer in the format asked for, or in the one its reader expects when none is. */
-export function renderAnswer(outcome: Outcome, format?: Format): string {
+export function renderAnswer(outcome: Outcome, { format, layout = 'compact' }: AnswerShape = {}): string {
   const chosen = format ?? defaultFormatOf(outcome)
   switch (chosen) {
     case 'json':
-      return renderJson(outcome)
+      return renderJson(outcome, layout)
     case 'quickfix':
       return renderQuickfix(outcome)
     case 'diagnostics':
-      return renderDiagnostics(outcome)
+      return renderDiagnostics(outcome, layout)
     case 'text':
       return renderText(outcome)
     default:
@@ -121,20 +135,30 @@ export function renderText(outcome: Outcome): string {
  * should read the answer rather than parse the terminal form. A checked outcome gives back
  * the whole report, so the findings a person reads and a program reads are the same content.
  */
-export function renderJson(outcome: Outcome): string {
+export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string {
   switch (outcome.kind) {
     case 'checked':
-      return JSON.stringify(outcome.report)
+      return stringify(outcome.report, layout)
     case 'wrote':
-      return JSON.stringify({ changed: outcome.files })
+      return stringify({ changed: outcome.files }, layout)
     case 'touched':
     case 'impact':
-      return JSON.stringify(outcome.report)
+      return stringify(outcome.report, layout)
     case 'cannot-run':
-      return JSON.stringify({ error: outcome.reason })
+      return stringify({ error: outcome.reason }, layout)
     default:
       return assertNever(outcome)
   }
+}
+
+const JSON_INDENT = 2
+
+/**
+ * The one place a JSON answer's layout is applied, so every command lays out the same way and
+ * the compact form stays the one a caller who asked for nothing gets, byte for byte.
+ */
+function stringify(value: unknown, layout: Layout): string {
+  return layout === 'indented' ? JSON.stringify(value, undefined, JSON_INDENT) : JSON.stringify(value)
 }
 
 /**
@@ -142,15 +166,29 @@ export function renderJson(outcome: Outcome): string {
  * place to open — `file:line` — and the line under it names the promise and where it is
  * written, so the two questions a diff raises ("which claim is this?" and "where does it
  * live?") are answered without leaving the report.
+ *
+ * The report groups its scenarios under the requirement they prove, which is the shape the
+ * program-readable answer keeps. Here that grouping is flattened back into one list in file
+ * order: a person reading a terminal is walking their diff, not the spec tree, and every line
+ * names its promise anyway.
  */
 function renderTouched(report: TouchedReport): string {
-  const nothing = report.scenarios.length === 0 && report.unmatched.length === 0 && report.gone.length === 0
+  const scenarios = report.requirements
+    .flatMap(under => under.scenarios.map(scenario => ({ scenario, under })))
+    .sort((a, b) => compareStrings(a.scenario.file, b.scenario.file) || a.scenario.from - b.scenario.from)
+  const gone = report.requirements.flatMap(under => under.gone.map(scenario => ({ scenario, under })))
+
+  const nothing = scenarios.length === 0 && report.unmatched.length === 0 && gone.length === 0
   if (nothing) return `nothing touched since ${report.base}`
 
   const parts = [`touched since ${report.base}`]
-  if (report.scenarios.length > 0) parts.push(report.scenarios.map(renderTouchedScenario).join('\n'))
+  if (scenarios.length > 0) {
+    parts.push(scenarios.map(one => renderTouchedScenario(one.scenario, one.under)).join('\n'))
+  }
   if (report.unmatched.length > 0) parts.push(report.unmatched.map(renderUnmatched).join('\n'))
-  if (report.gone.length > 0) parts.push(['no longer proven:', ...report.gone.map(renderGone)].join('\n'))
+  if (gone.length > 0) {
+    parts.push(['no longer proven:', ...gone.map(one => renderGone(one.scenario, one.under))].join('\n'))
+  }
   return parts.join('\n\n')
 }
 
@@ -164,10 +202,10 @@ const CHANGED_LABEL: Record<TouchedScenarioReport['changed'], string> = {
   both: '[claim and proof changed]',
 }
 
-function renderTouchedScenario(scenario: TouchedScenarioReport): string {
+function renderTouchedScenario(scenario: TouchedScenarioReport, under: TouchedRequirement): string {
   return [
     `${scenario.file}:${scenario.from}  ${scenario.scenario}  ${CHANGED_LABEL[scenario.changed]}`,
-    `    ${scenario.capability} → ${scenario.requirement}${where(scenario.spec)}`,
+    `    ${under.capability} → ${under.requirement}${where(under.spec)}`,
   ].join('\n')
 }
 
@@ -176,10 +214,10 @@ function renderUnmatched(lines: UnmatchedLines): string {
   return `${lines.file}:${at}  changed outside every proof`
 }
 
-function renderGone(scenario: GoneScenario): string {
+function renderGone(scenario: GoneScenario, under: TouchedRequirement): string {
   return [
     `${scenario.file}  ${scenario.scenario}`,
-    `    ${scenario.capability} → ${scenario.requirement}${where(scenario.spec)}`,
+    `    ${under.capability} → ${under.requirement}${where(under.spec)}`,
   ].join('\n')
 }
 
@@ -274,9 +312,9 @@ function renderQuickfixFinding(finding: Finding): string {
  * into the {severity, range, message, code} a diagnostic carries. Non-checked outcomes fall
  * back to the JSON form, since a diagnostics consumer is already parsing JSON.
  */
-export function renderDiagnostics(outcome: Outcome): string {
+export function renderDiagnostics(outcome: Outcome, layout: Layout = 'compact'): string {
   if (outcome.kind !== 'checked') {
-    return renderJson(outcome)
+    return renderJson(outcome, layout)
   }
 
   const diagnostics = outcome.report.findings.map(finding => {
@@ -292,5 +330,5 @@ export function renderDiagnostics(outcome: Outcome): string {
     }
   })
 
-  return JSON.stringify({ diagnostics })
+  return stringify({ diagnostics }, layout)
 }

@@ -1421,6 +1421,84 @@ asked, and that JSON carries the claim and the proving source. No new command, n
 `--with-source`, no `--agent` mode. A flag an agent must remember is a flag it will not use,
 and a second command is a second thing to keep true.
 
+**The requirement's prose, carried once.** The report handed over the claim and the proving
+lines as values and the requirement as a `file:line` — an address, which is the shape this
+section exists to argue against. The reason it survived a while is real and worth writing
+down: the cost is not the same on both sides. Proving source is a read *per scenario*, so
+thirty scenarios were thirty reads; a capability file is one read that serves every scenario
+under it, and the tool had already done that read to find the heading line. So the address
+was cheap to redeem — but "cheap" is not "free", and the thing being addressed is the
+standard the claim is judged against. It is now carried, and `spec-file` already parsed it:
+`RequirementSpec.description` existed, and `touched` was throwing it away one step before
+delivery. The same defect §30 opens with, one field over.
+
+**Grouped under the requirement, not pointing at it.** The first attempt carried the prose
+once in a `requirements` list and left every scenario pointing at it — no duplication, but an
+indirection. The question that killed it: if the parent is going to hold the prose, why is it
+not holding the scenarios too? Grouping removes the pointer *and* a duplication the flat list
+had carried all along — each scenario's own copy of `spec: {file, line}`, thirty-seven times
+on this branch for five distinct positions. So the report is now the tree it always described:
+requirement → its touched scenarios, its removed proofs. A scenario carries only what is its
+own, and its capability, requirement and position are read from the entry above it.
+
+**The flat file-ordered walk was the one real objection, and it belongs to the other form.**
+The spec had required scenarios in file order, because that is how a person walks a diff and
+because two runs of a branch have to be comparable. Grouping breaks that walk in the JSON —
+and does not touch the terminal form, which flattens the groups back into one file-ordered
+list on the way out. §30's whole argument is that these are two readers; this is the first
+time the two forms differ in *shape* rather than in payload, and the reason is the same one.
+Comparability survives in the JSON by ordering requirements the tree's way, capability then
+requirement, and the scenarios inside each by file.
+
+**The lines that prove nothing carry their source too.** `unmatched` — the helper, import and
+fixture edits that fall outside every proof — was the last thing in the report given as an
+address, and it is the one where the address is worst value: 35 of the 39 runs on this branch
+are one or two lines long, so the read costs more than the lines. The wrinkle is that the file
+is often *not* a test: the scan reads `*.test.ts` and nothing else, so `tests/cli/support.ts`
+was never in hand and has to be read back. A changed file that cannot be read back is now a
+cannot-run rather than a run of blank lines — blank is a claim about those lines, and a wrong
+one. Only files with lines to cut are read, so a deleted file cannot refuse a run.
+
+**And most of what it reported was blank lines.** Carrying the source made that visible
+immediately: 29 of the 39 runs on this branch were a single empty line. Git hands one back with
+every block inserted beside it, so a change that adds tests reports mostly blank lines — they
+belong to no promise, say nothing to a reader, and outnumber the edits worth reading. A run
+that is nothing but whitespace is now dropped from the report in both forms. That is a small
+retreat from `locate`'s rule that lines outside every proof must be named rather than dropped,
+taken deliberately at the `cli` boundary: the rule exists so a helper edit is never hidden, and
+a blank line is not one. A change that adds only blank lines now answers "nothing touched",
+which for a tool that reports on promises is the true answer.
+
+**A position and its prose are one field.** `spec` is now `{file, line, description} |
+undefined` rather than a location beside an optional paragraph. They are read from the same
+heading in the same pass, and a requirement either is declared or is not — two optional fields
+that are always both present or both absent is the shape the style rules exist to prevent.
+
+**The answer was being cut at 64KB, and only the new flag made it show.** `main.ts` wrote the
+answer and called `process.exit`. A write to a pipe is asynchronous, so the process ended
+before it drained and the reader got exactly 65536 bytes — a truncated JSON document, which
+parses as a syntax error rather than as a short answer. The bug was always there; a compact
+report of a small branch just never reached the buffer. Indenting the answer and carrying the
+requirement prose made it ordinary to pass it: this repo's own `touched` answer is 68130
+bytes. The fix is `process.exitCode`, letting the process end on its own once nothing holds
+the loop.
+
+This is the first thing in `cli` that `main.ts` being untested actually cost. The file is
+"the one piece of `cli` that does not need a test to be right" because every decision was
+moved out of it — but this was not a decision, it was the process boundary itself, and a
+function call cannot have this failure mode. So the suite gained its one end-to-end test:
+spawn the real entry point, read its output through a real pipe, and parse it. It is pinned
+the way §31 says to pin things — the mutation was run, `process.exit` put back, and the test
+fails.
+
+**A flag for the person, never for the agent.** `--pretty` lays the JSON out over indented
+lines, and it is not a walk-back of the paragraph above. The rule there is that an agent must
+not have to remember a flag to be answered well; this flag is for the person who runs
+`touched` in a terminal and reads the answer with their eyes. Nothing about the content moves
+with it — the same report, the same keys — and without it the output is byte for byte what it
+was, so no script reading the answer today notices the flag exists. The layout is applied in
+one place, so a second command cannot lay out differently from the first.
+
 **The proving lines are a list, not a span.** A scenario proven inside a shared test is
 proven by the setup that test shares *and* by its own statements, with its siblings' lines in
 between belonging to them. Those are the proof zones §29 already computes, so the answer fell

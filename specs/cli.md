@@ -57,7 +57,22 @@ The tree, the positions, and the failures are all things another tool will want 
 editor, a CI annotation, and in a later version an MCP server. Each of those should read
 the same answer rather than parse the one meant for a terminal.
 
+An answer SHALL reach its reader whole, however large it is. A pipe holds a fixed number of
+bytes before its writer has to wait, and a process that ends without waiting hands the reader
+an answer cut off mid-token: not a smaller answer, a broken one, and a parser reports it as a
+syntax error rather than as anything the tool said. The command that reads that answer is
+usually a program, and the layout below makes a large answer ordinary.
+
+The JSON SHALL be given on one line unless a layout is asked for, and indented over several
+lines when it is. One line is what a program parses and what a pipe carries. A person reads
+the same answer too — the touched report especially, which is JSON without being asked — and
+one line of it is the thing they reach for another tool to reformat. Laying it out is a
+choice the caller makes, so the answer a script already reads does not change under it.
+
 <!-- scenarios: generated -->
+- "An answer larger than a pipe holds reaches its reader whole" → tests/cli/e2e.test.ts
+- "The JSON answer is laid out over indented lines when a person asks for it" → tests/cli/touched.test.ts
+- "The JSON answer stays on one line when no layout is asked for" → tests/cli/touched.test.ts
 - "The check's findings are returned as LSP diagnostics a modern editor shows inline" → tests/cli/format.test.ts
 - "The check's findings are returned in quickfix form for an editor to jump to" → tests/cli/format.test.ts
 - "The check's verdict is returned as JSON carrying the same findings" → tests/cli/json.test.ts
@@ -124,6 +139,26 @@ answers as text, because what a person reads in the log of a build that just fai
 verdict. A command that could not run answers the way every command reports being unable to
 run, and a caller branches on the exit code rather than on the shape of that answer.
 
+The report SHALL be grouped by requirement: every scenario it names, and every proof the
+change removed, sits under the requirement it proves. A claim is judged against the standard
+it serves, and grouping is what puts that standard beside every claim under it — once,
+however many of its scenarios the change reached, and with nothing repeated onto the
+scenarios themselves.
+
+Requirements SHALL come back in capability then requirement order, and the scenarios under
+each in file order. Git lists what it already tracks ahead of what it has never seen, so the
+order a diff arrives in is not an order at all; a report that is read again on the next run
+has to be comparable with the last one.
+
+Changed lines that fall in no proof SHALL carry their source too, and a run of them that is
+nothing but whitespace SHALL not be reported at all. They are the helper, the import and the
+fixture edits, and they are usually a line or two — the read that fetches them costs a reader
+more than the lines are worth. A blank line is the exception that is worth nothing either way:
+git hands one back with every block inserted beside it, and on a change that adds several
+tests there are more of those than there are edits, burying the ones worth reading. The file they are in is often not a test, so it
+is read back for them; one git names as changed but that cannot be read is a cannot-run,
+because reporting those lines as blank is a claim about them and a wrong one.
+
 Carrying the source is what makes one call enough. An agent asked to judge whether a test
 still does what its claim says would otherwise open every file the report named, which costs
 a read per scenario; the tool already holds those lines, so it hands them over. A scenario
@@ -131,12 +166,24 @@ proven inside a shared test is proven by more than one run of lines, and the ans
 carry every one of them — the setup its test shares as well as its own statements — since
 handing over only the first would leave an agent judging a claim against half its evidence.
 
+Each requirement SHALL carry where it is written together with the prose written there. The
+tool has already read every capability file it names, so handing the prose over costs the
+reader nothing and saves them the read. The two arrive together or not at all: a requirement
+no capability file declares has neither, and its scenarios are still named under it, because
+a promise nothing declares is exactly what the reader has to see. Judging that gap is the
+check's job, not this one's.
+
+The terminal form SHALL stay one list in file order. A person reading a report in a terminal
+is walking their diff, not the spec tree, and each of its lines names the promise it belongs
+to anyway.
+
 This is the one place the program-readable answer carries more than the terminal one. A
 person reading a report in a terminal opens the file the report points at, and printing the
 proof under every scenario would bury the list they came for; an agent cannot open a file
 without paying for another turn. The general rule that both forms carry the same content
 holds for what the report *is* — the scenarios, their requirements, and where they are — and
-the source is delivery, not content.
+the proving source and the requirement's prose are delivery, not content. So is the shape:
+the same findings grouped for one reader and flattened for the other.
 
 It compares against the branch point with `main` by default, so run inside a task's
 worktree it answers "what did this branch touch"; `--since` names another revision. It
@@ -154,16 +201,23 @@ the other commands use.
 <!-- scenarios: generated -->
 - "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
 - "A change inside a proof names the scenario and where its requirement is written" → tests/cli/touched.test.ts
+- "A changed file that cannot be read back cannot run" → tests/cli/touched.test.ts
+- "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
 - "A format named on the command line is the one used" → tests/cli/touched.test.ts
 - "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
+- "A requirement no capability file declares carries no prose" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
 - "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
 - "A touched scenario carries the source of the lines that prove it" → tests/cli/touched.test.ts
 - "A verdict still answers as text when no format is asked for" → tests/cli/touched.test.ts
+- "Changed lines that fall in no proof carry the source of those lines" → tests/cli/touched.test.ts
 - "Changed lines that prove nothing are reported as touching no scenario" → tests/cli/touched.test.ts
+- "One requirement holds every scenario of it the change touched" → tests/cli/touched.test.ts
+- "The requirement a touched scenario proves carries the prose written under it" → tests/cli/touched.test.ts
 - "The touched command answers as JSON when no format is asked for" → tests/cli/touched.test.ts
+- "Touched scenarios come back in file order" → tests/cli/touched.test.ts
 - "Whatever it touched, the command exits zero" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 

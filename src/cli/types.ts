@@ -51,29 +51,62 @@ export type ProvingLines = LineRange & {
 
 /**
  * A scenario a change touched, carrying what it takes to judge it: the claim it makes (passed
- * through from `locate` untouched), where the requirement it proves is written, and the proving
- * lines themselves. `locate` names those lines; `cli` owns the filesystem, so this is where they
- * become the text an agent reads without a second read of the file.
+ * through from `locate` untouched) and the proving lines themselves. `locate` names those
+ * lines; `cli` owns the filesystem, so this is where they become the text an agent reads
+ * without a second read of the file.
+ *
+ * Which requirement it proves is not on it. The report groups scenarios under the requirement
+ * they prove, so the capability, the requirement and where it is written are read from the
+ * one entry above them rather than copied onto every scenario under it.
  */
-export type TouchedScenarioReport = Omit<TouchedScenario, 'proves'> & {
-  /** Absent when no capability file declares the requirement — a gap the check reports. */
-  readonly spec: SpecLocation | undefined
+export type TouchedScenarioReport = Omit<TouchedScenario, 'proves' | 'capability' | 'requirement'> & {
   readonly proof: readonly ProvingLines[]
 }
 
-/** Changed lines that fall in no proof: a helper, an import, a fixture. */
-export type UnmatchedLines = LineRange & {
-  readonly file: string
+/** Where a requirement is written and what it says there. The two are read together or not at all. */
+export type RequirementDeclaration = SpecLocation & {
+  /** The prose between the heading and the generated block, as written. */
+  readonly description: string
 }
 
-/** A scenario the change stopped proving, read from the base revision. */
-export type GoneScenario = {
+/**
+ * A requirement this change reached, with everything it reached under it: the scenarios whose
+ * proofs moved, and the proofs it removed outright.
+ *
+ * The report is grouped this way rather than kept as one flat list because a claim is judged
+ * against the requirement it serves, and this puts that standard beside every claim under it —
+ * once, whether the change touched one scenario of it or twenty. The terminal form still reads
+ * as one file-ordered list, which is how a person walks a diff.
+ */
+export type TouchedRequirement = {
   readonly capability: string
   readonly requirement: string
+  /** Absent when no capability file declares it — a gap the check reports. */
+  readonly spec: RequirementDeclaration | undefined
+  /** Its scenarios the change touched, in file order. */
+  readonly scenarios: readonly TouchedScenarioReport[]
+  /** Its proofs the change removed, in title order. */
+  readonly gone: readonly GoneScenario[]
+}
+
+/**
+ * Changed lines that fall in no proof: a helper, an import, a fixture. They carry their source
+ * for the reason a touched scenario carries its proof — the tool is holding the lines, and the
+ * reader would otherwise open the file to see an edit that is usually two lines long.
+ */
+export type UnmatchedLines = LineRange & {
+  readonly file: string
+  readonly source: string
+}
+
+/**
+ * A scenario the change stopped proving, read from the base revision. Like a touched scenario
+ * it is named under the requirement it used to prove, so it carries only what is its own.
+ */
+export type GoneScenario = {
   readonly scenario: string
   /** The file that used to prove it. */
   readonly file: string
-  readonly spec: SpecLocation | undefined
 }
 
 /**
@@ -83,9 +116,10 @@ export type GoneScenario = {
 export type TouchedReport = {
   /** The revision everything here was measured against. */
   readonly base: string
-  readonly scenarios: readonly TouchedScenarioReport[]
+  /** What the change reached, by requirement, in capability then requirement order. */
+  readonly requirements: readonly TouchedRequirement[]
+  /** Changed lines under no requirement at all, so they hang off the report rather than a promise. */
   readonly unmatched: readonly UnmatchedLines[]
-  readonly gone: readonly GoneScenario[]
 }
 
 /** One requirement a test file proves, and every scenario of it that file holds. */

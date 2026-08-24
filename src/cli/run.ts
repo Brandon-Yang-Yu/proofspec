@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { guard } from '../guard/index.ts'
 import { impactTree, testsRunning } from '../impact/index.ts'
@@ -12,6 +12,7 @@ import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
 import { readChangedFiles, readFileAt } from './diff.ts'
+import type { ChangedFile } from './diff.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
@@ -20,9 +21,11 @@ import type {
   GoneScenario,
   Outcome,
   ProvenRequirement,
+  RequirementDeclaration,
   RunOptions,
   SpecLocation,
   TestProves,
+  TouchedRequirement,
   TouchedScenarioReport,
   UnmatchedLines,
 } from './types.ts'
@@ -150,11 +153,12 @@ export async function touched(options: RunOptions): Promise<Outcome> {
   if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
 
   const specs = specLocations(inputs.specs)
-  const sources = new Map(inputs.tests.map(test => [test.path, test.source]))
+  const held = new Map(inputs.tests.map(test => [test.path, test.source]))
+  const read = await changedLines(diff.files, { cwd: options.cwd, held })
+  if (!read.ok) return { kind: 'cannot-run', reason: read.reason }
   const proven = new Set(sites.filter(hasCapability).map(site => identityKey(site)))
-  const scenarios: TouchedScenarioReport[] = []
+  const found = new Map<string, Reached>()
   const unmatched: UnmatchedLines[] = []
-  const gone: GoneScenario[] = []
 
   for (const file of diff.files) {
     const here = sites.filter(site => site.file === file.path)
@@ -164,26 +168,120 @@ export async function touched(options: RunOptions): Promise<Outcome> {
     const skipUnmatched = file.changed.kind === 'new-file'
 
     const hit = scenariosTouched(here, ranges)
-    // Split once per file rather than once per scenario. A file the scan never read holds no
-    // sites, so it yields no scenarios and nothing is ever cut from the empty fallback — but a
-    // deleted file still has removed lines to account for below, so this cannot skip the file.
-    const lines = (sources.get(file.path) ?? '').split('\n')
-    scenarios.push(...hit.scenarios.map(scenario => withSpecAndSource(scenario, { specs, lines })))
-    if (!skipUnmatched) unmatched.push(...hit.unmatched.map(range => ({ file: file.path, ...range })))
+    // Split once per file rather than once per scenario. A deleted file has no lines to cut
+    // from and no scenarios or unmatched runs to cut them for, so the empty fallback is never
+    // reached — but it still has removed lines to account for below, so this cannot skip it.
+    const lines = read.lines.get(file.path) ?? []
+    for (const scenario of hit.scenarios) reached(found, scenario).scenarios.push(withSource(scenario, lines))
+    if (!skipUnmatched) {
+      const runs = hit.unmatched.map(range => ({ file: file.path, ...range, source: sourceOf(lines, range) }))
+      unmatched.push(...runs.filter(saysSomething))
+    }
 
     if (file.changed.kind === 'new-file' || file.changed.removed.length === 0) continue
-    gone.push(...(await removedScenarios({ file: file.path, ranges: file.changed.removed }, { base: diff.base, cwd: options.cwd, proven, specs })))
+    const removed = await removedScenarios({ file: file.path, ranges: file.changed.removed }, { base: diff.base, cwd: options.cwd, proven })
+    for (const was of removed) reached(found, was).gone.push({ scenario: was.scenario, file: was.file })
   }
 
   return {
     kind: 'touched',
     report: {
       base: diff.base,
-      scenarios: scenarios.sort(byFileThenLine),
+      requirements: requirementsReached(found, specs),
       unmatched: unmatched.sort(byFileThenLine),
-      gone: gone.sort(byIdentity),
     },
   }
+}
+
+/**
+ * Whether a run of changed lines says anything at all. A run that is nothing but whitespace is
+ * the blank line git hands back with the block inserted beside it: it belongs to no promise, it
+ * tells a reader nothing, and there are usually more of them than there are real edits — so
+ * naming them buries the helper and fixture changes `unmatched` exists to show.
+ */
+function saysSomething(run: UnmatchedLines): boolean {
+  return run.source.trim() !== ''
+}
+
+/** Every changed file's current lines, or the reason one of them could not be read back. */
+type LinesRead =
+  | { readonly ok: true; readonly lines: ReadonlyMap<string, readonly string[]> }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * The lines of every changed file the report will cut source from. A test is already in hand
+ * from the scan; a helper or a fixture beside it is not, and is read here, because its changed
+ * lines are carried as written too.
+ *
+ * A file git names as changed but that cannot be read back is a cannot-run, the way an
+ * unreadable test is: carrying its lines as blank would be a claim about them, and a wrong one.
+ * Only the files with lines to cut are read — a deleted file has none, and reading it back
+ * would refuse a run over a file the change was supposed to remove.
+ */
+async function changedLines(
+  files: readonly ChangedFile[],
+  from: { readonly cwd: string; readonly held: ReadonlyMap<string, string> },
+): Promise<LinesRead> {
+  const lines = new Map<string, readonly string[]>()
+  for (const file of files) {
+    const source = from.held.get(file.path)
+    if (source !== undefined) {
+      lines.set(file.path, source.split('\n'))
+      continue
+    }
+    if (file.changed.kind === 'new-file' || file.changed.ranges.length === 0) continue
+    const now = await readWorkingCopy(join(from.cwd, file.path))
+    if (now === undefined) return { ok: false, reason: `cannot touched: ${file.path} could not be read` }
+    lines.set(file.path, now.split('\n'))
+  }
+  return { ok: true, lines }
+}
+
+/** A file as it now stands, or `undefined` when it cannot be read — a miss, not a crash. */
+async function readWorkingCopy(path: string): Promise<string | undefined> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+/** One requirement's findings while the report is still being gathered, before they are ordered. */
+type Reached = RequirementIdentity & {
+  readonly scenarios: TouchedScenarioReport[]
+  readonly gone: GoneScenario[]
+}
+
+/** The entry everything under a requirement is collected in, opened the first time one is reached. */
+function reached(found: Map<string, Reached>, identity: RequirementIdentity): Reached {
+  const key = requirementKey(identity)
+  const held = found.get(key) ?? {
+    capability: identity.capability,
+    requirement: identity.requirement,
+    scenarios: [],
+    gone: [],
+  }
+  found.set(key, held)
+  return held
+}
+
+/**
+ * What the change reached, by requirement, with the prose each capability file writes under it.
+ * The order is the tree's own — capability, then requirement — rather than the diff's, so two
+ * runs of the same branch are comparable; inside a requirement the scenarios keep file order,
+ * which is the order a person walks a diff in.
+ */
+function requirementsReached(
+  found: ReadonlyMap<string, Reached>,
+  specs: SpecLocations,
+): TouchedRequirement[] {
+  return [...found.values()].sort(byRequirement).map(one => ({
+    capability: one.capability,
+    requirement: one.requirement,
+    spec: declarationFor(one, specs),
+    scenarios: [...one.scenarios].sort(byFileThenLine),
+    gone: [...one.gone].sort((a, b) => compareStrings(a.scenario, b.scenario)),
+  }))
 }
 
 /**
@@ -292,7 +390,7 @@ function groupByRequirement(
   const byRequirement = new Map<string, ProvenRequirement>()
   for (const scenario of scenarios) {
     const identity = { capability: scenario.capability, requirement: scenario.requirement }
-    const key = `${identity.capability}\u0000${identity.requirement}`
+    const key = requirementKey(identity)
     const held = byRequirement.get(key) ?? { ...identity, spec: specFor(identity, specs), scenarios: [] }
     if (held.scenarios.includes(scenario.scenario)) continue
     byRequirement.set(key, { ...held, scenarios: [...held.scenarios, scenario.scenario] })
@@ -333,7 +431,7 @@ function provenBy(
       // reports that gap on its own.
       if (capability === undefined) continue
       const identity = { capability, requirement: site.requirement }
-      const key = `${capability}\u0000${site.requirement}`
+      const key = requirementKey(identity)
       const held = byRequirement.get(key) ?? {
         ...identity,
         spec: specFor(identity, from.specs),
@@ -359,60 +457,98 @@ async function removedScenarios(
     readonly base: string
     readonly cwd: string
     readonly proven: ReadonlySet<string>
-    readonly specs: SpecLocations
   },
-): Promise<GoneScenario[]> {
+): Promise<readonly TouchedScenario[]> {
   const before = await readFileAt({ cwd: against.cwd, rev: against.base, path: deleted.file })
   if (before === undefined) return []
   const was = scanSource(before, { file: deleted.file }).sites
-  return scenariosTouched(was, deleted.ranges)
-    .scenarios.filter(scenario => !against.proven.has(identityKey(scenario)))
-    .map(scenario => ({
-      capability: scenario.capability,
-      requirement: scenario.requirement,
-      scenario: scenario.scenario,
-      file: scenario.file,
-      spec: specFor(scenario, against.specs),
-    }))
-}
-
-/** Where each capability's requirements are written, by capability name. */
-type SpecLocations = ReadonlyMap<string, { readonly file: string; readonly lines: ReadonlyMap<string, number> }>
-
-function specLocations(specs: readonly SpecFileRead[]): SpecLocations {
-  return new Map(
-    specs.map(spec => [spec.capability, { file: spec.path, lines: requirementLines(spec.source) }]),
+  return scenariosTouched(was, deleted.ranges).scenarios.filter(
+    scenario => !against.proven.has(identityKey(scenario)),
   )
 }
 
-/**
- * A touched scenario as the report hands it over: where its requirement is written, and the
- * lines that prove it as they are written. `locate` names those lines and stops, because it
- * reads no files; cutting them is this capability's job, since it owns the filesystem.
- */
-function withSpecAndSource(
-  scenario: TouchedScenario,
-  from: { readonly specs: SpecLocations; readonly lines: readonly string[] },
-): TouchedScenarioReport {
-  const { proves, ...rest } = scenario
-  // A `LineRange` counts from 1 and includes both ends; `slice` counts from 0 and excludes the
-  // end. So the start moves back one and the end does not.
-  const cut = (range: LineRange): string => from.lines.slice(range.from - 1, range.to).join('\n')
-  return {
-    ...rest,
-    spec: specFor(scenario, from.specs),
-    proof: proves.map(range => ({ ...range, source: cut(range) })),
-  }
+/** A requirement named by its capability and its own name — how the tree keys one. */
+type RequirementIdentity = {
+  readonly capability: string
+  readonly requirement: string
 }
 
-function specFor(
-  identity: { readonly capability: string; readonly requirement: string },
+/** The two names as one map key. A NUL cannot appear in either, so nothing can collide. */
+function requirementKey(identity: RequirementIdentity): string {
+  return `${identity.capability}\u0000${identity.requirement}`
+}
+
+/** What a capability file says about one requirement: where its heading is, and the prose under it. */
+type RequirementRead = {
+  readonly line: number
+  readonly description: string
+}
+
+/** What each capability's requirements say and where they are written, by capability name. */
+type SpecLocations = ReadonlyMap<
+  string,
+  { readonly file: string; readonly requirements: ReadonlyMap<string, RequirementRead> }
+>
+
+function specLocations(specs: readonly SpecFileRead[]): SpecLocations {
+  return new Map(specs.map(spec => [spec.capability, readRequirements(spec)]))
+}
+
+/**
+ * One capability file's requirements, read once for both halves the report needs. A name
+ * written twice keeps the first heading — the place the requirement was declared, which is
+ * where `requirementLines` sends a reader and where its prose was written; the guard is what
+ * warns about the repeat.
+ */
+function readRequirements(spec: SpecFileRead): {
+  readonly file: string
+  readonly requirements: ReadonlyMap<string, RequirementRead>
+} {
+  const lines = requirementLines(spec.source)
+  const requirements = new Map<string, RequirementRead>()
+  for (const read of readCapabilityFile(spec.source, { capability: spec.capability }).requirements) {
+    const line = lines.get(read.requirement)
+    if (line === undefined || requirements.has(read.requirement)) continue
+    requirements.set(read.requirement, { line, description: read.description })
+  }
+  return { file: spec.path, requirements }
+}
+
+/**
+ * A touched scenario as the report hands it over: the lines that prove it, as they are written.
+ * `locate` names those lines and stops, because it reads no files; cutting them is this
+ * capability's job, since it owns the filesystem. The capability and the requirement come off
+ * here — the entry this scenario is filed under carries them for every scenario at once.
+ */
+function withSource(scenario: TouchedScenario, lines: readonly string[]): TouchedScenarioReport {
+  const { proves, capability, requirement, ...rest } = scenario
+  return { ...rest, proof: proves.map(range => ({ ...range, source: sourceOf(lines, range) })) }
+}
+
+/**
+ * A run of lines as they are written. A `LineRange` counts from 1 and includes both ends;
+ * `slice` counts from 0 and excludes the end, so the start moves back one and the end does not.
+ */
+function sourceOf(lines: readonly string[], range: LineRange): string {
+  return lines.slice(range.from - 1, range.to).join('\n')
+}
+
+/** Where a requirement is written and what it says, or nothing when no capability file declares it. */
+function declarationFor(
+  identity: RequirementIdentity,
   specs: SpecLocations,
-): SpecLocation | undefined {
+): RequirementDeclaration | undefined {
   const spec = specs.get(identity.capability)
-  const line = spec?.lines.get(identity.requirement)
-  if (spec === undefined || line === undefined) return undefined
-  return { file: spec.file, line }
+  const read = spec?.requirements.get(identity.requirement)
+  if (spec === undefined || read === undefined) return undefined
+  return { file: spec.file, line: read.line, description: read.description }
+}
+
+/** The same lookup cut down to the position — what `impact` names, which carries no prose. */
+function specFor(identity: RequirementIdentity, specs: SpecLocations): SpecLocation | undefined {
+  const declared = declarationFor(identity, specs)
+  if (declared === undefined) return undefined
+  return { file: declared.file, line: declared.line }
 }
 
 /** A site whose file declares a capability, narrowed so its identity can be keyed. */
@@ -424,12 +560,8 @@ function byFileThenLine(a: { file: string; from: number }, b: { file: string; fr
   return compareStrings(a.file, b.file) || a.from - b.from
 }
 
-function byIdentity(a: GoneScenario, b: GoneScenario): number {
-  return (
-    compareStrings(a.capability, b.capability) ||
-    compareStrings(a.requirement, b.requirement) ||
-    compareStrings(a.scenario, b.scenario)
-  )
+function byRequirement(a: RequirementIdentity, b: RequirementIdentity): number {
+  return compareStrings(a.capability, b.capability) || compareStrings(a.requirement, b.requirement)
 }
 
 /** Names the first thing the scan could not read, so the reason points at a place to look. */

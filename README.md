@@ -61,6 +61,7 @@ files you author, so create `specs/<capability>.md` before the first write.
 ```sh
 npx proofspec touched              # since this branch left main
 npx proofspec touched --since HEAD # since the last commit
+npx proofspec touched --pretty     # the same JSON, indented for a person to read
 ```
 
 ```
@@ -71,9 +72,17 @@ tests/cli/touched.test.ts:32  A change inside a proof names the scenario  [the c
 tests/cli/support.ts:128-161  changed outside every proof
 ```
 
+Given as JSON — the default, since an agent reads this report more often than a person does —
+the answer is grouped by requirement: each one carries where it is written and the prose written
+there, and under it every scenario the change touched, with the Gherkin claim and the proving
+lines as they stand. That is everything needed to judge whether a test still does what its claim
+says, and whether the claim still serves its requirement, without opening a file the report
+points at. The terminal form above stays one list in file order.
+
 A proof runs from its `// Requirement:` line to the last line of its test, so editing the
 Gherkin counts as touching the scenario — and is reported as the claim changing, not the
-proof. Changes to a helper or a fixture are listed as touching nothing. A proof the change
+proof. Changes to a helper or a fixture are listed as touching nothing, with the changed lines
+themselves alongside them. A proof the change
 deleted is read back from the base revision and reported as no longer proven.
 
 It counts the working tree and files git has never seen, not only what is committed, and it
@@ -149,6 +158,10 @@ npx proofspec check --format json       # JSON for CI/scripts
 npx proofspec check --format quickfix   # file:line:E/W:msg (nvim/vim quickfix)
 npx proofspec check --format diagnostics # LSP diagnostics format (JSON)
 ```
+
+`touched` answers as JSON unless another format is named, since an agent reads it far more
+often than a person does. Add `--pretty` to any JSON answer to have it indented over several
+lines for reviewing by eye; without it the JSON stays on the one line a program parses.
 
 ### Neovim integration
 

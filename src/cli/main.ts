@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util'
 import { check, impact, render, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
-import type { Format } from './render.ts'
+import type { Format, Layout } from './render.ts'
 import type { Outcome, RunOptions } from './types.ts'
 
 /**
@@ -42,6 +42,8 @@ Options:
   --format <fmt>  Output format: text, json, quickfix, diagnostics. Left out, touched
                   answers as JSON and everything else as text.
   --json          The legacy spelling of --format json; touched answers that way anyway
+  --pretty        Lay the JSON answer out over indented lines for a person to read. Without
+                  it the JSON is the one line a program parses, unchanged.
   -h, --help      Show this help`
 
 // parseArgs throws on an unknown flag; catch it so a mistyped option prints the usage rather
@@ -61,6 +63,7 @@ try {
       coverage: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
+      pretty: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   })
@@ -79,6 +82,8 @@ if (rawFormat !== undefined && !isFormat(rawFormat)) {
   process.exit(2)
 }
 const format: Format | undefined = rawFormat
+// `--pretty` only lays out a JSON answer; a text one is already written for a person to read.
+const layout: Layout = values.pretty ? 'indented' : 'compact'
 
 // `--help`, or no command at all, prints the usage and stops before any file is touched.
 if (values.help || positionals[0] === undefined) {
@@ -99,9 +104,12 @@ const options: RunOptions = {
 }
 const outcome = await runCommand(positionals[0], options)
 
-const answer = renderAnswer(outcome, format)
+const answer = renderAnswer(outcome, { format, layout })
 process.stdout.write(`${answer}\n`)
-process.exit(exitCodeOf(outcome))
+// The code is set rather than exited on: a write to a pipe is asynchronous, so calling
+// `process.exit` here truncates the answer at the pipe buffer — 64KB, which an indented
+// report of a real branch passes easily. Nothing keeps the loop alive, so it ends anyway.
+process.exitCode = exitCodeOf(outcome)
 
 function runCommand(command: string | undefined, options: RunOptions): Promise<Outcome> {
   if (command === 'check') return check(options)
