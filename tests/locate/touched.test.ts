@@ -341,3 +341,18 @@ it('names the lines that prove a scenario and none that prove its sibling', () =
 
   expect(scenarios.map(one => one.proves)).toEqual([[{ from: 3, to: 5 }, { from: 9, to: 10 }]])
 })
+
+// Requirement: The scenarios proven at a set of lines can be found
+// Scenario: Every part of a changed run that no proof owns is reported
+// GIVEN one run of changed lines opening above one proof, running through a second, and ending
+//       below it, so that the lines no proof owns sit before, between, and after them
+// WHEN the touched scenarios are found
+// THEN all three parts come back unmatched, because a run of changed lines is not all one
+//      promise, and every stretch of it that proved nothing is a change with nothing behind it
+it('reports every part of a changed run that reached no proof', () => {
+  const second = site({ scenario: 'A second scenario', tagLine: 26, line: 30, endLine: 40, steps: stepsAbove(30) })
+
+  const { unmatched } = scenariosTouched([PROOF, second], [{ from: 4, to: 45 }])
+
+  expect(unmatched).toEqual([{ from: 4, to: 5 }, { from: 21, to: 25 }, { from: 41, to: 45 }])
+})

@@ -112,10 +112,12 @@ function collectFromTest(
     return { sites: [], errors }
   }
 
+  const testEndLine = lines.of(call.end)
   if (tagged.length > 0) {
-    return { sites: layoutBSites(body, tagged, above, { testLine, context }), errors }
+    return { sites: layoutBSites({ body, tagged, above, testLine, testEndLine, context }), errors }
   }
-  return { sites: layoutASite(above, call, { tagLine: opensAt(aboveComments, testLine), testLine }, context), errors }
+  const tagLine = opensAt(aboveComments, testLine)
+  return { sites: layoutASite({ above, tagLine, testLine, testEndLine, context }), errors }
 }
 
 /** Where a run of leading comments opens, or the tagged line itself when there are none. */
@@ -124,12 +126,14 @@ function opensAt(leading: readonly LineComment[], fallback: number): number {
 }
 
 /** Layout A: the whole test is one site. A lone tag makes no site — guard catches it. */
-function layoutASite(
-  above: ParsedBlock,
-  call: AstNode,
-  at: { readonly tagLine: number; readonly testLine: number },
-  context: FileContext,
-): ProofSite[] {
+function layoutASite(options: {
+  readonly above: ParsedBlock
+  readonly tagLine: number
+  readonly testLine: number
+  readonly testEndLine: number
+  readonly context: FileContext
+}): ProofSite[] {
+  const { above, tagLine, testLine, testEndLine, context } = options
   if (!above.tag.tagged) return []
   return [
     {
@@ -138,10 +142,10 @@ function layoutASite(
       scenario: above.tag.scenario,
       steps: above.steps,
       file: context.file,
-      tagLine: at.tagLine,
-      line: at.testLine,
-      testLine: at.testLine,
-      endLine: context.lines.of(call.end),
+      tagLine,
+      line: testLine,
+      testLine,
+      endLine: testEndLine,
     },
   ]
 }
@@ -151,17 +155,23 @@ function layoutASite(
  * delivered on every block. A block runs from its tagged statement to the statement before
  * the next tagged one, or to the end of the test.
  */
-function layoutBSites(
-  body: readonly TaggedStatement[],
-  tagged: readonly TaggedStatement[],
-  above: ParsedBlock,
-  at: { readonly testLine: number; readonly context: FileContext },
-): ProofSite[] {
-  const { context } = at
+function layoutBSites(options: {
+  readonly body: readonly TaggedStatement[]
+  readonly tagged: readonly TaggedStatement[]
+  readonly above: ParsedBlock
+  readonly testLine: number
+  readonly testEndLine: number
+  readonly context: FileContext
+}): ProofSite[] {
+  const { body, tagged, above, testLine, testEndLine, context } = options
   return tagged.flatMap((start, position): ProofSite[] => {
     if (!start.block.tag.tagged) return []
     const next = tagged[position + 1]
-    const lastIndex = next === undefined ? body.length - 1 : next.index - 1
+    // A block runs to the line before the next block's tag. The last one runs to the end of the
+    // test rather than to its own last statement: the closing line sits below the last tag, so
+    // it belongs to the block above it, the same way the untagged statements before it do.
+    const endLine =
+      next === undefined ? testEndLine : context.lines.of(body[next.index - 1]!.statement.end)
     return [
       {
         capability: context.capability,
@@ -171,8 +181,8 @@ function layoutBSites(
         file: context.file,
         tagLine: start.tagLine,
         line: context.lines.of(start.statement.start),
-        testLine: at.testLine,
-        endLine: context.lines.of(body[lastIndex]!.statement.end),
+        testLine,
+        endLine,
       },
     ]
   })

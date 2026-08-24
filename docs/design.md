@@ -1448,3 +1448,51 @@ protocol built over an answer of the wrong shape would have frozen that shape in
 queries become genuinely selective — a graph too large to serialise, a question about one
 scenario rather than all of them — the transport will start earning its keep, and by then
 what to define will be visible rather than guessed at.
+
+## 31. Two wrong answers, found by mutation rather than by reading
+
+§29 and §30 built the three states and the payload. Neither was found to be wrong by review;
+both were found to be wrong by deliberately breaking the code and seeing what the suite let
+through. This section records the two answers that were wrong, and what the exercise taught
+about reading a green suite.
+
+**A block stopped one line short of its own test.** A site tagged inside a test body ended at
+its last *statement*, while a site tagging a whole test ended at its closing line. So on a
+test proving several scenarios, the `})` belonged to nobody: turning it into `}, 10_000)` —
+adding a timeout — reported *nothing touched*.
+
+The rule that settles it was already written down twice. `specs/test-scan.md` says a block
+ends "at the next tagged statement, or **at the end of the test**", and it also says
+"untagged statements belong to the block above them". The closing line sits below the last
+tag, so it belongs to the block above it for the same reason every untagged statement before
+it does.
+
+**And the tool's own suite was carrying the drift it exists to catch.** The scenario "A block
+ends at the statement before the next tagged one" says in its THEN that the second block
+"runs on through the untagged statement below it *to the end of the test*", and then asserted
+the last statement's line. The Gherkin was right and the assertion was wrong, and nothing
+noticed, because the assertion is what runs. This is the argument for co-location stated in
+the negative: putting the claim beside the proof does not make them agree, it makes the
+disagreement *visible to a reader* — and here nobody had read it since it was written.
+
+**A changed run of lines is not all one promise.** `touched` marked a whole `LineRange`
+matched the moment any part of it overlapped a proof, so the rest of the run vanished from
+the report. Git hands out contiguous runs, so a helper edited just above the test it serves
+arrives in the same run as the proof below it — and `specs/locate.md` is explicit that those
+lines must be named, not dropped. The answer is to subtract what proofs own from each run
+rather than discard the run whole, which is why `unproven` exists and why `unmatched` can now
+come back as more runs than it was given.
+
+**On reading a mutation report.** Five decisions survived their mutants. Four were genuinely
+unpinned. The fifth — the ordering of the report — was not: it is guaranteed twice, once
+where the diff is read and once where the report is assembled, so removing either alone
+changed nothing. *Survived* means "this line is redundant" just as often as it means "this
+behavior is unguarded", and the two call for opposite responses. Removing both sorts made the
+scenario fail, which is the check that tells them apart.
+
+**The pin that mattered most** was not on either fix. A block's shared step lines had no test
+at all, and `halvesOf` splits the shared claim from the block's own claim purely on those
+lines — so an off-by-one there reports a rewritten shared GIVEN as a changed *proof* instead
+of a changed *claim*. The exact opposite answer, silently, with everything green. A capability
+can be wrong in the one direction that inverts its meaning and still pass, if the input shape
+that reaches that code path is the one the suite never builds.

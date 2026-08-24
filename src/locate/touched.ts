@@ -19,19 +19,21 @@ export function scenariosTouched(
   ranges: readonly LineRange[],
 ): TouchedScenarios {
   const scenarios: TouchedScenario[] = []
-  const matched = new Set<LineRange>()
+  const owned: LineRange[] = []
 
   for (const site of sites) {
     // A site whose file declares no capability cannot be pointed at a requirement. `guard`
     // reports that gap; here it simply proves nothing, so its lines fall through as unmatched.
     if (site.capability === undefined) continue
     const halves = halvesOf(site, sites)
+    // Collected whether or not this site ends up in the answer: a line is proven by where it
+    // sits, not by whether the change happened to reach the scenario that owns it.
+    owned.push(...halves.claim, ...halves.proof)
     const claimHits = ranges.filter(range => reaches(range, halves.claim))
     const proofHits = ranges.filter(range => reaches(range, halves.proof))
     const changed = moved({ claim: claimHits, proof: proofHits })
     if (changed === undefined) continue
 
-    for (const hit of [...claimHits, ...proofHits]) matched.add(hit)
     scenarios.push({
       capability: site.capability,
       requirement: site.requirement,
@@ -47,8 +49,37 @@ export function scenariosTouched(
 
   return {
     scenarios: scenarios.sort(compareTouched),
-    unmatched: ranges.filter(range => !matched.has(range)),
+    unmatched: ranges.flatMap(range => unproven(range, owned)),
   }
+}
+
+/**
+ * The parts of a changed run that no proof owns.
+ *
+ * A run of changed lines is not all one promise. Git reports a contiguous run, so a helper
+ * edited just above the test it serves arrives in the same run as the proof below it. Treating
+ * the whole run as matched the moment any of it lands in a proof would lose the half that
+ * proved nothing — which is the half this report exists to name.
+ */
+function unproven(range: LineRange, owned: readonly LineRange[]): readonly LineRange[] {
+  // `filter` gives a fresh array, so the sort is this function's own; `owned` is left alone.
+  const covering = owned.filter(zone => overlaps(range, zone)).sort((a, b) => a.from - b.from)
+  const parts: LineRange[] = []
+  // The first line not yet accounted for. Zones repeat — every block of one test owns the same
+  // shared prelude — so the same stretch arrives more than once. Moving `open` only forward
+  // also keeps the subtraction right for a zone contained in one already walked past, which
+  // the proof zones never are today: this stays a fact about the arithmetic rather than a debt
+  // owed to whoever calls it.
+  let open = range.from
+  for (const zone of covering) {
+    if (zone.from > open) parts.push({ from: open, to: zone.from - 1 })
+    open = Math.max(open, zone.to + 1)
+    // Load-bearing, not an optimisation: a zone running past the end of the range leaves
+    // nothing after it, and falling through would push a run that ends before it starts.
+    if (open > range.to) return parts
+  }
+  parts.push({ from: open, to: range.to })
+  return parts
 }
 
 /** The runs of lines a site owns, split into the promise and the evidence. */
@@ -111,13 +142,19 @@ function moved(hits: {
   return undefined
 }
 
-/**
- * Whether a changed run of lines reaches any of the runs a site owns. A zone owns nothing when
- * its end precedes its start — a site with no claim written above its code collapses that way —
- * and a zone owning nothing must not catch the change that straddles the line it collapsed to.
- */
+/** Whether a changed run of lines reaches any of the runs a site owns. */
 function reaches(range: LineRange, zones: readonly LineRange[]): boolean {
-  return zones.some(zone => zone.from <= zone.to && zone.from <= range.to && zone.to >= range.from)
+  return zones.some(zone => overlaps(range, zone))
+}
+
+/**
+ * Whether a zone and a changed run share a line. A zone owns nothing when its end precedes its
+ * start — a site with no claim written above its code collapses that way — and a zone owning
+ * nothing must not catch the change that straddles the line it collapsed to.
+ */
+function overlaps(range: LineRange, zone: LineRange): boolean {
+  if (zone.from > zone.to) return false
+  return zone.from <= range.to && zone.to >= range.from
 }
 
 /** Source order within a file, and by scenario when two proofs start on the same line. */

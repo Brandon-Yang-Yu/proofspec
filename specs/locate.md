@@ -160,6 +160,7 @@ thing to judge this one by. Lines rather than source, because locate reads no fi
 - "A step shared above the blocks changes the claim of every scenario in the test" → tests/locate/touched.test.ts
 - "A touched scenario carries the Gherkin it claims" → tests/locate/touched.test.ts
 - "A touched scenario names the lines that prove it" → tests/locate/touched.test.ts
+- "Every part of a changed run that no proof owns is reported" → tests/locate/touched.test.ts
 - "Setup shared above the blocks changes the proof of every scenario in the test" → tests/locate/touched.test.ts
 - "The line between two blocks belongs to the block above it" → tests/locate/touched.test.ts
 <!-- /scenarios -->

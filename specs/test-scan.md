@@ -116,6 +116,7 @@ language is still a spec.
 <!-- scenarios: generated -->
 - "A block site opens where its own tag block does, below the steps it shares" → tests/test-scan/position.test.ts
 - "A block site reports the line its test opens on" → tests/test-scan/position.test.ts
+- "A block site reports the lines of the steps its test shares" → tests/test-scan/position.test.ts
 - "A proof site reports the line its tag block opens on" → tests/test-scan/position.test.ts
 - "A proof site reports the line of the code it tags" → tests/test-scan/position.test.ts
 - "Each step reports its own line" → tests/test-scan/position.test.ts

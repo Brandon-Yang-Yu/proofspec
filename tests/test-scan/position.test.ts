@@ -158,3 +158,31 @@ it('posting a turn', async () => {
 
   expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: A turn streams the reply'))
 })
+
+// Requirement: Every proof site reports its current position
+// Scenario: A block site reports the lines of the steps its test shares
+// GIVEN a test whose body tags a statement, under a GIVEN and a WHEN the whole test shares
+// WHEN the file is scanned
+// THEN the shared steps report the lines they are written on, which is what tells a block
+//      which of its steps came from above its test and where its shared claim opens
+it('reports the line of each step a block shares with its test', () => {
+  const source = `// GIVEN a document with one version
+// WHEN a turn is posted
+it('posting a turn', async () => {
+  const res = await post('/turn')
+
+  // Requirement: A turn streams the reply
+  // Scenario: The reply is streamed as SSE
+  // THEN the response is an SSE stream
+  expect.soft(res.status).toBe(200)
+})
+`
+
+  const scan = scanSource(source, { file: FILE })
+
+  expect(onlySite(scan).steps.map(step => step.line)).toEqual([
+    lineOf(source, '// GIVEN a document with one version'),
+    lineOf(source, '// WHEN a turn is posted'),
+    lineOf(source, '// THEN the response is an SSE stream'),
+  ])
+})
