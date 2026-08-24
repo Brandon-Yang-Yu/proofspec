@@ -10,11 +10,25 @@ import type { GuardReport } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import type { ProvingLines, ReviewEntry, ReviewProtocol } from '../review/index.ts'
+import type { SourceFile } from './discover.ts'
 
 /** Where a repo keeps its capability files and its tests, both as directories under the root. */
 export type Locations = {
   readonly specsDir: string
   readonly testsDir: string
+}
+
+/**
+ * Tests a caller has already read, standing in for discovery. A repo whose tests live where
+ * the conventional walk cannot reach them — several roots, another suffix — reads them its
+ * own way and hands them over. The roots are given with the files because the diff needs a
+ * place to look: a test file the branch deleted is not among the files, and its removal is
+ * only visible when the diff is scoped to where tests live.
+ */
+export type GivenTests = {
+  /** Where the tests live, as git pathspecs: the diff scope `touched` measures. */
+  readonly roots: readonly string[]
+  readonly files: readonly SourceFile[]
 }
 
 /**
@@ -41,6 +55,8 @@ export type RunOptions = {
   readonly ask?: TouchedAsk
   /** The review `review` is asked to record. */
   readonly review?: ProposedInput
+  /** Tests read by the caller, instead of discovering them under `testsDir`. */
+  readonly tests?: GivenTests
 } & Partial<Locations>
 
 /** Where a requirement is written: the capability file, and the line of its heading. */

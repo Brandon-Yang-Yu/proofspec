@@ -626,3 +626,52 @@ it('orders the work list by capability and then by requirement', async () => {
     ['zeta', 'A zeta promise'],
   ])
 })
+
+// Requirement: touched measures the tests a caller gives it
+// Scenario: Tests given with their root are scanned and diffed where they live
+// GIVEN a repo under git whose one test lives in src/ui as a .test.tsx the conventional walk never reads, with one line rewritten inside a proof
+// WHEN the touched command runs with that file given as the tests and src/ui as their root
+// THEN it answers with the requirement the changed proof reaches, which it could only do by
+//      reading the given file in place of discovery and scoping the diff to the given root —
+//      either half left on the conventional tests/ would see nothing change and judge nothing
+it('answers from tests given by the caller, diffed at the root they were given with', async () => {
+  const testPath = 'src/ui/demo.test.tsx'
+  const repo = await makeGitRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: [FIRST, SECOND], testPath }),
+    [testPath]: testFile([FIRST, SECOND]),
+  })
+  await repo.write(testPath, testFile([FIRST, SECOND]).replace('  expect(true).toBe(true)', '  expect(1 + 1).toBe(2)'))
+
+  const summary = summaryOf(
+    await touched({
+      cwd: repo.root,
+      tests: { roots: ['src/ui'], files: [{ path: testPath, source: await repo.read(testPath) }] },
+    }),
+  )
+
+  expect(summary.requirements).toEqual([
+    { key: KEY, capability: CAPABILITY, requirement: REQUIREMENT, scenarios: 1, gone: 0, pending: 1 },
+  ])
+})
+
+// Requirement: touched measures the tests a caller gives it
+// Scenario: A test deleted from a given root is read back as no longer proven
+// GIVEN a repo under git whose one test lives in src/ui, and a working tree with that file deleted
+// WHEN the touched command runs with no files left to give and src/ui as the root
+// THEN the proof the base revision held is reported as gone and still owes a judgement,
+//      because a removal outside the conventional tests/ is exactly the change a gate that
+//      diffed only tests/ would wave through
+it('reports a deleted given test as gone, through the root it was given with', async () => {
+  const testPath = 'src/ui/demo.test.tsx'
+  const repo = await makeGitRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: [FIRST], testPath }),
+    [testPath]: testFile([FIRST]),
+  })
+  await repo.git(['rm', testPath])
+
+  const summary = summaryOf(await touched({ cwd: repo.root, tests: { roots: ['src/ui'], files: [] } }))
+
+  expect(summary.requirements).toEqual([
+    { key: KEY, capability: CAPABILITY, requirement: REQUIREMENT, scenarios: 0, gone: 1, pending: 1 },
+  ])
+})
