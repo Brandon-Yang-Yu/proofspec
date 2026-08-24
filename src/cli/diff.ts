@@ -57,7 +57,7 @@ export async function readChangedFiles(options: {
   const inWorkTree = await git(options.cwd, ['rev-parse', '--is-inside-work-tree'])
   if (inWorkTree?.trim() !== 'true') return { ok: false, reason: `${options.cwd} is not a git repository` }
 
-  const named = options.since ?? (await git(options.cwd, ['merge-base', 'HEAD', INTEGRATION_BRANCH]))?.trim()
+  const named = options.since ?? (await defaultBase(options.cwd))
   if (named === undefined) {
     return { ok: false, reason: `could not find where this branch left ${INTEGRATION_BRANCH}; name a revision with --since` }
   }
@@ -86,6 +86,27 @@ export async function readFileAt(options: {
   // `:./path` reads the path as written here — relative to the directory git runs in, the
   // same anchor the diff's paths use.
   return await git(options.cwd, ['show', `${options.rev}:./${options.path}`])
+}
+
+/**
+ * Where a run that named no revision measures from. Off `main` that is the branch point.
+ * On `main` the branch point is `HEAD` itself, which would answer "nothing touched" over
+ * commits the next push is about to publish — the very list a held push sends a reader to
+ * work through — so there the base is where the published tip stands: `main`'s upstream
+ * when one is configured, else the conventional `origin` tracking ref a fetch leaves
+ * behind. A repo with neither keeps the branch point: nothing is published to measure from.
+ */
+async function defaultBase(cwd: string): Promise<string | undefined> {
+  const head = (await git(cwd, ['rev-parse', 'HEAD']))?.trim()
+  const branchPoint = (await git(cwd, ['merge-base', 'HEAD', INTEGRATION_BRANCH]))?.trim()
+  if (head === undefined || branchPoint === undefined) return undefined
+  if (branchPoint !== head) return branchPoint
+
+  const published =
+    (await git(cwd, ['rev-parse', '--verify', `${INTEGRATION_BRANCH}@{upstream}`]))?.trim() ??
+    (await git(cwd, ['rev-parse', '--verify', `refs/remotes/origin/${INTEGRATION_BRANCH}`]))?.trim()
+  if (published === undefined) return branchPoint
+  return (await git(cwd, ['merge-base', 'HEAD', published]))?.trim() ?? branchPoint
 }
 
 async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {

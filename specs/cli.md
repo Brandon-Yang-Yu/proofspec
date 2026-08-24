@@ -220,12 +220,14 @@ cannot resolve — SHALL exit the same cannot-run code the other commands use.
 - "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
 - "A key no touched requirement carries cannot run" → tests/cli/touched.test.ts
+- "A main with no configured upstream measures from where origin stands" → tests/cli/touched.test.ts
 - "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
 - "A requirement no capability file declares carries no prose" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
 - "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
 - "A touched scenario carries the source of the lines that prove it" → tests/cli/touched.test.ts
+- "On main the default base is where main's upstream stands" → tests/cli/touched.test.ts
 - "One requirement holds every scenario of it the change touched" → tests/cli/touched.test.ts
 - "Requirements come back in capability then requirement order" → tests/cli/touched.test.ts
 - "The lines that prove nothing are counted in the work list and asked for on their own" → tests/cli/touched.test.ts

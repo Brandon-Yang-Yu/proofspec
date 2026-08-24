@@ -100,6 +100,56 @@ it('answers with a count for each requirement the change reached', async () => {
 })
 
 // Requirement: A command says which scenarios a change touched
+// Scenario: On main the default base is where main's upstream stands
+// GIVEN a repo under git whose change is committed on main, ahead of its upstream, with a clean tree
+// WHEN the touched command runs with nothing in particular asked for
+// THEN it measures from the upstream tip rather than from HEAD itself, because on main the
+//      branch point is HEAD and would answer nothing over what the next push publishes
+it('measures from the upstream tip when it runs on main', async () => {
+  const repo = await makeGitRepo(inSync())
+  const published = await repo.git(['rev-parse', 'HEAD'])
+  await repo.git(['update-ref', 'refs/remotes/origin/main', published])
+  // The fetch refspec is what lets `main@{upstream}` resolve to that tracking ref; a
+  // clone has it, a hand-built fixture does not until it is written here.
+  await repo.git(['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'])
+  await repo.git(['config', 'branch.main.remote', 'origin'])
+  await repo.git(['config', 'branch.main.merge', 'refs/heads/main'])
+  await repo.write(TEST_PATH, bodyEdited())
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'change'])
+
+  const summary = summaryOf(await touched({ cwd: repo.root }))
+
+  expect(summary.base).toBe(published)
+  expect(summary.requirements).toEqual([
+    { key: KEY, capability: CAPABILITY, requirement: REQUIREMENT, scenarios: 1, gone: 0, pending: 1 },
+  ])
+})
+
+// Requirement: A command says which scenarios a change touched
+// Scenario: A main with no configured upstream measures from where origin stands
+// GIVEN a repo under git whose change is committed on main, ahead of a remote-tracking
+//      origin main it never told its own main to track, with a clean tree
+// WHEN the touched command runs with nothing in particular asked for
+// THEN it measures from where origin's main stands, because a repo can carry that tip from
+//      its fetches without ever having configured an upstream
+it('measures from the origin tracking ref when no upstream is configured', async () => {
+  const repo = await makeGitRepo(inSync())
+  const published = await repo.git(['rev-parse', 'HEAD'])
+  await repo.git(['update-ref', 'refs/remotes/origin/main', published])
+  await repo.write(TEST_PATH, bodyEdited())
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'change'])
+
+  const summary = summaryOf(await touched({ cwd: repo.root }))
+
+  expect(summary.base).toBe(published)
+  expect(summary.requirements).toEqual([
+    { key: KEY, capability: CAPABILITY, requirement: REQUIREMENT, scenarios: 1, gone: 0, pending: 1 },
+  ])
+})
+
+// Requirement: A command says which scenarios a change touched
 // Scenario: A change inside a proof names the scenario and where its requirement is written
 // GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
 // WHEN that requirement is asked for in full
