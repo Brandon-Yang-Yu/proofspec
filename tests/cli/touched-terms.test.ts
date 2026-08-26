@@ -68,7 +68,7 @@ function requirementOf(outcome: Outcome): TouchedRequirement {
 
 // Requirement: A changed TERM counts as a change the tests did not make
 // Scenario: A changed TERM's PROMISE are in the work list and hold the gate
-// GIVEN a repo committed in sync whose CAPABILITY FILE then redefines TURN while the tests
+// GIVEN a repo committed in sync whose CAPABILITY_FILE then redefines TURN while the tests
 //       do not move a line
 // WHEN the work list is asked for
 // THEN the requirement whose STANDARD uses TURN is in it with both its PROMISE pending,
@@ -102,7 +102,7 @@ it('carries the definition then and now on a scenario a term re-opened', async (
 
 // Requirement: A changed TERM counts as a change the tests did not make
 // Scenario: A PROMISE both axes reached is gathered once, carrying the TERM changes with it
-// GIVEN a repo committed in sync whose CAPABILITY FILE then redefines TURN while a line of
+// GIVEN a repo committed in sync whose CAPABILITY_FILE then redefines TURN while a line of
 //       one of the tests it governs also moves
 // WHEN the requirement is fetched by address
 // THEN the scenario whose test moved is gathered once, carrying both what moved in its

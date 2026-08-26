@@ -8,7 +8,7 @@ afterEach(cleanupRepos)
 
 // Requirement: Checking never writes
 // Scenario: A check that finds drift changes no file on disk
-// GIVEN a repo whose committed CAPABILITY FILE records fewer scenarios than the tests prove
+// GIVEN a repo whose committed CAPABILITY_FILE records fewer scenarios than the tests prove
 // WHEN the check runs and finds the drift
 // THEN the build fails and every file is byte-for-byte what it was before the check ran
 it('changes no file even when it finds drift', async () => {

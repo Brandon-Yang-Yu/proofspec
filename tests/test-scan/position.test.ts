@@ -4,11 +4,11 @@ import { expect, it } from 'vitest'
 import { scanSource } from '../../src/test-scan/index.ts'
 import { FILE, lineOf, onlySite } from './support.ts'
 
-// Requirement: Every PROOF SITE reports its current position
-// Scenario: A PROOF SITE reports the line of the code it tags
+// Requirement: Every PROOF_SITE reports its current position
+// Scenario: A PROOF_SITE reports the line of the code it tags
 // GIVEN a tagged test partway down a file
 // WHEN the file is scanned
-// THEN the PROOF SITE reports the line the test sits on, which is what locate answers
+// THEN the PROOF_SITE reports the line the test sits on, which is what locate answers
 //      with and what guard points at
 it('reports the line a proof site sits on', () => {
   const source = `import { guard } from '../src/guard/index.ts'
@@ -28,7 +28,7 @@ describe('the guard', () => {
   expect(onlySite(scan).line).toBe(lineOf(source, "it('fails on a stale capability file'"))
 })
 
-// Requirement: Every PROOF SITE reports its current position
+// Requirement: Every PROOF_SITE reports its current position
 // Scenario: Each step reports its own line
 // GIVEN a test with three steps above it
 // WHEN the file is scanned
@@ -54,7 +54,7 @@ it('fails on a stale capability file', () => {
   ])
 })
 
-// Requirement: Every PROOF SITE reports its current position
+// Requirement: Every PROOF_SITE reports its current position
 // Scenario: Positions are right in a file containing non-ASCII text
 // GIVEN a tagged test under a line of text outside ASCII
 // WHEN the file is scanned
@@ -83,8 +83,8 @@ it('fails on a stale capability file', () => {
   ])
 })
 
-// Requirement: Every PROOF SITE reports its current position
-// Scenario: A PROOF SITE reports the line its tag block opens on
+// Requirement: Every PROOF_SITE reports its current position
+// Scenario: A PROOF_SITE reports the line its tag block opens on
 // GIVEN a test whose tag and Gherkin sit in a comment block above it
 // WHEN the file is scanned
 // THEN the site reports the line that block opens on, which is where the site starts for a
@@ -105,7 +105,7 @@ it('fails on a stale capability file', () => {
   expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: The guard fails'))
 })
 
-// Requirement: Every PROOF SITE reports its current position
+// Requirement: Every PROOF_SITE reports its current position
 // Scenario: A block site reports the line its test opens on
 // GIVEN a test whose body tags two statements, under a GIVEN the two of them share
 // WHEN the file is scanned
@@ -136,7 +136,7 @@ it('posting a turn', async () => {
   ])
 })
 
-// Requirement: Every PROOF SITE reports its current position
+// Requirement: Every PROOF_SITE reports its current position
 // Scenario: A block site opens where its own tag block does, below the steps it shares
 // GIVEN a test whose body tags a statement, under a GIVEN the whole test shares
 // WHEN the file is scanned
@@ -159,7 +159,7 @@ it('posting a turn', async () => {
   expect(onlySite(scan).tagLine).toBe(lineOf(source, '// Requirement: A turn streams the reply'))
 })
 
-// Requirement: Every PROOF SITE reports its current position
+// Requirement: Every PROOF_SITE reports its current position
 // Scenario: A block site reports the lines of the steps its test shares
 // GIVEN a test whose body tags a statement, under a GIVEN and a WHEN the whole test shares
 // WHEN the file is scanned

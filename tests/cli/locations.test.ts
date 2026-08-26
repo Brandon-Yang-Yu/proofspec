@@ -11,7 +11,7 @@ const SCENARIOS = ['A first behavior', 'A second behavior']
 
 // Requirement: It runs in a conventional repo with no configuration
 // Scenario: The conventional layout is checked with no locations given
-// GIVEN a repo keeping its CAPABILITY FILE in specs/ and its tests in tests/
+// GIVEN a repo keeping its CAPABILITY_FILE in specs/ and its tests in tests/
 // WHEN the check runs with no locations given
 // THEN it reads both from the conventional places and returns a verdict
 it('checks the conventional layout with no locations given', async () => {
@@ -29,7 +29,7 @@ it('checks the conventional layout with no locations given', async () => {
 
 // Requirement: It runs in a conventional repo with no configuration
 // Scenario: Both locations can be pointed at where a repo keeps them
-// GIVEN a repo keeping its CAPABILITY FILE under docs/spec and its tests under test
+// GIVEN a repo keeping its CAPABILITY_FILE under docs/spec and its tests under test
 // WHEN the check runs with both locations given
 // THEN it reads them from there and returns a verdict, which it could only do by honouring
 //      the given locations rather than the conventional ones

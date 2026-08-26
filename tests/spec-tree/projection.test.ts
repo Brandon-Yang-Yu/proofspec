@@ -6,7 +6,7 @@ import { site } from './support.ts'
 
 // Requirement: The tree is the stable projection of a scan
 // Scenario: Sites are grouped under their capability and then their requirement
-// GIVEN PROOF SITE spread across two capabilities, one of them with two requirements
+// GIVEN PROOF_SITE spread across two capabilities, one of them with two requirements
 // WHEN the tree is built
 // THEN each scenario sits under its own capability, then its own requirement
 it('groups sites under their capability and requirement', () => {
@@ -29,7 +29,7 @@ it('groups sites under their capability and requirement', () => {
 
 // Requirement: The tree is the stable projection of a scan
 // Scenario: A scenario keeps its title and file, not its steps or line
-// GIVEN a PROOF SITE carrying Gherkin steps and a line number
+// GIVEN a PROOF_SITE carrying Gherkin steps and a line number
 // WHEN the tree is built
 // THEN its scenario node holds the title and the file, and nothing else
 it('keeps a scenario title and file, not its steps or line', () => {
@@ -50,7 +50,7 @@ it('keeps a scenario title and file, not its steps or line', () => {
 
 // Requirement: The tree is the stable projection of a scan
 // Scenario: Sites scanned in any order yield the same tree
-// GIVEN the same set of PROOF SITE in two different orders, spanning two capabilities,
+// GIVEN the same set of PROOF_SITE in two different orders, spanning two capabilities,
 //       two requirements under one of them, and two scenarios under one of those
 // WHEN each order is built
 // THEN the two trees are equal, because every level — capability, requirement, and

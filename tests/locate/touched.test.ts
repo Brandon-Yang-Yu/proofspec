@@ -197,7 +197,7 @@ it('changes both for every scenario when the shared halves moved together', () =
 
 // Requirement: The scenarios proven at a set of lines can be found
 // Scenario: A line changed outside every PROOF is reported as matching none
-// GIVEN a changed line that falls in no PROOF SITE
+// GIVEN a changed line that falls in no PROOF_SITE
 // WHEN the touched scenarios are found
 // THEN no scenario is named and the line comes back as unmatched, because a helper or an
 //      import is a real change with no PROMISE behind it
@@ -221,7 +221,7 @@ it('names a scenario once however many changed lines fall in it', () => {
 
 // Requirement: The scenarios proven at a set of lines can be found
 // Scenario: A PROOF with no capability names no scenario
-// GIVEN a PROOF SITE whose file declares no capability, and a changed line inside it
+// GIVEN a PROOF_SITE whose file declares no capability, and a changed line inside it
 // WHEN the touched scenarios are found
 // THEN no scenario is named and the line is unmatched, because a site with no capability
 //      cannot be pointed at a requirement — the check reports that gap on its own

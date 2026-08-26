@@ -4,9 +4,9 @@ import { expect, it } from 'vitest'
 import { buildTree } from '../../src/spec-tree/index.ts'
 import { site } from './support.ts'
 
-// Requirement: A PROOF SITE with no capability is set aside
+// Requirement: A PROOF_SITE with no capability is set aside
 // Scenario: A site with no capability is set aside, not placed in the tree
-// GIVEN one PROOF SITE with a capability and one with none
+// GIVEN one PROOF_SITE with a capability and one with none
 // WHEN the tree is built
 // THEN the site with no capability appears in the set-aside list and in no capability of
 //      the tree, so guard can see it rather than it vanishing

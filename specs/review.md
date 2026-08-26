@@ -11,7 +11,7 @@ one that had merely been reported on. This capability is that record.
 It reads no files. `cli` owns the LEDGER on disk and assembles the touched report; what a line
 of that LEDGER means, what KEY a judgement is filed under, and whether a change has been
 judged through are this capability's — the same split `spec-file` and `cli` already keep over
-the CAPABILITY FILE.
+the CAPABILITY_FILE.
 
 ### Term: KEY
 
@@ -27,7 +27,7 @@ their lines.
 
 ### Term: PROMISE
 
-One scenario claimed at one PROOF SITE: its CLAIM, its PROOF, and the STANDARD it is judged
+One scenario claimed at one PROOF_SITE: its CLAIM, its PROOF, and the STANDARD it is judged
 against, bound into the one unit the gate holds. Change any of the three and the PROMISE that
 was judged is not this one.
 

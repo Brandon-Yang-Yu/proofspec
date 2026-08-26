@@ -45,7 +45,7 @@ const RECORDED: readonly RequirementNode[] = [
 
 // Requirement: Writing back twice changes nothing
 // Scenario: Writing back a file that has just been written changes nothing
-// GIVEN a CAPABILITY FILE the write-back has just produced, written from a file of any
+// GIVEN a CAPABILITY_FILE the write-back has just produced, written from a file of any
 //       shape: an ordinary one, one that does not end in a newline, one holding a code
 //       fence nobody closed
 // WHEN the same write-back runs on it again

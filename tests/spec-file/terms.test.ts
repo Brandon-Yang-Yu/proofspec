@@ -34,7 +34,7 @@ The tool SHALL answer every TURN.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: A Term heading reads as a term with the definition written under it
-// GIVEN a CAPABILITY FILE holding two Term sections, each with a definition and each ended
+// GIVEN a CAPABILITY_FILE holding two Term sections, each with a definition and each ended
 //       by the heading that follows it
 // WHEN the file is read
 // THEN both TERM come back in the order the file declares them, each with the definition
@@ -83,7 +83,7 @@ The answer half of a TURN.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: A Term heading inside a fenced code block is not a term
-// GIVEN a CAPABILITY FILE showing what a Term section looks like inside a fenced code block
+// GIVEN a CAPABILITY_FILE showing what a Term section looks like inside a fenced code block
 // WHEN the file is read
 // THEN the file declares no TERM, because the fence is the file saying what the format
 //      looks like, not using it
@@ -112,7 +112,7 @@ The tool SHALL answer every turn.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: Writing back leaves Term sections exactly as they were
-// GIVEN a CAPABILITY FILE holding Term sections and a requirement whose block already
+// GIVEN a CAPABILITY_FILE holding Term sections and a requirement whose block already
 //       records what the tests prove
 // WHEN the write-back runs with those same entries
 // THEN the file comes back byte for byte unchanged, Term sections included, because a

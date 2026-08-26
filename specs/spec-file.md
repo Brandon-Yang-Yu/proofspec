@@ -8,7 +8,7 @@ The two halves have different owners, and this capability is what keeps them apa
 knows the file format and nothing about the tree; `spec-tree` knows the tree and nothing
 about files.
 
-### Term: CAPABILITY FILE
+### Term: CAPABILITY_FILE
 
 The committed markdown file that holds one capability: the descriptions of its requirements,
 the TERM sections it defines, and the generated block that records where their scenarios are

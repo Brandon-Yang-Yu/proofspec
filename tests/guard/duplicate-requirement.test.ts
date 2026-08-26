@@ -11,8 +11,8 @@ function declaredTimes(requirement: string, proves: ScenarioNode, times: number)
 }
 
 // Requirement: A requirement declared twice is a warning
-// Scenario: A requirement declared twice in a committed CAPABILITY FILE is a warning
-// GIVEN a committed CAPABILITY FILE that declares some requirements more than once, each
+// Scenario: A requirement declared twice in a committed CAPABILITY_FILE is a warning
+// GIVEN a committed CAPABILITY_FILE that declares some requirements more than once, each
 //       copy holding a scenario the tests prove
 // WHEN the guard runs
 // THEN every requirement declared more than once is reported once as a warning naming its

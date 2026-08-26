@@ -61,12 +61,15 @@ function termFindings(terms: readonly TermSpec[]): Finding[] {
   const findings: Finding[] = []
   const seen = new Set<string>()
   for (const { term, definition } of terms) {
-    // Capitals, with words separated as they are used — a phrase in capitals is a term in
-    // capitals — because the name is the match key: a promise uses a term in the exact form
-    // it was defined in, and a name in lower case is a word no requirement can ever use.
-    // Plurals are left to the reader — a stemmer would be a guess about English, and the
-    // guard does not guess.
-    if (!/^[A-Z]+(?:[ -][A-Z]+)*$/.test(term)) findings.push({ kind: 'term-not-in-capitals', term })
+    // Capitals, the words of a phrase joined by underscores — one TERM one token —
+    // because the name is the match key: a promise uses a term in the exact form it was
+    // defined in, and a name in lower case is a word no requirement can ever use. Spaces
+    // are refused because `proof site` is ordinary English: two capitals standing beside
+    // each other are indistinguishable from emphasis, and the underscore is what makes a
+    // defined word self-evident to a reader and one whole word to the matcher. Plurals are
+    // left to the reader — a stemmer would be a guess about English, and the guard does
+    // not guess.
+    if (!/^[A-Z]+(?:_[A-Z]+)*$/.test(term)) findings.push({ kind: 'term-not-in-capitals', term })
     if (/\bSHALL\b/.test(definition)) findings.push({ kind: 'term-promises', term })
     if (seen.has(term)) findings.push({ kind: 'term-defined-twice', term })
     seen.add(term)

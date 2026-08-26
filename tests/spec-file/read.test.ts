@@ -6,7 +6,7 @@ import { CAPABILITY, FENCE, entriesOf, onlyRequirement, requirementNames } from 
 
 // Requirement: Reading a file yields its requirements and what they record
 // Scenario: A requirement's description and its recorded entries are read together
-// GIVEN a CAPABILITY FILE whose opening prose is followed by a requirement, its
+// GIVEN a CAPABILITY_FILE whose opening prose is followed by a requirement, its
 //       description, and a generated block holding two entries
 // WHEN the file is read
 // THEN one requirement comes back, carrying the description written beneath its heading
@@ -73,7 +73,7 @@ ${block}`
 
 // Requirement: Reading a file yields its requirements and what they record
 // Scenario: A file that declares no requirements reads as a capability with none
-// GIVEN a CAPABILITY FILE that is all opening prose and declares no requirement heading
+// GIVEN a CAPABILITY_FILE that is all opening prose and declares no requirement heading
 // WHEN the file is read
 // THEN it comes back as a capability with an empty requirements list — the branch a file
 //      holds before anyone has written a requirement into it, an ordinary state and not an
@@ -91,10 +91,10 @@ Opening prose about the capability, and not one requirement declared yet.
 
 // Requirement: Reading a file yields its requirements and what they record
 // Scenario: A heading inside a fenced code block is not a requirement
-// GIVEN a CAPABILITY FILE whose description shows an example requirement heading inside a
+// GIVEN a CAPABILITY_FILE whose description shows an example requirement heading inside a
 //       fenced code block
 // WHEN the file is read
-// THEN only the real requirement comes back, because a CAPABILITY FILE showing an example
+// THEN only the real requirement comes back, because a CAPABILITY_FILE showing an example
 //      of itself must not be read as if the example were real
 it('does not read a heading inside a code fence as a requirement', () => {
   const source = `### Requirement: The real one
@@ -116,7 +116,7 @@ ${FENCE}
   expect(requirementNames(spec)).toEqual(['The real one'])
 })
 
-// GIVEN a CAPABILITY FILE that declares its requirements in an order other than by name,
+// GIVEN a CAPABILITY_FILE that declares its requirements in an order other than by name,
 //       one of them recording its entries in an order other than by title
 // WHEN the file is read
 it('reads requirements in the order the file declares them and entries in title order', () => {

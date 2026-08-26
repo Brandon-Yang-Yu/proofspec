@@ -10,7 +10,7 @@ in a build.
 The command that checks SHALL NOT modify any file.
 
 A check that quietly fixed what it found would report success on a repo that was wrong
-until the moment it ran. The build would go green and the committed CAPABILITY FILE would go on
+until the moment it ran. The build would go green and the committed CAPABILITY_FILE would go on
 disagreeing with what was reviewed.
 
 Writing back is a separate command, run on purpose.
@@ -21,7 +21,7 @@ Writing back is a separate command, run on purpose.
 
 ### Requirement: The exit code says what happened
 
-The check SHALL exit zero when the tests and the committed CAPABILITY FILE agree, and non-zero
+The check SHALL exit zero when the tests and the committed CAPABILITY_FILE agree, and non-zero
 when they do not.
 
 A tool that cannot be configured or cannot read its inputs SHALL exit with a different
@@ -30,13 +30,13 @@ from "I could not run".
 
 <!-- scenarios: generated -->
 - "A repo the check cannot run in exits with a code that is not the drift code" → tests/cli/exit-code.test.ts
-- "Agreement between the tests and the committed CAPABILITY FILE exits zero" → tests/cli/exit-code.test.ts
-- "Drift between the tests and the committed CAPABILITY FILE exits non-zero" → tests/cli/exit-code.test.ts
+- "Agreement between the tests and the committed CAPABILITY_FILE exits zero" → tests/cli/exit-code.test.ts
+- "Drift between the tests and the committed CAPABILITY_FILE exits non-zero" → tests/cli/exit-code.test.ts
 <!-- /scenarios -->
 
 ### Requirement: It runs in a conventional repo with no configuration
 
-Running the check in a repo that keeps its CAPABILITY FILE and its tests in the usual places
+Running the check in a repo that keeps its CAPABILITY_FILE and its tests in the usual places
 SHALL work with no configuration file present.
 
 Both locations SHALL be configurable for repos that do it differently. Nothing else needs
@@ -83,9 +83,9 @@ choice the caller makes, so the answer a script already reads does not change un
 - "The write's answer is returned as JSON naming the changed files" → tests/cli/json.test.ts
 <!-- /scenarios -->
 
-### Requirement: Writing back records the tests in the committed CAPABILITY FILE
+### Requirement: Writing back records the tests in the committed CAPABILITY_FILE
 
-The write command SHALL update each committed CAPABILITY FILE so its recorded scenarios
+The write command SHALL update each committed CAPABILITY_FILE so its recorded scenarios
 match the tests, and change nothing else.
 
 This is the separate command requirement 1 keeps apart from the check. It is run on
@@ -103,7 +103,7 @@ the write changes files, so it refuses before it acts rather than reporting afte
 <!-- scenarios: generated -->
 - "Writing back a repo already in agreement changes no file" → tests/cli/write.test.ts
 - "Writing back a repo it cannot fully read changes nothing" → tests/cli/write.test.ts
-- "Writing back leaves the other CAPABILITY FILE untouched" → tests/cli/write.test.ts
+- "Writing back leaves the other CAPABILITY_FILE untouched" → tests/cli/write.test.ts
 - "Writing back records a scenario the tests prove but the file did not" → tests/cli/write.test.ts
 - "Writing back through an absolute location changes the file exactly there" → tests/cli/write.test.ts
 <!-- /scenarios -->
@@ -121,7 +121,7 @@ elsewhere. The pages are a generated output, so a project gitignores that direct
 than committing it. Inputs it cannot read are refused the way the check and the write refuse
 them.
 
-A capability's requirements are headed in the order its CAPABILITY FILE declares them, not by
+A capability's requirements are headed in the order its CAPABILITY_FILE declares them, not by
 name. A
 description is prose the human owns, and prose refers to its neighbours: a page that sorts
 the requirements makes every "the requirement below" point at one above it.
@@ -131,7 +131,7 @@ the requirements makes every "the requirement below" point at one above it.
 - "The render command reports it cannot run on unreadable inputs" → tests/cli/render.test.ts
 - "The render command writes into a chosen directory" → tests/cli/render.test.ts
 - "The render command writes to the default directory when none is given" → tests/cli/render.test.ts
-- "The rendered page lists requirements in the CAPABILITY FILE's order" → tests/cli/render.test.ts
+- "The rendered page lists requirements in the CAPABILITY_FILE's order" → tests/cli/render.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command says which scenarios a change touched
@@ -172,7 +172,7 @@ one of them, since handing over only the first would leave an agent judging a CL
 half its evidence. A sibling's lines are not among them.
 
 Each requirement SHALL carry where it is written together with the prose written there. The
-two arrive together or not at all: a requirement no CAPABILITY FILE declares has neither, and
+two arrive together or not at all: a requirement no CAPABILITY_FILE declares has neither, and
 its scenarios are still named under it, because a PROMISE nothing declares is exactly what the
 reader has to see. Judging that gap is the check's job, not this one's.
 
@@ -215,15 +215,15 @@ which is the requirement below. A repo it cannot read — not a git repository, 
 cannot resolve — SHALL exit the same cannot-run code the other commands use.
 
 <!-- scenarios: generated -->
+- "A KEY no touched requirement carries cannot run" → tests/cli/touched.test.ts
+- "A PROOF the change removed is named from the base revision" → tests/cli/touched.test.ts
 - "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
 - "A change inside a PROOF names the scenario and where its requirement is written" → tests/cli/touched.test.ts
 - "A changed file that cannot be read back cannot run" → tests/cli/touched.test.ts
 - "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
-- "A KEY no touched requirement carries cannot run" → tests/cli/touched.test.ts
 - "A main with no configured upstream measures from where origin stands" → tests/cli/touched.test.ts
-- "A PROOF the change removed is named from the base revision" → tests/cli/touched.test.ts
-- "A requirement no CAPABILITY FILE declares carries no prose" → tests/cli/touched.test.ts
+- "A requirement no CAPABILITY_FILE declares carries no prose" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
 - "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
@@ -270,7 +270,7 @@ gate would then measure is their willingness to let themselves through.
 
 The work list SHALL count the PROMISE a changed TERM re-opened exactly as it counts the
 PROMISE a changed test reached — the same shapes, the same gate — by reading where the
-CAPABILITY FILE live against the same base revision the tests are measured from.
+CAPABILITY_FILE live against the same base revision the tests are measured from.
 
 The diff of the tests has one axis: a changed line reaches the PROOF that owns it. That
 leaves a door open. Rewrite a definition and every PROMISE that uses the word changes what
@@ -284,9 +284,9 @@ whether a CLAIM still reads its PROOF honestly under a meaning that moved, and t
 it moved is the whole of what they were asked about.
 
 <!-- scenarios: generated -->
-- "A changed TERM's PROMISE are in the work list and hold the gate" → tests/cli/touched-terms.test.ts
 - "A PROMISE both axes reached is gathered once, carrying the TERM changes with it" → tests/cli/touched-terms.test.ts
 - "A PROMISE re-opened through another TERM's definition keys the definition it never names" → tests/cli/touched-terms.test.ts
+- "A changed TERM's PROMISE are in the work list and hold the gate" → tests/cli/touched-terms.test.ts
 - "A scenario re-opened by a TERM carries the definition it is now judged under" → tests/cli/touched-terms.test.ts
 <!-- /scenarios -->
 

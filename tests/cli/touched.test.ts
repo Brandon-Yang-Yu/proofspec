@@ -84,7 +84,7 @@ async function passFirst(cwd: string, proves: number): Promise<Outcome> {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The touched command answers with one entry for each requirement it reached
-// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
+// GIVEN a repo under git whose test and CAPABILITY_FILE agree, with one line rewritten inside a PROOF
 // WHEN the touched command runs with nothing in particular asked for
 // THEN it answers with the requirement counted rather than written out, because this is the
 //      answer read on every run and one that carried the CLAIM would be the whole branch again
@@ -151,10 +151,10 @@ it('measures from the origin tracking ref when no upstream is configured', async
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: A change inside a PROOF names the scenario and where its requirement is written
-// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
+// GIVEN a repo under git whose test and CAPABILITY_FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
 // THEN the scenario that PROOF proves is named, with the requirement it proves and the line
-//      of the CAPABILITY FILE that requirement is written on, so the reader lands on the PROMISE
+//      of the CAPABILITY_FILE that requirement is written on, so the reader lands on the PROMISE
 it('names the scenario a changed proof proves and where its requirement is written', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, bodyEdited())
@@ -343,7 +343,7 @@ it('reports cannot-run where there is no git repository to read', async () => {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: A touched scenario carries the source of the lines that prove it
-// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
+// GIVEN a repo under git whose test and CAPABILITY_FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
 // THEN the scenario carries the proving lines as they are written, so an agent judging whether
 //      the test still does what its CLAIM says needs no second read of the file
@@ -360,9 +360,9 @@ it('carries the source of the lines that prove a touched scenario', async () => 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The requirement a touched scenario proves carries the prose written under it
-// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
+// GIVEN a repo under git whose test and CAPABILITY_FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
-// THEN it comes back with the prose its CAPABILITY FILE writes under it, so the CLAIM can be
+// THEN it comes back with the prose its CAPABILITY_FILE writes under it, so the CLAIM can be
 //      judged against the STANDARD it serves without opening the file the report points at
 it('carries the prose written under the requirement a touched scenario proves', async () => {
   const repo = await makeGitRepo(inSync())
@@ -394,8 +394,8 @@ it('holds every touched scenario of a requirement under one entry', async () => 
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A requirement no CAPABILITY FILE declares carries no prose
-// GIVEN a change inside a PROOF whose requirement no CAPABILITY FILE declares
+// Scenario: A requirement no CAPABILITY_FILE declares carries no prose
+// GIVEN a change inside a PROOF whose requirement no CAPABILITY_FILE declares
 // WHEN that requirement is asked for in full
 // THEN the scenario is still named under it, with nothing where the position and the prose
 //      would be: none is written, and the check is what reports the gap
@@ -645,7 +645,7 @@ it('carries the lines that prove nothing in the terminal form', async () => {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: Requirements come back in capability then requirement order
-// GIVEN a change reaching three requirements that their CAPABILITY FILE, their capabilities, and their
+// GIVEN a change reaching three requirements that their CAPABILITY_FILE, their capabilities, and their
 //       own names each order differently
 // WHEN the work list is asked for
 // THEN they come back by capability and then by requirement, rather than in the order the diff

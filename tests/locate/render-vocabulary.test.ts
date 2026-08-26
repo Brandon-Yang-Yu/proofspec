@@ -42,7 +42,7 @@ const CHAIN: readonly TermSpec[] = [
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
 // Scenario: The vocabulary page holds every TERM in name order
-// GIVEN a CAPABILITY FILE declaring its TERM out of name order
+// GIVEN a CAPABILITY_FILE declaring its TERM out of name order
 // WHEN the site is rendered
 // THEN one vocabulary page holds every TERM with its definition, in name order, so a
 //      reader looking for a word finds it in the one place words are defined

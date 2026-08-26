@@ -5,10 +5,10 @@ import { scanSource } from '../../src/test-scan/index.ts'
 import { FILE, lineOf, onlyError, onlySite } from './support.ts'
 
 // Requirement: A capability tag governs the file it heads
-// Scenario: Every PROOF SITE in the file carries the file's capability
+// Scenario: Every PROOF_SITE in the file carries the file's capability
 // GIVEN a file that declares a capability at the top and holds two tagged tests
 // WHEN the file is scanned
-// THEN both PROOF SITE report that capability, which is written once for the file
+// THEN both PROOF_SITE report that capability, which is written once for the file
 //      rather than repeated on every test
 it('attaches the file capability to every proof site', () => {
   const source = `// Capability: guard
@@ -60,10 +60,10 @@ it('fails on a stale capability file', () => {
 })
 
 // Requirement: A capability tag governs the file it heads
-// Scenario: A PROOF SITE in a file with no capability tag is unresolved
+// Scenario: A PROOF_SITE in a file with no capability tag is unresolved
 // GIVEN a tagged test in a file that declares no capability
 // WHEN the file is scanned
-// THEN the PROOF SITE is reported with its capability unresolved rather than as an
+// THEN the PROOF_SITE is reported with its capability unresolved rather than as an
 //      error, because the scan says what it found and guard decides what fails
 it('reports a proof site with no capability as unresolved', () => {
   const source = `// Requirement: The guard fails the build on drift
@@ -86,7 +86,7 @@ it('fails on a stale capability file', () => {
 // GIVEN a `// Capability:` note trailing a line of code, not on its own line
 // WHEN the file is scanned
 // THEN it is not read as the file's capability, the same own-line rule the steps follow,
-//      so the PROOF SITE is left unresolved
+//      so the PROOF_SITE is left unresolved
 it('ignores a capability tag that shares a code line', () => {
   const source = `const config = load() // Capability: guard
 

@@ -3,7 +3,7 @@
 Answers where a scenario is, right now, by looking at the tests.
 
 This is the delivery half of the split the design record makes: what is stable sits in the
-committed CAPABILITY FILE. Positions move on every edit, so they are computed when asked
+committed CAPABILITY_FILE. Positions move on every edit, so they are computed when asked
 and never written down.
 
 ### Requirement: A position is read from the tests as they stand
@@ -38,7 +38,7 @@ scenario's current file and line.
 
 This is the view a person reads to see what the project promises, and the view an AI
 reads before deciding whether a test does what its CLAIM says. Both need the positions,
-which is why the tree cannot simply be the committed CAPABILITY FILE.
+which is why the tree cannot simply be the committed CAPABILITY_FILE.
 
 <!-- scenarios: generated -->
 - "A scenario's file in the tree is its current file, not the tree's stored file" → tests/locate/tree.test.ts
@@ -52,9 +52,9 @@ Locate SHALL render each capability as its own page and an index that links to t
 each page carrying its requirements' descriptions and its scenarios' Gherkin and current
 positions.
 
-The committed CAPABILITY FILE record only titles and locations, so on their own they show
+The committed CAPABILITY_FILE record only titles and locations, so on their own they show
 which scenarios exist, not what they say. This render is the readable view the
-storage/delivery split makes possible: the descriptions come from the CAPABILITY FILE, the
+storage/delivery split makes possible: the descriptions come from the CAPABILITY_FILE, the
 Gherkin and the positions come live from the tests, and no second copy of behavior is
 stored. A capability is the unit
 a reader browses, so it is the unit the render splits into pages, with an index as the one

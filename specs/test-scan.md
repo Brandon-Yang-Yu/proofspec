@@ -1,6 +1,6 @@
 # test-scan
 
-Reads TypeScript test files and returns every PROOF SITE. A PROOF SITE is one place that
+Reads TypeScript test files and returns every PROOF_SITE. A PROOF_SITE is one place that
 claims to prove a scenario. For each one the scan reports its tags, its Gherkin steps,
 and where it sits right now.
 
@@ -9,7 +9,7 @@ and nothing else.
 
 ### Term: CLAIM
 
-The behaviour text of a PROOF SITE: its scenario title and its GIVEN, WHEN and THEN steps,
+The behaviour text of a PROOF_SITE: its scenario title and its GIVEN, WHEN and THEN steps,
 read as the assertion its PROOF has to keep. A CLAIM sits above the code, not inside it, so
 editing the code never silently rewrites what was claimed.
 
@@ -18,17 +18,17 @@ editing the code never silently rewrites what was claimed.
 The code a CLAIM is proven by: everything from the CLAIM to the last line of its test. A
 PROOF is what a change to the tests puts its hands on, and what a PROMISE stands on.
 
-### Term: PROOF SITE
+### Term: PROOF_SITE
 
 One place that claims to prove a scenario: a whole test, or a tagged block of assertions
-inside one. A parameterised test is one PROOF SITE however many rows its table has.
+inside one. A parameterised test is one PROOF_SITE however many rows its table has.
 
-### Requirement: A tag pair's layer decides the PROOF SITE
+### Requirement: A tag pair's layer decides the PROOF_SITE
 
-The scan SHALL decide what a PROOF SITE is from where its `// Requirement:` and
+The scan SHALL decide what a PROOF_SITE is from where its `// Requirement:` and
 `// Scenario:` tags sit. Two placements, two meanings:
 
-- **Above a test.** The whole test is one PROOF SITE.
+- **Above a test.** The whole test is one PROOF_SITE.
 - **Above a statement inside a test.** That statement opens a block. The block ends at
   the next tagged statement, or at the end of the test. Untagged statements belong to the
   block above them.
@@ -38,24 +38,24 @@ SITE could be counted two ways.
 
 What counts as a test: a call to `it` or `test`, including `.each`, `.skip`, `.only` and
 `.concurrent`. A test nested in `describe` blocks is found however deep it goes. A
-parameterised test is one PROOF SITE, however many rows its table has. An `it(...)`
+parameterised test is one PROOF_SITE, however many rows its table has. An `it(...)`
 written inside a string or a comment is not a test.
 
 <!-- scenarios: generated -->
 - "A block ends at the statement before the next tagged one" → tests/test-scan/proof-site.test.ts
-- "A lone tag makes no PROOF SITE" → tests/test-scan/proof-site.test.ts
-- "A parameterised test is one PROOF SITE however many rows it has" → tests/test-scan/proof-site.test.ts
-- "A tag pair above a test makes the whole test one PROOF SITE" → tests/test-scan/proof-site.test.ts
+- "A lone tag makes no PROOF_SITE" → tests/test-scan/proof-site.test.ts
+- "A parameterised test is one PROOF_SITE however many rows it has" → tests/test-scan/proof-site.test.ts
+- "A tag pair above a test makes the whole test one PROOF_SITE" → tests/test-scan/proof-site.test.ts
 - "A test declared with any alias or modifier is found" → tests/test-scan/proof-site.test.ts
 - "A test nested in describe blocks is found however deep it sits" → tests/test-scan/proof-site.test.ts
 - "A test tagged both above and inside is reported as an error" → tests/test-scan/proof-site.test.ts
-- "Each tagged statement inside a test opens its own PROOF SITE" → tests/test-scan/proof-site.test.ts
+- "Each tagged statement inside a test opens its own PROOF_SITE" → tests/test-scan/proof-site.test.ts
 - "Text that only looks like a test is not a test" → tests/test-scan/proof-site.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Gherkin steps are read exactly as written
 
-The scan SHALL take a PROOF SITE's steps from the `//` comment lines directly above it.
+The scan SHALL take a PROOF_SITE's steps from the `//` comment lines directly above it.
 
 - The step keywords are GIVEN, WHEN and THEN. AND is an error.
 - A comment line starting with none of them continues the step above it. This is how a
@@ -79,24 +79,24 @@ them. The author writes them once. The scan delivers them on every block.
 
 ### Requirement: A capability tag governs the file it heads
 
-The scan SHALL attach a file's `// Capability:` tag to every PROOF SITE in that file.
+The scan SHALL attach a file's `// Capability:` tag to every PROOF_SITE in that file.
 
-A file may declare one capability at most. Two is an error: a PROOF SITE with two
+A file may declare one capability at most. Two is an error: a PROOF_SITE with two
 possible parents has no place in the tree.
 
-A PROOF SITE in a file with no capability tag is reported as unresolved. The scan says
+A PROOF_SITE in a file with no capability tag is reported as unresolved. The scan says
 what it found. `guard` decides whether that fails the build.
 
 <!-- scenarios: generated -->
-- "A PROOF SITE in a file with no capability tag is unresolved" → tests/test-scan/capability-tag.test.ts
+- "A PROOF_SITE in a file with no capability tag is unresolved" → tests/test-scan/capability-tag.test.ts
 - "A capability tag sharing a code line is not read" → tests/test-scan/capability-tag.test.ts
 - "A second capability tag is reported as an error" → tests/test-scan/capability-tag.test.ts
-- "Every PROOF SITE in the file carries the file's capability" → tests/test-scan/capability-tag.test.ts
+- "Every PROOF_SITE in the file carries the file's capability" → tests/test-scan/capability-tag.test.ts
 <!-- /scenarios -->
 
-### Requirement: A file's PROOF SITE depends on nothing but that file
+### Requirement: A file's PROOF_SITE depends on nothing but that file
 
-Scanning a file SHALL give the same PROOF SITE whatever state the rest of the project is
+Scanning a file SHALL give the same PROOF_SITE whatever state the rest of the project is
 in. Types that do not check, imports naming modules that do not exist, no build
 configuration at all — none of it changes the answer.
 
@@ -105,12 +105,12 @@ is least likely to be green. A scan that needed the project to compile would go 
 when it is needed most.
 
 <!-- scenarios: generated -->
-- "A file that does not compile still yields its PROOF SITE" → tests/test-scan/file-independence.test.ts
+- "A file that does not compile still yields its PROOF_SITE" → tests/test-scan/file-independence.test.ts
 <!-- /scenarios -->
 
-### Requirement: Every PROOF SITE reports its current position
+### Requirement: Every PROOF_SITE reports its current position
 
-The scan SHALL report the line of each PROOF SITE, the line its tag block opens on, the
+The scan SHALL report the line of each PROOF_SITE, the line its tag block opens on, the
 line of each of its steps, and the line the test it sits in opens on.
 `locate` needs them to answer where a scenario is. `guard` needs them to point at what
 caused an error.
@@ -130,8 +130,8 @@ Positions SHALL be right in files containing non-ASCII text. A spec written in a
 language is still a spec.
 
 <!-- scenarios: generated -->
-- "A PROOF SITE reports the line its tag block opens on" → tests/test-scan/position.test.ts
-- "A PROOF SITE reports the line of the code it tags" → tests/test-scan/position.test.ts
+- "A PROOF_SITE reports the line its tag block opens on" → tests/test-scan/position.test.ts
+- "A PROOF_SITE reports the line of the code it tags" → tests/test-scan/position.test.ts
 - "A block site opens where its own tag block does, below the steps it shares" → tests/test-scan/position.test.ts
 - "A block site reports the line its test opens on" → tests/test-scan/position.test.ts
 - "A block site reports the lines of the steps its test shares" → tests/test-scan/position.test.ts

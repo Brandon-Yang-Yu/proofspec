@@ -4,7 +4,7 @@ Answers what the spec's own words mean, and what happens when one of them change
 
 A spec speaks in words — a turn, the margin — and two readers can hear two things in the
 same one. A TERM fixes a meaning once, the way a legal document defines its defined terms:
-the vocabulary is written in each CAPABILITY FILE beside the requirements that use it, and a
+the vocabulary is written in each CAPABILITY_FILE beside the requirements that use it, and a
 requirement uses a TERM in the exact form it was defined in — capitals, singular,
 unchanged — so a reader always knows which words carry a meaning of their own.
 
@@ -16,7 +16,7 @@ that change from passing unreviewed.
 A TERM is not one of the format's reserved words. `### Requirement:`, `### Term:`, and the
 Gherkin step keywords are the tool's — written in backticks, defined by the capabilities
 that parse them, and meaning the same thing in every repository. A TERM is this project's:
-defined in a CAPABILITY FILE, used in the exact form, and owned by whoever owns that repo's
+defined in a CAPABILITY_FILE, used in the exact form, and owned by whoever owns that repo's
 spec.
 
 ### Term: TERM
@@ -40,6 +40,18 @@ vocabulary never reached.
 <!-- scenarios: generated -->
 - "A TERM is used when it appears as a whole word in the exact form it was defined in" → tests/glossary/use.test.ts
 - "A word that merely contains the TERM, or spells it differently, is not a use" → tests/glossary/use.test.ts
+<!-- /scenarios -->
+
+### Requirement: The words of a phrase TERM are joined by underscores
+
+A TERM of more than one word SHALL join its words with underscores — PROOF_SITE —
+so that one TERM is one token: a reader can tell a defined word from two words
+standing beside each other, and the matcher can treat it as a single whole word
+with no rule of its own.
+
+<!-- scenarios: generated -->
+- "A TERM heading that spaces its words fails the build" → tests/glossary/underscore.test.ts
+- "A phrase TERM joined by underscores is one word to the matcher" → tests/glossary/underscore.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TERM is changed when its definition is not what it was

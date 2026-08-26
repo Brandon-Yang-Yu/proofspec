@@ -4,11 +4,11 @@ import { expect, it } from 'vitest'
 import { scanSource } from '../../src/test-scan/index.ts'
 import { FILE, lineOf, onlyError, onlySite } from './support.ts'
 
-// Requirement: A tag pair's layer decides the PROOF SITE
-// Scenario: A tag pair above a test makes the whole test one PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
+// Scenario: A tag pair above a test makes the whole test one PROOF_SITE
 // GIVEN a test with a Requirement and a Scenario tag on the lines directly above it
 // WHEN the file is scanned
-// THEN one PROOF SITE is reported, carrying both tag names and running from the first
+// THEN one PROOF_SITE is reported, carrying both tag names and running from the first
 //      line of the test to its last
 it('reads a tag pair above a test as one proof site', () => {
   const source = `// Requirement: The guard fails the build on drift
@@ -60,16 +60,16 @@ it('posting a turn', async () => {
     throw new Error(`expected two proof sites, got ${scan.sites.length}`)
   }
 
-  // Requirement: A tag pair's layer decides the PROOF SITE
-  // Scenario: Each tagged statement inside a test opens its own PROOF SITE
-  // THEN one PROOF SITE is reported for each tagged statement, and none for the test
+  // Requirement: A tag pair's layer decides the PROOF_SITE
+  // Scenario: Each tagged statement inside a test opens its own PROOF_SITE
+  // THEN one PROOF_SITE is reported for each tagged statement, and none for the test
   //      itself, which carries no tag pair of its own
   expect.soft(scan.sites.map(site => site.scenario)).toEqual([
     'The reply is streamed as SSE',
     'A successful turn appends one version',
   ])
 
-  // Requirement: A tag pair's layer decides the PROOF SITE
+  // Requirement: A tag pair's layer decides the PROOF_SITE
   // Scenario: A block ends at the statement before the next tagged one
   // THEN the first block ends on its own statement, because the next one is tagged, and
   //      the second runs on through the untagged statement below it to the end of the
@@ -80,7 +80,7 @@ it('posting a turn', async () => {
   expect.soft(secondBlock.endLine).toBe(lineOf(source, '})'))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
 // Scenario: A test tagged both above and inside is reported as an error
 // GIVEN a test carrying a tag pair above it and another on a statement inside it
 // WHEN the file is scanned
@@ -105,11 +105,11 @@ it('tagged twice over', () => {
   expect(error.line).toBe(lineOf(source, "it('tagged twice over'"))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
 // Scenario: A test nested in describe blocks is found however deep it sits
 // GIVEN a tagged test two describe blocks deep
 // WHEN the file is scanned
-// THEN its PROOF SITE is reported, the same as one written at the top level
+// THEN its PROOF_SITE is reported, the same as one written at the top level
 it('finds a test nested in describe blocks', () => {
   const source = `describe('the guard', () => {
   describe('when the committed file is stale', () => {
@@ -130,11 +130,11 @@ it('finds a test nested in describe blocks', () => {
   expect(site.line).toBe(lineOf(source, "it('fails'"))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
-// Scenario: A parameterised test is one PROOF SITE however many rows it has
+// Requirement: A tag pair's layer decides the PROOF_SITE
+// Scenario: A parameterised test is one PROOF_SITE however many rows it has
 // GIVEN a tagged parameterised test with three rows
 // WHEN the file is scanned
-// THEN one PROOF SITE is reported, not one per row, because rows that differ only in
+// THEN one PROOF_SITE is reported, not one per row, because rows that differ only in
 //      data are one scenario
 it('counts a parameterised test once', () => {
   const source = `// Requirement: A proof site the tree cannot hold fails the build
@@ -155,12 +155,12 @@ it.each([
   expect(onlySite(scan).line).toBe(lineOf(source, 'it.each(['))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
 // Scenario: Text that only looks like a test is not a test
 // GIVEN a file holding one real tagged test and, below it, an `it(...)` written where it
 //       cannot run
 // WHEN the file is scanned
-// THEN only the real test is reported, because a PROOF SITE is a place that runs
+// THEN only the real test is reported, because a PROOF_SITE is a place that runs
 it.each([
   { where: 'a string literal', decoy: `const sample = "it('not a test', () => {})"` },
   { where: 'a comment', decoy: `// it('not a test', () => {})` },
@@ -181,11 +181,11 @@ ${decoy}
   expect(onlySite(scan).line).toBe(lineOf(source, "it('the real test'"))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
 // Scenario: A test declared with any alias or modifier is found
 // GIVEN a tagged test declared with one of the names and modifiers a runner accepts
 // WHEN the file is scanned
-// THEN its PROOF SITE is reported, because which alias the author reached for says
+// THEN its PROOF_SITE is reported, because which alias the author reached for says
 //      nothing about what the test claims
 it.each([
   { declaration: "it('runs', () => {" },
@@ -210,11 +210,11 @@ ${declaration}
   expect(site.line).toBe(lineOf(source, declaration))
 })
 
-// Requirement: A tag pair's layer decides the PROOF SITE
-// Scenario: A lone tag makes no PROOF SITE
+// Requirement: A tag pair's layer decides the PROOF_SITE
+// Scenario: A lone tag makes no PROOF_SITE
 // GIVEN a test tagged with a `// Requirement:` but no `// Scenario:`, or the reverse
 // WHEN the file is scanned
-// THEN no PROOF SITE is reported for it, because a PROOF SITE needs a whole tag pair —
+// THEN no PROOF_SITE is reported for it, because a PROOF_SITE needs a whole tag pair —
 //      guard catches the lone tag as an uncovered requirement or a missing scenario
 it.each([
   { half: 'a requirement with no scenario', tag: '// Requirement: The guard fails the build on drift' },

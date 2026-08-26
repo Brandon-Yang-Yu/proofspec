@@ -4,9 +4,9 @@ import { expect, it } from 'vitest'
 import { guard } from '../../src/guard/index.ts'
 import { CAPABILITY, FILE, REQUIREMENT, committed, scan, scanError, site } from './support.ts'
 
-// Requirement: A PROOF SITE the tree cannot hold fails the build
+// Requirement: A PROOF_SITE the tree cannot hold fails the build
 // Scenario: A tagged site in a file that declares no capability fails the build
-// GIVEN a tagged PROOF SITE in a file that declares no capability, so the scan could not
+// GIVEN a tagged PROOF_SITE in a file that declares no capability, so the scan could not
 //       place it
 // WHEN the guard runs
 // THEN the build fails and the site is reported as having no capability to sit under, with
@@ -29,9 +29,9 @@ it('fails when a tagged site sits in a file that declares no capability', () => 
   ])
 })
 
-// Requirement: A PROOF SITE the tree cannot hold fails the build
+// Requirement: A PROOF_SITE the tree cannot hold fails the build
 // Scenario: A tagged site with no Gherkin steps is a warning
-// GIVEN a tagged PROOF SITE with no GIVEN, WHEN or THEN above it
+// GIVEN a tagged PROOF_SITE with no GIVEN, WHEN or THEN above it
 // WHEN the guard runs
 // THEN the site is reported as a warning naming its file and line, and the build still
 //      passes. It is co-location in name only: there is a tag, but no CLAIM to judge the
@@ -56,7 +56,7 @@ it('warns without failing when a tagged site carries no Gherkin steps', () => {
   ])
 })
 
-// Requirement: A PROOF SITE the tree cannot hold fails the build
+// Requirement: A PROOF_SITE the tree cannot hold fails the build
 // Scenario: Anything the scan could not read fails the build
 // GIVEN a scan reporting something it could not read
 // WHEN the guard runs

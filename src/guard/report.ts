@@ -47,7 +47,7 @@ export function describeFinding(finding: Finding): string {
     case 'unreadable':
       return `${siteOf(finding)}: ${finding.message}`
     case 'term-not-in-capitals':
-      return `Term ${finding.term}: a term's name is written in capitals and nothing else, so a requirement can use it in the exact form it was defined in`
+      return `Term ${finding.term}: a term's name is written in capitals, its words joined by underscores, and nothing else, so a requirement can use it in the exact form it was defined in`
     case 'term-defined-twice':
       return `Term ${finding.term}: defined more than once, and a word with two meanings has no meaning to use`
     case 'term-promises':

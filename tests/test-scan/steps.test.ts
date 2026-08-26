@@ -8,7 +8,7 @@ import { FILE, lineOf, onlyError, onlySite, stepsOf } from './support.ts'
 // Scenario: The steps above a test are read in order
 // GIVEN a test with a GIVEN, a WHEN and a THEN on the lines above it
 // WHEN the file is scanned
-// THEN its PROOF SITE carries the three steps in the order written, each with its
+// THEN its PROOF_SITE carries the three steps in the order written, each with its
 //      keyword and its text taken as written
 it('reads the steps above a test', () => {
   const source = `// Requirement: The guard fails the build on drift
@@ -100,7 +100,7 @@ it('fails on a stale capability file', () => {
 // Scenario: A block comment is not read as a step
 // GIVEN steps written in a `/* */` comment above a tagged test
 // WHEN the file is scanned
-// THEN the PROOF SITE carries no steps, because only `//` comments are read
+// THEN the PROOF_SITE carries no steps, because only `//` comments are read
 it('ignores steps written in a block comment', () => {
   const source = `/* WHEN the tree is regenerated
    THEN the guard fails */
