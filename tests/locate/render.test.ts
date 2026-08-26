@@ -297,6 +297,7 @@ it('carries the requirement prose, the Gherkin, and the live position of every s
   expect(full).toContain('The tool SHALL render.')
   expect(full).toContain('#### Scenario: A scenario')
   expect(full).toContain('**GIVEN** a scanned test file')
+  expect(full).toContain('**THEN** the full page says it too')
   expect(full).toContain('[tests/live.test.ts:87](tests/live.test.ts.md#a-scenario)')
 })
 
@@ -309,5 +310,6 @@ it('carries the requirement prose, the Gherkin, and the live position of every s
 it('links the index to the full-spec page', () => {
   const index = page(renderSite([ONE], [site({ scenario: 'A scenario' })], []), 'index.md')
 
-  expect(index).toContain('(spec.md)')
+  expect(index).toContain('- [locate](locate.md)')
+  expect(index).toContain('[Read the whole spec in one page](spec.md)')
 })

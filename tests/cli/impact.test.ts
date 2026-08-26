@@ -121,7 +121,8 @@ it('reports cannot-run when the graph cannot be read', async () => {
 
   const outcome = await impact({ cwd: repo.root, graph: 'nowhere.json' })
 
-  expect(outcome.kind).toBe('cannot-run')
+  if (outcome.kind !== 'cannot-run') throw new Error('expected a cannot-run')
+  expect(outcome.reason).toContain('nowhere.json')
   expect(exitCodeOf(outcome)).toBe(2)
 })
 

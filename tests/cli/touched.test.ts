@@ -334,7 +334,10 @@ it('reports cannot-run where there is no git repository to read', async () => {
 
   const outcome = await touched({ cwd: repo.root })
 
-  expect(outcome.kind).toBe('cannot-run')
+  expect(outcome).toMatchObject({
+    kind: 'cannot-run',
+    reason: `${repo.root} is not a git repository`,
+  })
   expect(exitCodeOf(outcome)).toBe(2)
 })
 
