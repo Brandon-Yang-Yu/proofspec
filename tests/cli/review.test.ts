@@ -54,10 +54,10 @@ function proposal(fields: Partial<ProposedInput> & { readonly key: string }): Pr
 }
 
 // Requirement: A command records a review of one touched scenario
-// Scenario: A recorded review is appended to the ledger
-// GIVEN a change that touched one proof, and a reviewer passing it while citing a line of it
+// Scenario: A recorded review is appended to the LEDGER
+// GIVEN a change that touched one PROOF, and a reviewer passing it while citing a line of it
 // WHEN the review command runs
-// THEN the ledger holds that judgement, carrying the cited line as written and who made it,
+// THEN the LEDGER holds that judgement, carrying the cited line as written and who made it,
 //      because the record is committed and read in a pull request by a person
 it('appends a recorded review to the ledger', async () => {
   const repo = await repoWithOneTouched()
@@ -84,10 +84,10 @@ it('appends a recorded review to the ledger', async () => {
 })
 
 // Requirement: A command records a review of one touched scenario
-// Scenario: A review of a promise the change did not reach cannot run
-// GIVEN a key that names no promise this change reached
+// Scenario: A review of a PROMISE the change did not reach cannot run
+// GIVEN a KEY that names no PROMISE this change reached
 // WHEN the review command runs
-// THEN it is cannot-run, because a key that no longer matches anything is what a stale review
+// THEN it is cannot-run, because a KEY that no longer matches anything is what a stale review
 //      looks like, and accepting it would file a judgement nothing will ever read
 it('reports cannot-run for a key no promise this change carries', async () => {
   const repo = await repoWithOneTouched()
@@ -99,11 +99,11 @@ it('reports cannot-run for a key no promise this change carries', async () => {
 })
 
 // Requirement: A command records a review of one touched scenario
-// Scenario: A pass citing a line outside the proof cannot run
-// GIVEN a pass citing a line the scenario's proof does not own
+// Scenario: A pass citing a line outside the PROOF cannot run
+// GIVEN a pass citing a line the scenario's PROOF does not own
 // WHEN the review command runs
 // THEN it is cannot-run and nothing is written, because a citation nobody checked is a
-//      signature rather than a review, and the ledger must not carry one
+//      signature rather than a review, and the LEDGER must not carry one
 it('refuses a pass citing a line the proof does not own, and writes nothing', async () => {
   const repo = await repoWithOneTouched()
   const scenario = await firstPending(repo.root)
@@ -167,11 +167,11 @@ it('reports cannot-run for a verdict it does not know', async () => {
 })
 
 // Requirement: A command records a review of one touched scenario
-// Scenario: A ledger that cannot be read cannot run
-// GIVEN a ledger holding a line that is not a review — the shape a half-resolved merge leaves
+// Scenario: A LEDGER that cannot be read cannot run
+// GIVEN a LEDGER holding a line that is not a review — the shape a half-resolved merge leaves
 // WHEN the work list is asked for
 // THEN it is cannot-run rather than an answer built on the reviews it could still parse: a
-//      promise counted as judged because the line saying otherwise was skipped is the one
+//      PROMISE counted as judged because the line saying otherwise was skipped is the one
 //      failure the record exists to prevent
 it('reports cannot-run when the ledger holds a line it cannot read', async () => {
   const repo = await repoWithOneTouched()

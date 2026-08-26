@@ -50,7 +50,7 @@ function reportOf(outcome: Outcome): ImpactReport {
 // WHEN the impact command runs against a given call graph
 // THEN the tree is rooted at the changed function with its caller above it, the test hangs
 //      off the caller it actually calls, and the requirement that test proves is named with
-//      the line of the capability file it is written on
+//      the line of the CAPABILITY FILE it is written on
 it('walks from a changed function to the tests that reach it and the promises they prove', async () => {
   const repo = await makeGitRepo(repoFiles())
   await repo.write(SOURCE, 'export function thing() {\n  return 2\n}\n')

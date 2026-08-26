@@ -63,7 +63,7 @@ function outOfNameOrder(): Readonly<Record<string, string>> {
 
 // Requirement: A command renders the spec into an output directory
 // Scenario: The render command writes to the default directory when none is given
-// GIVEN a repo whose capability files and tests agree
+// GIVEN a repo whose CAPABILITY FILE and tests agree
 // WHEN the render command runs with no output directory
 // THEN an index page, a full-spec page, one page per capability, and a code page per test are
 //      written under the default `build/`, and the outcome names the files it wrote
@@ -84,7 +84,7 @@ it('writes an index, a full spec, a page per capability, and a code page per tes
 
 // Requirement: A command renders the spec into an output directory
 // Scenario: The render command writes into a chosen directory
-// GIVEN a repo whose capability files and tests agree
+// GIVEN a repo whose CAPABILITY FILE and tests agree
 // WHEN the render command runs with an output directory
 // THEN the pages are written under that directory and the outcome names them, so a project
 //      can keep the generated pages where it wants
@@ -102,7 +102,7 @@ it('writes the pages into a chosen output directory', async () => {
 
 // Requirement: A command renders the spec into an output directory
 // Scenario: An absolute output directory is written to exactly
-// GIVEN a repo whose capability files and tests agree
+// GIVEN a repo whose CAPABILITY FILE and tests agree
 // WHEN the render command runs with an absolute output directory
 // THEN the pages exist under exactly that directory, the outcome names them where they
 //      were written, and nothing appears under the repo itself
@@ -147,8 +147,8 @@ it('reports cannot-run when its inputs cannot be read', async () => {
 })
 
 // Requirement: A command renders the spec into an output directory
-// Scenario: The rendered page lists requirements in the capability file's order
-// GIVEN a repo whose capability file declares two requirements in an order other than by
+// Scenario: The rendered page lists requirements in the CAPABILITY FILE's order
+// GIVEN a repo whose CAPABILITY FILE declares two requirements in an order other than by
 //       name, the first one's description referring to the requirement below it
 // WHEN the render command runs
 // THEN the capability page and the full-spec page both head the requirements in the order

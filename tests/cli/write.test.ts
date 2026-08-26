@@ -9,9 +9,9 @@ afterEach(cleanupRepos)
 
 const SCENARIOS = ['A first behavior', 'A second behavior']
 
-// Requirement: Writing back records the tests in the committed files
+// Requirement: Writing back records the tests in the committed CAPABILITY FILE
 // Scenario: Writing back records a scenario the tests prove but the file did not
-// GIVEN a repo whose committed file omits a scenario the tests prove
+// GIVEN a repo whose committed CAPABILITY FILE omits a scenario the tests prove
 // WHEN the write runs
 // THEN the file on disk records the missing scenario, and a following check passes
 it('records a proven scenario the committed file was missing', async () => {
@@ -30,9 +30,9 @@ it('records a proven scenario the committed file was missing', async () => {
   expect(outcome.report.status).toBe('pass')
 })
 
-// Requirement: Writing back records the tests in the committed files
+// Requirement: Writing back records the tests in the committed CAPABILITY FILE
 // Scenario: Writing back a repo already in agreement changes no file
-// GIVEN a repo whose committed file already records exactly what the tests prove
+// GIVEN a repo whose committed CAPABILITY FILE already records exactly what the tests prove
 // WHEN the write runs
 // THEN no file's bytes change, so the write-back is safe to run when nothing has moved
 it('changes no file when the committed file already agrees', async () => {
@@ -49,12 +49,12 @@ it('changes no file when the committed file already agrees', async () => {
   expect(await repo.read(TEST_PATH)).toBe(before[TEST_PATH])
 })
 
-// Requirement: Writing back records the tests in the committed files
-// Scenario: Writing back leaves the other capability files untouched
-// GIVEN a repo with two capability files, one that has drifted and one already in agreement
+// Requirement: Writing back records the tests in the committed CAPABILITY FILE
+// Scenario: Writing back leaves the other CAPABILITY FILE untouched
+// GIVEN a repo with two CAPABILITY FILE, one that has drifted and one already in agreement
 // WHEN the write runs and records the drifted one
 // THEN the file it did not need to change is byte-for-byte what it was, so "changes nothing
-//      else" holds across files and not only within the one it rewrote
+//      else" holds across CAPABILITY FILE and not only within the one it rewrote
 it('leaves a capability file it need not change untouched', async () => {
   const drifted = `specs/${CAPABILITY}.md`
   const settled = 'specs/other.md'
@@ -74,9 +74,9 @@ it('leaves a capability file it need not change untouched', async () => {
   expect(await repo.read(settled)).toBe(settledBefore)
 })
 
-// Requirement: Writing back records the tests in the committed files
+// Requirement: Writing back records the tests in the committed CAPABILITY FILE
 // Scenario: Writing back through an absolute location changes the file exactly there
-// GIVEN a repo keeping its capability file in an unconventional place the default would
+// GIVEN a repo keeping its CAPABILITY FILE in an unconventional place the default would
 //       never find, not recording a scenario its tests prove
 // WHEN the write runs with the specs location given as an absolute path
 // THEN the file at that absolute location records the scenario, and the outcome names the
@@ -94,7 +94,7 @@ it('writes back through an absolute specs location', async () => {
   expect(await repo.read(specPath)).toBe(specFile({ recorded: SCENARIOS }))
 })
 
-// Requirement: Writing back records the tests in the committed files
+// Requirement: Writing back records the tests in the committed CAPABILITY FILE
 // Scenario: Writing back a repo it cannot fully read changes nothing
 // GIVEN a repo holding a test the scan cannot read
 // WHEN the write runs

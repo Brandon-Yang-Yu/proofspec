@@ -24,8 +24,8 @@ function drifting(): Readonly<Record<string, string>> {
 }
 
 // Requirement: The exit code says what happened
-// Scenario: Agreement between the tests and the committed files exits zero
-// GIVEN a repo whose committed file records exactly the scenarios the tests prove
+// Scenario: Agreement between the tests and the committed CAPABILITY FILE exits zero
+// GIVEN a repo whose committed CAPABILITY FILE records exactly the scenarios the tests prove
 // WHEN the check runs
 // THEN its exit code is zero
 it('exits zero when the tests and the committed files agree', async () => {
@@ -37,8 +37,8 @@ it('exits zero when the tests and the committed files agree', async () => {
 })
 
 // Requirement: The exit code says what happened
-// Scenario: Drift between the tests and the committed files exits non-zero
-// GIVEN a repo proving a scenario its committed file does not record
+// Scenario: Drift between the tests and the committed CAPABILITY FILE exits non-zero
+// GIVEN a repo proving a scenario its committed CAPABILITY FILE does not record
 // WHEN the check runs
 // THEN its exit code is not zero
 it('exits non-zero when the tests and the committed files disagree', async () => {
@@ -51,7 +51,7 @@ it('exits non-zero when the tests and the committed files disagree', async () =>
 
 // Requirement: The exit code says what happened
 // Scenario: A repo the check cannot run in exits with a code that is not the drift code
-// GIVEN a repo whose capability files are pointed at a directory that does not exist
+// GIVEN a repo whose CAPABILITY FILE are pointed at a directory that does not exist
 // WHEN the check runs there, and separately in a repo that has merely drifted
 // THEN the cannot-run exit code is non-zero and different from the drift code, so CI can
 //      tell "your spec is wrong" apart from "I could not run"

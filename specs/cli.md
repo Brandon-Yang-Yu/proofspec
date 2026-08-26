@@ -10,7 +10,7 @@ in a build.
 The command that checks SHALL NOT modify any file.
 
 A check that quietly fixed what it found would report success on a repo that was wrong
-until the moment it ran. The build would go green and the committed files would go on
+until the moment it ran. The build would go green and the committed CAPABILITY FILE would go on
 disagreeing with what was reviewed.
 
 Writing back is a separate command, run on purpose.
@@ -21,8 +21,8 @@ Writing back is a separate command, run on purpose.
 
 ### Requirement: The exit code says what happened
 
-The check SHALL exit zero when the tests and the committed files agree, and non-zero when
-they do not.
+The check SHALL exit zero when the tests and the committed CAPABILITY FILE agree, and non-zero
+when they do not.
 
 A tool that cannot be configured or cannot read its inputs SHALL exit with a different
 non-zero code than a spec that has drifted. CI needs to tell "your spec is wrong" apart
@@ -30,14 +30,14 @@ from "I could not run".
 
 <!-- scenarios: generated -->
 - "A repo the check cannot run in exits with a code that is not the drift code" → tests/cli/exit-code.test.ts
-- "Agreement between the tests and the committed files exits zero" → tests/cli/exit-code.test.ts
-- "Drift between the tests and the committed files exits non-zero" → tests/cli/exit-code.test.ts
+- "Agreement between the tests and the committed CAPABILITY FILE exits zero" → tests/cli/exit-code.test.ts
+- "Drift between the tests and the committed CAPABILITY FILE exits non-zero" → tests/cli/exit-code.test.ts
 <!-- /scenarios -->
 
 ### Requirement: It runs in a conventional repo with no configuration
 
-Running the check in a repo that keeps its capability files and its tests in the usual
-places SHALL work with no configuration file present.
+Running the check in a repo that keeps its CAPABILITY FILE and its tests in the usual places
+SHALL work with no configuration file present.
 
 Both locations SHALL be configurable for repos that do it differently. Nothing else needs
 setting: there is no compiler to point at and no project to build.
@@ -83,9 +83,9 @@ choice the caller makes, so the answer a script already reads does not change un
 - "The write's answer is returned as JSON naming the changed files" → tests/cli/json.test.ts
 <!-- /scenarios -->
 
-### Requirement: Writing back records the tests in the committed files
+### Requirement: Writing back records the tests in the committed CAPABILITY FILE
 
-The write command SHALL update each committed capability file so its recorded scenarios
+The write command SHALL update each committed CAPABILITY FILE so its recorded scenarios
 match the tests, and change nothing else.
 
 This is the separate command requirement 1 keeps apart from the check. It is run on
@@ -103,7 +103,7 @@ the write changes files, so it refuses before it acts rather than reporting afte
 <!-- scenarios: generated -->
 - "Writing back a repo already in agreement changes no file" → tests/cli/write.test.ts
 - "Writing back a repo it cannot fully read changes nothing" → tests/cli/write.test.ts
-- "Writing back leaves the other capability files untouched" → tests/cli/write.test.ts
+- "Writing back leaves the other CAPABILITY FILE untouched" → tests/cli/write.test.ts
 - "Writing back records a scenario the tests prove but the file did not" → tests/cli/write.test.ts
 - "Writing back through an absolute location changes the file exactly there" → tests/cli/write.test.ts
 <!-- /scenarios -->
@@ -121,7 +121,8 @@ elsewhere. The pages are a generated output, so a project gitignores that direct
 than committing it. Inputs it cannot read are refused the way the check and the write refuse
 them.
 
-A capability's requirements are headed in the order its file declares them, not by name. A
+A capability's requirements are headed in the order its CAPABILITY FILE declares them, not by
+name. A
 description is prose the human owns, and prose refers to its neighbours: a page that sorts
 the requirements makes every "the requirement below" point at one above it.
 
@@ -130,14 +131,14 @@ the requirements makes every "the requirement below" point at one above it.
 - "The render command reports it cannot run on unreadable inputs" → tests/cli/render.test.ts
 - "The render command writes into a chosen directory" → tests/cli/render.test.ts
 - "The render command writes to the default directory when none is given" → tests/cli/render.test.ts
-- "The rendered page lists requirements in the capability file's order" → tests/cli/render.test.ts
+- "The rendered page lists requirements in the CAPABILITY FILE's order" → tests/cli/render.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command says which scenarios a change touched
 
-The CLI SHALL provide a command that reads the changes to the tests and says which promises
+The CLI SHALL provide a command that reads the changes to the tests and says which PROMISE
 they reached, in one of three shapes: the work list, one requirement in full, or the changed
-lines that fall in no proof. Asked for nothing in particular it SHALL give the work list.
+lines that fall in no PROOF. Asked for nothing in particular it SHALL give the work list.
 
 Its report SHALL be given as JSON unless another format is named, and the format named SHALL
 be the one used. This report is read by an agent far more often than by a person, and an
@@ -149,46 +150,46 @@ run, and a caller branches on the exit code rather than on the shape of that ans
 
 **The work list SHALL count each requirement the change reached rather than write it out**,
 carrying its capability, its name, how many of its scenarios were touched, how many of its
-proofs were removed, how many of those promises nobody has judged, and the address the rest of
-it is fetched by. It also SHALL carry how many changed runs fall in no proof, as a number.
+PROOF were removed, how many of those PROMISE nobody has judged, and the address the rest of
+it is fetched by. It also SHALL carry how many changed runs fall in no PROOF, as a number.
 
 One shape used to carry everything at once, and the reason that stopped working is worth
 writing down. Reviewing is per scenario, so it is a loop, and the work list is read on every
-turn of it — carrying the claims and the proving source there charged the whole branch's worth
+turn of it — carrying the CLAIM and the proving source there charged the whole branch's worth
 of context for the question "what is left". Measured on this tool's own branch the two shapes
 are 716 bytes and 65 kilobytes. The saving is not in total: a reviewer who works through
 everything reads all of it either way. It is that the reading is now bounded by one
 requirement at a time, and that the answer to "what is left" gets cheaper as the work is done.
 
 **One requirement asked for by address SHALL carry everything judging it takes**: the prose
-written under it, every scenario of it the change touched with the claim it makes and the
-lines that prove it as they are written, every proof of it the change removed, the key each of
+written under it, every scenario of it the change touched with the CLAIM it makes and the
+lines that prove it as they are written, every PROOF of it the change removed, the KEY each of
 those is judged under, whatever judgement already stands against each, and how they are to be
 judged. Carrying the source is what makes one call enough — an agent asked whether a test still
-does what its claim says would otherwise open every file the report named. A scenario proven
+does what its CLAIM says would otherwise open every file the report named. A scenario proven
 inside a shared test is proven by more than one run of lines, and the answer SHALL carry every
-one of them, since handing over only the first would leave an agent judging a claim against
+one of them, since handing over only the first would leave an agent judging a CLAIM against
 half its evidence. A sibling's lines are not among them.
 
 Each requirement SHALL carry where it is written together with the prose written there. The
-two arrive together or not at all: a requirement no capability file declares has neither, and
-its scenarios are still named under it, because a promise nothing declares is exactly what the
+two arrive together or not at all: a requirement no CAPABILITY FILE declares has neither, and
+its scenarios are still named under it, because a PROMISE nothing declares is exactly what the
 reader has to see. Judging that gap is the check's job, not this one's.
 
 An address that names no requirement the change reached SHALL be a cannot-run rather than an
-empty answer. A stale key handed back as "nothing to judge here" is how a reviewer works
+empty answer. A stale KEY handed back as "nothing to judge here" is how a reviewer works
 through a list and reviews none of it.
 
-**The changed lines that fall in no proof SHALL be asked for on their own**, carrying their
+**The changed lines that fall in no PROOF SHALL be asked for on their own**, carrying their
 source, and a run of them that is nothing but whitespace SHALL not be reported at all. They are
 the helper, the import and the fixture edits, and they are usually a line or two — the read
 that fetches them costs a reader more than the lines are worth, so they are carried as written.
 But nothing judges them, and on a change that adds tests there are more of them than there are
-promises, so they are not in the work list beyond their number. A blank line is worth nothing
+PROMISE, so they are not in the work list beyond their number. A blank line is worth nothing
 either way: git hands one back with every block inserted beside it, and they would bury the
 runs worth reading. The file they are in is often not a test, so it is read back for them; one
 git names as changed but that cannot be read is a cannot-run, because reporting those lines as
-blank is a claim about them and a wrong one.
+blank is a CLAIM about them and a wrong one.
 
 Requirements SHALL come back in capability then requirement order, and the scenarios under
 each in file order. Git lists what it already tracks ahead of what it has never seen, so the
@@ -204,25 +205,25 @@ worktree it answers "what did this branch touch"; `--since` names another revisi
 counts the work as it stands — the working tree and files not yet added to git, not only
 what is committed — because in a worktree most of the work is uncommitted most of the time.
 
-A change that removed a proof is read from the base revision and named too, so a promise
+A change that removed a PROOF is read from the base revision and named too, so a PROMISE
 left with nothing behind it is reported rather than silently missing.
 
 It reports what it found and does not judge it. Whatever the change touched — including a
-promise nothing proves any more — that is not this command saying the build is wrong, and the
+PROMISE nothing proves any more — that is not this command saying the build is wrong, and the
 command that gives that verdict is the check. What it does hold a gate on is the reviewing,
 which is the requirement below. A repo it cannot read — not a git repository, or a revision it
 cannot resolve — SHALL exit the same cannot-run code the other commands use.
 
 <!-- scenarios: generated -->
 - "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
-- "A change inside a proof names the scenario and where its requirement is written" → tests/cli/touched.test.ts
+- "A change inside a PROOF names the scenario and where its requirement is written" → tests/cli/touched.test.ts
 - "A changed file that cannot be read back cannot run" → tests/cli/touched.test.ts
 - "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
 - "A directory that is not a git repository cannot run" → tests/cli/touched.test.ts
-- "A key no touched requirement carries cannot run" → tests/cli/touched.test.ts
+- "A KEY no touched requirement carries cannot run" → tests/cli/touched.test.ts
 - "A main with no configured upstream measures from where origin stands" → tests/cli/touched.test.ts
-- "A proof the change removed is named from the base revision" → tests/cli/touched.test.ts
-- "A requirement no capability file declares carries no prose" → tests/cli/touched.test.ts
+- "A PROOF the change removed is named from the base revision" → tests/cli/touched.test.ts
+- "A requirement no CAPABILITY FILE declares carries no prose" → tests/cli/touched.test.ts
 - "A revision given on the command line replaces the branch point" → tests/cli/touched.test.ts
 - "A scenario proven inside a shared test carries every run of lines that prove it" → tests/cli/touched.test.ts
 - "A test file not yet added to git is counted" → tests/cli/touched.test.ts
@@ -238,13 +239,13 @@ cannot resolve — SHALL exit the same cannot-run code the other commands use.
 - "Touched scenarios come back in file order" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 
-### Requirement: The touched command holds the gate until every promise it reached has been judged
+### Requirement: The touched command holds the gate until every PROMISE it reached has been judged
 
-The work list SHALL exit non-zero while any promise the change reached has no review standing
+The work list SHALL exit non-zero while any PROMISE the change reached has no review standing
 against it, and zero when none is left. Asking for one requirement, or for the lines that prove
 nothing, SHALL exit zero however much is unjudged.
 
-This is what lets a hook hold the gate: a branch cannot be pushed with a promise on it nobody
+This is what lets a hook hold the gate: a branch cannot be pushed with a PROMISE on it nobody
 has looked at. It is not the tool judging the change. It is the tool saying nobody has, which
 is a fact about this branch's reviewing rather than about its code — and it is why the check
 keeping its own non-zero code is no ambiguity. The two send a reader to different places: the
@@ -254,39 +255,39 @@ Only the work list SHALL hold it. Fetching one requirement is how a reviewer col
 and an agent that read every fetch as a failed tool would stop partway through the very job the
 gate exists to make it finish.
 
-A promise SHALL count as judged whatever the judgement said. The gate asks whether every
-promise was looked at, not whether every judgement was favourable. A reviewer who cannot report
+A PROMISE SHALL count as judged whatever the judgement said. The gate asks whether every
+PROMISE was looked at, not whether every judgement was favourable. A reviewer who cannot report
 a problem without blocking their own branch has a reason to write a pass instead, and what the
 gate would then measure is their willingness to let themselves through.
 
 <!-- scenarios: generated -->
-- "A work list with a promise left unjudged exits non-zero" → tests/cli/touched.test.ts
-- "A work list with every promise judged exits zero" → tests/cli/touched.test.ts
+- "A work list with a PROMISE left unjudged exits non-zero" → tests/cli/touched.test.ts
+- "A work list with every PROMISE judged exits zero" → tests/cli/touched.test.ts
 - "Asking for one requirement exits zero however much is unjudged" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 
-### Requirement: A changed term counts as a change the tests did not make
+### Requirement: A changed TERM counts as a change the tests did not make
 
-The work list SHALL count the promises a changed term re-opened exactly as it counts the
-promises a changed test reached — the same shapes, the same gate — by reading where the
-capability files live against the same base revision the tests are measured from.
+The work list SHALL count the PROMISE a changed TERM re-opened exactly as it counts the
+PROMISE a changed test reached — the same shapes, the same gate — by reading where the
+CAPABILITY FILE live against the same base revision the tests are measured from.
 
-The diff of the tests has one axis: a changed line reaches the proof that owns it. That
-leaves a door open. Rewrite a definition and every promise that uses the word changes what
+The diff of the tests has one axis: a changed line reaches the PROOF that owns it. That
+leaves a door open. Rewrite a definition and every PROMISE that uses the word changes what
 it is claimed to prove, without a line of the tests moving, so no gate would ever sound. A
-changed term is the second axis, and it feeds the same work list because it asks the same
-question — has anybody looked at what this change means for the promises it reached?
+changed TERM is the second axis, and it feeds the same work list because it asks the same
+question — has anybody looked at what this change means for the PROMISE it reached?
 
-A requirement asked for by address SHALL carry, for each scenario a term re-opened, the term
+A requirement asked for by address SHALL carry, for each scenario a TERM re-opened, the TERM
 and its definition as the base revision held it and as it stands now. The reviewer is judging
-whether a claim still reads its proof honestly under a meaning that moved, and the distance
+whether a CLAIM still reads its PROOF honestly under a meaning that moved, and the distance
 it moved is the whole of what they were asked about.
 
 <!-- scenarios: generated -->
-- "A changed term's promises are in the work list and hold the gate" → tests/cli/touched-terms.test.ts
-- "A promise both axes reached is gathered once, carrying the term changes with it" → tests/cli/touched-terms.test.ts
-- "A promise re-opened through another term's definition keys the definition it never names" → tests/cli/touched-terms.test.ts
-- "A scenario re-opened by a term carries the definition it is now judged under" → tests/cli/touched-terms.test.ts
+- "A changed TERM's PROMISE are in the work list and hold the gate" → tests/cli/touched-terms.test.ts
+- "A PROMISE both axes reached is gathered once, carrying the TERM changes with it" → tests/cli/touched-terms.test.ts
+- "A PROMISE re-opened through another TERM's definition keys the definition it never names" → tests/cli/touched-terms.test.ts
+- "A scenario re-opened by a TERM carries the definition it is now judged under" → tests/cli/touched-terms.test.ts
 <!-- /scenarios -->
 
 ### Requirement: touched measures the tests a caller gives it
@@ -296,8 +297,8 @@ live under, in place of the conventional discovery. The diff SHALL then be scope
 roots, so a change to a given test is measured wherever it lives.
 
 A repo whose tests sit outside `tests/` — several roots, another suffix — cannot be walked by
-the one conventional discovery, but its promises are not worth less for that. The caller reads
-its own tests its own way; this keeps the measuring — which promises the change reached, and
+the one conventional discovery, but its PROMISE are not worth less for that. The caller reads
+its own tests its own way; this keeps the measuring — which PROMISE the change reached, and
 whether anybody has looked — one implementation. The roots are given with the files because the
 diff needs a place to look: a test file the branch deleted is not among the files, and its
 removal is only visible when the diff is scoped to where tests live.
@@ -309,8 +310,8 @@ removal is only visible when the diff is scoped to where tests live.
 
 ### Requirement: A command records a review of one touched scenario
 
-The CLI SHALL provide a command that records one reviewer's judgement of one promise the change
-reached, appending it to `.proofspec/reviews.jsonl`. A key naming no promise the change reached
+The CLI SHALL provide a command that records one reviewer's judgement of one PROMISE the change
+reached, appending it to `.proofspec/reviews.jsonl`. A KEY naming no PROMISE the change reached
 SHALL be a cannot-run, and a review that `review` turns away SHALL be a cannot-run that writes
 nothing.
 
@@ -319,20 +320,20 @@ It is a decision about a value rather than about what the options can represent,
 command's to make and not the argument parser's — which is also what puts it somewhere a test
 can reach.
 
-The promise is looked up rather than taken on trust because a pass has to be checked against
-the lines it cites, and those lines are only in hand once the change has been read. A key
-matching nothing is what a stale key looks like — the scenario moved out from under the
+The PROMISE is looked up rather than taken on trust because a pass has to be checked against
+the lines it cites, and those lines are only in hand once the change has been read. A KEY
+matching nothing is what a stale KEY looks like — the scenario moved out from under the
 judgement — and filing it anyway would write a record nothing ever reads back.
 
-The ledger is committed rather than ignored, unlike the coverage recording beside it. A page of
+The LEDGER is committed rather than ignored, unlike the coverage recording beside it. A page of
 bare passes with nothing cited is visible in a pull request in a way no mechanical rule could
 make it, and CI cannot hold a gate against a record that only ever existed on one machine.
 
 <!-- scenarios: generated -->
-- "A ledger that cannot be read cannot run" → tests/cli/review.test.ts
-- "A pass citing a line outside the proof cannot run" → tests/cli/review.test.ts
-- "A recorded review is appended to the ledger" → tests/cli/review.test.ts
-- "A review of a promise the change did not reach cannot run" → tests/cli/review.test.ts
+- "A LEDGER that cannot be read cannot run" → tests/cli/review.test.ts
+- "A pass citing a line outside the PROOF cannot run" → tests/cli/review.test.ts
+- "A recorded review is appended to the LEDGER" → tests/cli/review.test.ts
+- "A review of a PROMISE the change did not reach cannot run" → tests/cli/review.test.ts
 - "A reviewed scenario is no longer pending in the work list" → tests/cli/review.test.ts
 - "A verdict the tool does not know cannot run" → tests/cli/review.test.ts
 <!-- /scenarios -->
@@ -342,8 +343,8 @@ make it, and CI cannot hold a gate against a record that only ever existed on on
 One requirement asked for in full SHALL carry the question its scenarios are to be judged by,
 along with what to run to record either answer.
 
-The asking is not incidental. A reviewer asked "is this claim honest?" answers yes; one asked
-to find where the claim promises more than the proof asserts goes looking. Only one of those
+The asking is not incidental. A reviewer asked "is this CLAIM honest?" answers yes; one asked
+to find where the CLAIM promises more than the PROOF asserts goes looking. Only one of those
 two questions finds anything, and which one gets asked cannot be left to whoever remembers to
 ask it — the same argument that put the proving source in the payload rather than an address
 to it.
@@ -381,7 +382,7 @@ Given what a test run recorded, the command SHALL name only the scenarios that r
 changed functions, in place of every scenario their files hold.
 
 The call graph reaches a test file, never a scenario inside it: one file's tests usually call
-the same entry point, so without a run the honest answer is every promise that file proves. A
+the same entry point, so without a run the honest answer is every PROMISE that file proves. A
 run says which of them executed the change, which is the answer a reviewer wanted. A recording
 that cannot be read SHALL be a cannot-run rather than a silent fall back to the wide list —
 asking for the exact answer and being given the wide one without being told is worse than

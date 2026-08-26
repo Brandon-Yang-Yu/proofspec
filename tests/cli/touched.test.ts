@@ -84,10 +84,10 @@ async function passFirst(cwd: string, proves: number): Promise<Outcome> {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The touched command answers with one entry for each requirement it reached
-// GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
+// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
 // WHEN the touched command runs with nothing in particular asked for
 // THEN it answers with the requirement counted rather than written out, because this is the
-//      answer read on every run and one that carried the claims would be the whole branch again
+//      answer read on every run and one that carried the CLAIM would be the whole branch again
 it('answers with a count for each requirement the change reached', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, bodyEdited())
@@ -150,11 +150,11 @@ it('measures from the origin tracking ref when no upstream is configured', async
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A change inside a proof names the scenario and where its requirement is written
-// GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
+// Scenario: A change inside a PROOF names the scenario and where its requirement is written
+// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
-// THEN the scenario that proof proves is named, with the requirement it proves and the line
-//      of the capability file that requirement is written on, so the reader lands on the promise
+// THEN the scenario that PROOF proves is named, with the requirement it proves and the line
+//      of the CAPABILITY FILE that requirement is written on, so the reader lands on the PROMISE
 it('names the scenario a changed proof proves and where its requirement is written', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, bodyEdited())
@@ -187,10 +187,10 @@ it('names the scenario a changed proof proves and where its requirement is writt
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A key no touched requirement carries cannot run
+// Scenario: A KEY no touched requirement carries cannot run
 // GIVEN a change that reached one requirement, and an address that names none of them
 // WHEN that address is asked for
-// THEN it is cannot-run rather than an empty requirement, because a stale key handed back as
+// THEN it is cannot-run rather than an empty requirement, because a stale KEY handed back as
 //      "nothing to judge here" is how a reviewer works through a list and reviews nothing
 it('reports cannot-run for an address no touched requirement carries', async () => {
   const repo = await makeGitRepo(inSync())
@@ -204,7 +204,7 @@ it('reports cannot-run for an address no touched requirement carries', async () 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: A change committed since the branch left main is counted
-// GIVEN a branch that has committed a change to a proof since it left main
+// GIVEN a branch that has committed a change to a PROOF since it left main
 // WHEN the touched command runs
 // THEN its requirement counts the scenario among those reached, because the question is what
 //      this branch touched rather than what is uncommitted
@@ -243,7 +243,7 @@ it('compares against the revision given instead of the branch point', async () =
 // GIVEN a new test file written but never added to git
 // WHEN the touched command runs
 // THEN every scenario it proves is counted, because a file git has never seen is new in whole,
-//      claim and proof alike
+//      CLAIM and PROOF alike
 it('counts a test file that git has never seen', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write('tests/extra.test.ts', testFile(['A third behavior']))
@@ -254,11 +254,11 @@ it('counts a test file that git has never seen', async () => {
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A proof the change removed is named from the base revision
-// GIVEN a change that deleted one of the two proofs in a test file
+// Scenario: A PROOF the change removed is named from the base revision
+// GIVEN a change that deleted one of the two PROOF in a test file
 // WHEN that requirement is asked for in full
 // THEN the scenario it used to prove is named as gone, read out of the base revision, so a
-//      promise left with nothing behind it surfaces at review time
+//      PROMISE left with nothing behind it surfaces at review time
 it('names a proof the change removed', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, testFile([FIRST]))
@@ -273,11 +273,11 @@ it('names a proof the change removed', async () => {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The lines that prove nothing are counted in the work list and asked for on their own
-// GIVEN a change to a helper file beside the tests, which no proof owns
+// GIVEN a change to a helper file beside the tests, which no PROOF owns
 // WHEN the touched command runs, and then those lines are asked for
 // THEN the work list carries their number and nothing else, and asking for them gives the runs
 //      themselves — they are not work anyone judges, and on a real branch there are more of
-//      them than there are promises to read
+//      them than there are PROMISE to read
 it('counts the lines that prove nothing, and gives them when they are asked for', async () => {
   const repo = await makeGitRepo({ ...inSync(), 'tests/support.ts': 'export const helper = 1\n' })
   await repo.write('tests/support.ts', 'export const helper = 2\n')
@@ -310,7 +310,7 @@ it('reports nothing for a changed run that is only blank lines', async () => {
 // Scenario: A changed file that cannot be read back cannot run
 // GIVEN a changed file git names but that cannot be read back from the working tree
 // WHEN the touched command runs
-// THEN it is cannot-run, because carrying its lines as blank would be a claim about them and
+// THEN it is cannot-run, because carrying its lines as blank would be a CLAIM about them and
 //      a wrong one
 it('reports cannot-run when a changed file cannot be read back', async () => {
   const repo = await makeGitRepo({ ...inSync(), 'tests/support.ts': 'export const helper = 1\n' })
@@ -343,10 +343,10 @@ it('reports cannot-run where there is no git repository to read', async () => {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: A touched scenario carries the source of the lines that prove it
-// GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
+// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
 // THEN the scenario carries the proving lines as they are written, so an agent judging whether
-//      the test still does what its claim says needs no second read of the file
+//      the test still does what its CLAIM says needs no second read of the file
 it('carries the source of the lines that prove a touched scenario', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, bodyEdited())
@@ -360,10 +360,10 @@ it('carries the source of the lines that prove a touched scenario', async () => 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The requirement a touched scenario proves carries the prose written under it
-// GIVEN a repo under git whose test and capability file agree, with one line rewritten inside a proof
+// GIVEN a repo under git whose test and CAPABILITY FILE agree, with one line rewritten inside a PROOF
 // WHEN that requirement is asked for in full
-// THEN it comes back with the prose its capability file writes under it, so the claim can be
-//      judged against the standard it serves without opening the file the report points at
+// THEN it comes back with the prose its CAPABILITY FILE writes under it, so the CLAIM can be
+//      judged against the STANDARD it serves without opening the file the report points at
 it('carries the prose written under the requirement a touched scenario proves', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, bodyEdited())
@@ -379,10 +379,10 @@ it('carries the prose written under the requirement a touched scenario proves', 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: One requirement holds every scenario of it the change touched
-// GIVEN a change that rewrites a line inside both proofs of one requirement
+// GIVEN a change that rewrites a line inside both PROOF of one requirement
 // WHEN that requirement is asked for in full
 // THEN both scenarios come back under it, so its prose is written once however many of its
-//      promises the change reached
+//      PROMISE the change reached
 it('holds every touched scenario of a requirement under one entry', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.write(TEST_PATH, testFile([FIRST, SECOND]).replaceAll('  expect(true).toBe(true)', '  expect(1 + 1).toBe(2)'))
@@ -394,8 +394,8 @@ it('holds every touched scenario of a requirement under one entry', async () => 
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A requirement no capability file declares carries no prose
-// GIVEN a change inside a proof whose requirement no capability file declares
+// Scenario: A requirement no CAPABILITY FILE declares carries no prose
+// GIVEN a change inside a PROOF whose requirement no CAPABILITY FILE declares
 // WHEN that requirement is asked for in full
 // THEN the scenario is still named under it, with nothing where the position and the prose
 //      would be: none is written, and the check is what reports the gap
@@ -419,7 +419,7 @@ it('carries no prose for a requirement no capability file declares', async () =>
 // GIVEN a change inside one block of a test proving two scenarios
 // WHEN that requirement is asked for in full
 // THEN the block carries the setup its test shares as well as its own statements, and none of
-//      its sibling's, because judging a claim against another's evidence is the error to avoid
+//      its sibling's, because judging a CLAIM against another's evidence is the error to avoid
 it('carries both runs of lines that prove a scenario inside a shared test', async () => {
   const shared = sharedTestFile([FIRST, SECOND])
   const repo = await makeGitRepo({
@@ -440,7 +440,7 @@ it('carries both runs of lines that prove a scenario inside a shared test', asyn
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: Touched scenarios come back in file order
-// GIVEN a change reaching proofs in two test files, the later-named file listed first by git
+// GIVEN a change reaching PROOF in two test files, the later-named file listed first by git
 // WHEN that requirement is asked for in full
 // THEN the scenarios come back in file order rather than the order the diff arrived in, so two
 //      runs of the same branch are comparable
@@ -458,9 +458,9 @@ it('names touched scenarios in file order', async () => {
   expect(scenariosOf(report).map(one => one.file)).toEqual(['tests/a.test.ts', 'tests/b.test.ts'])
 })
 
-// Requirement: The touched command holds the gate until every promise it reached has been judged
-// Scenario: A work list with a promise left unjudged exits non-zero
-// GIVEN a change that touched a proof nobody has judged
+// Requirement: The touched command holds the gate until every PROMISE it reached has been judged
+// Scenario: A work list with a PROMISE left unjudged exits non-zero
+// GIVEN a change that touched a PROOF nobody has judged
 // WHEN the work list is asked for and its exit code is taken
 // THEN it is non-zero, which is what lets a hook hold the gate. It is not the tool judging the
 //      change: it is the tool saying nobody has, and the two commands that exit non-zero send
@@ -475,8 +475,8 @@ it('exits non-zero while a promise it reached is unjudged', async () => {
   expect(exitCodeOf(outcome)).toBe(1)
 })
 
-// Requirement: The touched command holds the gate until every promise it reached has been judged
-// Scenario: A work list with every promise judged exits zero
+// Requirement: The touched command holds the gate until every PROMISE it reached has been judged
+// Scenario: A work list with every PROMISE judged exits zero
 // GIVEN a change whose one touched scenario has been passed by a reviewer
 // WHEN the work list is asked for and its exit code is taken
 // THEN it is zero, and the requirement still appears with nothing pending, because the list is
@@ -492,9 +492,9 @@ it('exits zero once every promise it reached has been judged', async () => {
   expect(exitCodeOf(outcome)).toBe(0)
 })
 
-// Requirement: The touched command holds the gate until every promise it reached has been judged
+// Requirement: The touched command holds the gate until every PROMISE it reached has been judged
 // Scenario: Asking for one requirement exits zero however much is unjudged
-// GIVEN a change that touched a proof nobody has judged
+// GIVEN a change that touched a PROOF nobody has judged
 // WHEN that requirement is asked for in full and its exit code is taken
 // THEN it is zero, because fetching the work is not the gate — an agent partway through the
 //      reviewing would read every fetch as a broken tool, and stop
@@ -510,9 +510,9 @@ it('exits zero when a requirement is fetched, however much of it is unjudged', a
 
 // Requirement: The requirement asked for carries how its scenarios are to be judged
 // Scenario: The requirement asked for carries how its scenarios are to be judged
-// GIVEN a change that touched a proof
+// GIVEN a change that touched a PROOF
 // WHEN that requirement is asked for in full
-// THEN it carries how to judge what is under it, because a reviewer asked "is this claim
+// THEN it carries how to judge what is under it, because a reviewer asked "is this CLAIM
 //      honest?" answers yes and one asked to find the overstatement goes looking, and which of
 //      the two gets asked cannot be left to whoever remembers to ask
 it('carries how its scenarios are to be judged', async () => {
@@ -606,7 +606,7 @@ it('keeps the JSON answer on one line when no layout is asked for', async () => 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The terminal form of one requirement says how to record either verdict
-// GIVEN a change that touched a proof, and that requirement asked for as text
+// GIVEN a change that touched a PROOF, and that requirement asked for as text
 // WHEN the answer is rendered
 // THEN it carries both commands that record a judgement, not only the question to judge by,
 //      because the terminal form is the one a person reads and it is the person who otherwise
@@ -625,7 +625,7 @@ it('says how to record either verdict in the terminal form of one requirement', 
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: The terminal form of the lines that prove nothing carries them
-// GIVEN a change to a helper beside the tests that no proof owns, asked for as text
+// GIVEN a change to a helper beside the tests that no PROOF owns, asked for as text
 // WHEN the answer is rendered
 // THEN the changed line is in it as written, so the terminal form of this shape says what its
 //      JSON says rather than pointing at a file for two lines
@@ -645,7 +645,7 @@ it('carries the lines that prove nothing in the terminal form', async () => {
 
 // Requirement: A command says which scenarios a change touched
 // Scenario: Requirements come back in capability then requirement order
-// GIVEN a change reaching three requirements that their files, their capabilities, and their
+// GIVEN a change reaching three requirements that their CAPABILITY FILE, their capabilities, and their
 //       own names each order differently
 // WHEN the work list is asked for
 // THEN they come back by capability and then by requirement, rather than in the order the diff
@@ -682,9 +682,9 @@ it('orders the work list by capability and then by requirement', async () => {
 
 // Requirement: touched measures the tests a caller gives it
 // Scenario: Tests given with their root are scanned and diffed where they live
-// GIVEN a repo under git whose one test lives in src/ui as a .test.tsx the conventional walk never reads, with one line rewritten inside a proof
+// GIVEN a repo under git whose one test lives in src/ui as a .test.tsx the conventional walk never reads, with one line rewritten inside a PROOF
 // WHEN the touched command runs with that file given as the tests and src/ui as their root
-// THEN it answers with the requirement the changed proof reaches, which it could only do by
+// THEN it answers with the requirement the changed PROOF reaches, which it could only do by
 //      reading the given file in place of discovery and scoping the diff to the given root —
 //      either half left on the conventional tests/ would see nothing change and judge nothing
 it('answers from tests given by the caller, diffed at the root they were given with', async () => {
@@ -711,7 +711,7 @@ it('answers from tests given by the caller, diffed at the root they were given w
 // Scenario: A test deleted from a given root is read back as no longer proven
 // GIVEN a repo under git whose one test lives in src/ui, and a working tree with that file deleted
 // WHEN the touched command runs with no files left to give and src/ui as the root
-// THEN the proof the base revision held is reported as gone and still owes a judgement,
+// THEN the PROOF the base revision held is reported as gone and still owes a judgement,
 //      because a removal outside the conventional tests/ is exactly the change a gate that
 //      diffed only tests/ would wave through
 it('reports a deleted given test as gone, through the root it was given with', async () => {

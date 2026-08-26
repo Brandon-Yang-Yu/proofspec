@@ -39,7 +39,7 @@ it('returns the same verdict as JSON that it reports to a person', async () => {
 
 // Requirement: Any answer can be given in a form a program can read
 // Scenario: The write's answer is returned as JSON naming the changed files
-// GIVEN a repo whose committed file is missing a scenario the tests prove
+// GIVEN a repo whose committed CAPABILITY FILE is missing a scenario the tests prove
 // WHEN the write runs and is asked for its answer as JSON
 // THEN the JSON names the files it changed, so the write command too can be read by a
 //      program and not only by a person
