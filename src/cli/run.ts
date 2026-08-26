@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
+import { changedTerms, definitionsFor, reopenedByTerms, standardTexts } from '../glossary/index.ts'
+import type { ReopenedPromise, TermChange } from '../glossary/index.ts'
 import { guard } from '../guard/index.ts'
 import { impactTree, testsRunning } from '../impact/index.ts'
 import type { GraphNode, ImpactNode, TestReach } from '../impact/index.ts'
@@ -18,7 +20,8 @@ import {
   VERDICTS,
 } from '../review/index.ts'
 import type { JudgedPromise, JudgedScenario, ProvingLines, ReviewEntry } from '../review/index.ts'
-import { readCapabilityFile, requirementLines, updateScenarioBlocks } from '../spec-file/index.ts'
+import { readCapabilityFile, readTerms, requirementLines, updateScenarioBlocks } from '../spec-file/index.ts'
+import type { CapabilitySpec, TermSpec } from '../spec-file/index.ts'
 import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
@@ -31,6 +34,7 @@ import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
+  DistributiveOmit,
   GoneScenario,
   Outcome,
   ProvenRequirement,
@@ -66,10 +70,12 @@ export async function check(options: RunOptions): Promise<Outcome> {
   if (!inputs.ok) return { kind: 'cannot-run', reason: inputs.reason }
 
   const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
-  const committed: SpecTree = {
-    capabilities: inputs.specs.map(file => readCapabilityFile(file.source, { capability: file.capability })),
+  const specs = inputs.specs.map(file => readCapabilityFile(file.source, { capability: file.capability }))
+  const committed: SpecTree = { capabilities: specs }
+  return {
+    kind: 'checked',
+    report: guard({ scans, committed, terms: specs.flatMap(spec => spec.terms) }),
   }
-  return { kind: 'checked', report: guard({ scans, committed }) }
 }
 
 /**
@@ -179,7 +185,7 @@ export async function touched(options: RunOptions): Promise<Outcome> {
  * behind it, and a second copy of it in this file is a second place for it to be got wrong.
  */
 function workList(reached: ReachedNow): TouchedSummary {
-  const promises = reached.requirements.flatMap(promisesIn)
+  const promises = reached.requirements.flatMap(one => promisesIn(one, reached.vocabulary))
   const pending = new Set(
     pendingPromises({
       scenarios: promises.filter(one => one.kind === 'touched').map(one => one.scenario),
@@ -204,8 +210,8 @@ function workList(reached: ReachedNow): TouchedSummary {
 }
 
 /** Every promise one requirement holds, in the shape `review` judges them in. */
-function promisesIn(group: ReachedGroup): readonly JudgedPromise[] {
-  const under = judgedUnder(group)
+function promisesIn(group: ReachedGroup, vocabulary: readonly TermSpec[]): readonly JudgedPromise[] {
+  const under = judgedUnder(group, vocabulary)
   return [
     ...group.scenarios.map(one => ({ kind: 'touched' as const, scenario: judgeable(under, one) })),
     ...group.gone.map(one => ({
@@ -220,14 +226,24 @@ type JudgedUnder = {
   readonly capability: string
   readonly requirement: string
   readonly description: string | undefined
+  /** The repo's vocabulary: the definitions a promise's standard may lean on. */
+  readonly vocabulary: readonly TermSpec[]
 }
 
-function judgedUnder(group: {
-  readonly capability: string
-  readonly requirement: string
-  readonly spec: RequirementDeclaration | undefined
-}): JudgedUnder {
-  return { capability: group.capability, requirement: group.requirement, description: group.spec?.description }
+function judgedUnder(
+  group: {
+    readonly capability: string
+    readonly requirement: string
+    readonly spec: RequirementDeclaration | undefined
+  },
+  vocabulary: readonly TermSpec[],
+): JudgedUnder {
+  return {
+    capability: group.capability,
+    requirement: group.requirement,
+    description: group.spec?.description,
+    vocabulary,
+  }
 }
 
 /**
@@ -248,6 +264,19 @@ function judgeable(
     description: under.description,
     claim: promise.claim,
     proof: promise.proof,
+    // The definitions of the terms this standard uses, so a redefined word moves the key.
+    // The standard's texts are named once, in the glossary, because keying a promise and
+    // re-opening it must read them the same way.
+    definitions: definitionsFor(
+      standardTexts({
+        capability: under.capability,
+        requirement: under.requirement,
+        scenario: promise.scenario,
+        description: under.description,
+        claim: promise.claim,
+      }),
+      under.vocabulary,
+    ),
   }
 }
 
@@ -292,7 +321,7 @@ export async function review(options: RunOptions): Promise<Outcome> {
 function judgedAt(reached: ReachedNow, key: string): JudgedPromise | undefined {
   for (const group of reached.requirements) {
     const identity = { capability: group.capability, requirement: group.requirement }
-    const under = judgedUnder(group)
+    const under = judgedUnder(group, reached.vocabulary)
     const touchedHere = group.scenarios.find(one => one.key === key)
     if (touchedHere !== undefined) return { kind: 'touched', scenario: judgeable(under, touchedHere) }
     const goneHere = group.gone.find(one => one.key === key)
@@ -309,6 +338,8 @@ type ReachedNow = {
   readonly unmatched: readonly UnmatchedLines[]
   /** The ledger as it stands, so the work list can ask `review` what is left rather than guess. */
   readonly entries: readonly ReviewEntry[]
+  /** The repo's vocabulary, so every promise can be keyed with the terms its standard uses. */
+  readonly vocabulary: readonly TermSpec[]
 }
 
 /** One requirement and everything under it, keyed and with any standing judgements attached. */
@@ -344,7 +375,8 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
   const ledger = await readReviews(options.cwd)
   if (!ledger.ok) return ledger
 
-  const specs = specLocations(inputs.specs)
+  const specReads = readSpecs(inputs.specs)
+  const specs = specLocations(specReads)
   const held = new Map(inputs.tests.map(test => [test.path, test.source]))
   const read = await changedLines(diff.files, { cwd: options.cwd, held })
   if (!read.ok) return read
@@ -375,13 +407,110 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
     for (const was of removed) reached(found, was).gone.push({ scenario: was.scenario, file: was.file })
   }
 
+  // The second axis. The diff above reads the tests; this reads where the vocabulary lives,
+  // against the same base, and every promise whose standard uses a changed term is reached
+  // exactly as a changed test line reaches the proof that owns it.
+  const vocabulary = specReads.flatMap(one => one.read.terms)
+  const specDiff = await readChangedFiles({
+    cwd: options.cwd,
+    paths: [options.specsDir ?? DEFAULT_SPECS_DIR],
+    since: options.since,
+  })
+  if (!specDiff.ok) return specDiff
+  const changed = await changedTermsSince({
+    cwd: options.cwd,
+    base: specDiff.base,
+    files: specDiff.files,
+    now: new Map(specReads.map(one => [one.path, one.read.terms])),
+  })
+  const testLines = new Map(inputs.tests.map(file => [file.path, file.source.split('\n')]))
+  const reopened = reopenedByTerms({
+    changed,
+    terms: vocabulary,
+    promises: sites.filter(hasCapability).map(site => ({
+      capability: site.capability,
+      requirement: site.requirement,
+      scenario: site.scenario,
+      description: declarationFor(
+        { capability: site.capability, requirement: site.requirement },
+        specs,
+      )?.description,
+      claim: site.steps,
+    })),
+  })
+  for (const promise of reopened) {
+    reopenedInto(found, promise, { sites, testLines })
+  }
+
   return {
     ok: true,
     base: diff.base,
-    requirements: requirementsReached(found, { specs, entries: ledger.entries }),
+    requirements: requirementsReached(found, { specs, entries: ledger.entries, vocabulary }),
     unmatched: unmatched.sort(byFileThenLine),
     entries: ledger.entries,
+    vocabulary,
   }
+}
+
+/**
+ * Which terms changed between the base revision and the working tree. Only the changed
+ * capability files are compared — a file whose bytes did not move holds the definitions it
+ * held — and a file git has never seen has no base version, so every term it defines is new.
+ */
+async function changedTermsSince(from: {
+  readonly cwd: string
+  readonly base: string
+  readonly files: readonly ChangedFile[]
+  readonly now: ReadonlyMap<string, readonly TermSpec[]>
+}): Promise<readonly TermChange[]> {
+  const before: TermSpec[] = []
+  const after: TermSpec[] = []
+  for (const file of from.files) {
+    const was = await readFileAt({ cwd: from.cwd, rev: from.base, path: file.path })
+    if (was !== undefined) before.push(...readTerms(was))
+    const stands = from.now.get(file.path)
+    if (stands !== undefined) after.push(...stands)
+  }
+  return changedTerms({ before, after })
+}
+
+/**
+ * One re-opened promise, gathered under its requirement. A promise both axes reached is
+ * gathered once, carrying the term changes with it — it is one promise, and one judgement
+ * settles it.
+ */
+function reopenedInto(
+  found: Map<string, Gathering>,
+  promise: ReopenedPromise,
+  from: {
+    readonly sites: readonly ProofSite[]
+    readonly testLines: ReadonlyMap<string, readonly string[]>
+  },
+): void {
+  const group = reached(found, { capability: promise.capability, requirement: promise.requirement })
+  const gathered = group.scenarios.findIndex(one => one.scenario === promise.scenario)
+  if (gathered !== -1) {
+    group.scenarios[gathered] = { ...group.scenarios[gathered]!, reopenedBy: promise.reopenedBy }
+    return
+  }
+
+  // The proving lines, as they stand, so the reviewer judges the claim against its evidence
+  // in one read. A single line at the site's own test reaches exactly its proof, the same
+  // match the first axis makes — the halves are `locate`'s to name, not this file's.
+  const site = from.sites.find(
+    one =>
+      one.capability === promise.capability &&
+      one.requirement === promise.requirement &&
+      one.scenario === promise.scenario,
+  )
+  if (site === undefined) return
+  const hit = scenariosTouched(
+    from.sites.filter(one => one.file === site.file),
+    [{ from: site.line, to: site.line }],
+  ).scenarios.find(one => one.scenario === promise.scenario)
+  if (hit === undefined) return
+  const lines = from.testLines.get(site.file) ?? []
+  group.scenarios.push({ ...withSource(hit, lines), changed: 'term', reopenedBy: promise.reopenedBy })
 }
 
 /**
@@ -438,7 +567,7 @@ async function readWorkingCopy(path: string): Promise<string | undefined> {
 }
 
 /** A touched scenario before it is keyed: the key needs the standard, which its group holds. */
-type UnkeyedScenario = Omit<TouchedScenarioReport, 'key' | 'reviewed'>
+type UnkeyedScenario = DistributiveOmit<TouchedScenarioReport, 'key' | 'reviewed'>
 
 /** A removed proof before it is keyed. */
 type UnkeyedGone = Omit<GoneScenario, 'key' | 'reviewed'>
@@ -476,13 +605,13 @@ function reached(found: Map<string, Gathering>, identity: RequirementIdentity): 
  */
 function requirementsReached(
   found: ReadonlyMap<string, Gathering>,
-  read: { readonly specs: SpecLocations; readonly entries: readonly ReviewEntry[] },
+  read: { readonly specs: SpecLocations; readonly entries: readonly ReviewEntry[]; readonly vocabulary: readonly TermSpec[] },
 ): ReachedGroup[] {
   const standing = standingReviews(read.entries)
   return [...found.values()].sort(byRequirement).map(one => {
     const identity = { capability: one.capability, requirement: one.requirement }
     const spec = declarationFor(one, read.specs)
-    const under = judgedUnder({ ...identity, spec })
+    const under = judgedUnder({ ...identity, spec }, read.vocabulary)
     return {
       // The address a reader asks for this requirement by, not the key it was gathered under:
       // one is a digest a person can type, the other a map key private to the gathering.
@@ -552,7 +681,7 @@ export async function impact(options: RunOptions): Promise<Outcome> {
     depth: options.depth ?? DEFAULT_DEPTH,
   })
 
-  const specs = specLocations(inputs.specs)
+  const specs = specLocations(readSpecs(inputs.specs))
   if (options.coverage === undefined) {
     return {
       kind: 'impact',
@@ -720,8 +849,24 @@ type SpecLocations = ReadonlyMap<
   { readonly file: string; readonly requirements: ReadonlyMap<string, RequirementRead> }
 >
 
-function specLocations(specs: readonly SpecFileRead[]): SpecLocations {
-  return new Map(specs.map(spec => [spec.capability, readRequirements(spec)]))
+/** One capability file as both halves the commands need: its bytes, and its read. */
+type SpecRead = {
+  readonly path: string
+  readonly source: string
+  readonly read: CapabilitySpec
+}
+
+/** Every capability file, read once for all its consumers. */
+function readSpecs(specs: readonly SpecFileRead[]): readonly SpecRead[] {
+  return specs.map(file => ({
+    path: file.path,
+    source: file.source,
+    read: readCapabilityFile(file.source, { capability: file.capability }),
+  }))
+}
+
+function specLocations(specs: readonly SpecRead[]): SpecLocations {
+  return new Map(specs.map(spec => [spec.read.capability, readRequirements(spec)]))
 }
 
 /**
@@ -730,13 +875,13 @@ function specLocations(specs: readonly SpecFileRead[]): SpecLocations {
  * where `requirementLines` sends a reader and where its prose was written; the guard is what
  * warns about the repeat.
  */
-function readRequirements(spec: SpecFileRead): {
+function readRequirements(spec: SpecRead): {
   readonly file: string
   readonly requirements: ReadonlyMap<string, RequirementRead>
 } {
   const lines = requirementLines(spec.source)
   const requirements = new Map<string, RequirementRead>()
-  for (const read of readCapabilityFile(spec.source, { capability: spec.capability }).requirements) {
+  for (const read of spec.read.requirements) {
     const line = lines.get(read.requirement)
     if (line === undefined || requirements.has(read.requirement)) continue
     requirements.set(read.requirement, { line, description: read.description })

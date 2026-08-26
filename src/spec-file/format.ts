@@ -8,6 +8,7 @@
 import type { ScenarioNode } from '../spec-tree/index.ts'
 
 const REQUIREMENT_HEADING = '### Requirement:'
+const TERM_HEADING = '### Term:'
 export const BLOCK_OPEN = '<!-- scenarios: generated -->'
 export const BLOCK_CLOSE = '<!-- /scenarios -->'
 const CODE_FENCE = '```'
@@ -108,6 +109,53 @@ export function findSections(markdown: Markdown): RequirementSection[] {
       block: findBlock(markdown, { from: headingLine + 1, to: endLine }),
     }
   })
+}
+
+/**
+ * One `### Term:` heading and everything under it, as line indices into the source. A term
+ * section ends at the next heading of either kind, or at a generated block: a block
+ * records scenarios for the requirement the section sits in, so it is no more part of a
+ * definition than of a description.
+ */
+export type TermSection = {
+  readonly term: string
+  /** 0-based index of the heading line. */
+  readonly headingLine: number
+  /** 0-based index of the first line past the section. */
+  readonly endLine: number
+}
+
+/** The Term sections in the order the file declares them. */
+export function findTermSections(markdown: Markdown): TermSection[] {
+  const sections: TermSection[] = []
+  for (let index = 0; index < markdown.lines.length; index++) {
+    if (!isTermHeading(markdown, index)) continue
+    let end = index + 1
+    while (end < markdown.lines.length && !isSectionHeading(markdown, end) && !isBlockOpen(markdown, end)) end++
+    sections.push({
+      term: markdown.lines[index]!.slice(TERM_HEADING.length).trim(),
+      headingLine: index,
+      endLine: end,
+    })
+  }
+  return sections
+}
+
+/** Whether the line opens a generated block — the one thing besides a heading that ends prose. */
+function isBlockOpen(markdown: Markdown, index: number): boolean {
+  return !markdown.fenced[index] && markdown.lines[index]!.trimEnd() === BLOCK_OPEN
+}
+
+function isTermHeading(markdown: Markdown, index: number): boolean {
+  return !markdown.fenced[index] && markdown.lines[index]!.startsWith(TERM_HEADING)
+}
+
+/** Whether the line opens a section of either kind — the boundary a Term section ends at. */
+function isSectionHeading(markdown: Markdown, index: number): boolean {
+  return (
+    !markdown.fenced[index] &&
+    (markdown.lines[index]!.startsWith(TERM_HEADING) || markdown.lines[index]!.startsWith(REQUIREMENT_HEADING))
+  )
 }
 
 /**

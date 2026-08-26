@@ -16,8 +16,9 @@ the capability files.
 ### Requirement: A key says what it is for
 
 A judgement SHALL be filed under a digest of the scenario's identity, the description written
-under its requirement, its claim, and the source of the lines that prove it. A requirement's
-address SHALL be a digest of its identity alone.
+under its requirement, its claim, the source of the lines that prove it, and the definitions
+of every term that promise's standard uses. A requirement's address SHALL be a digest of its
+identity alone.
 
 Keying a judgement by what it judged is what makes a stale review impossible to hold rather
 than something to detect. Change the claim, the proof, or the standard, and the scenario is
@@ -33,6 +34,12 @@ The description SHALL be part of it. It is the standard the claim is judged agai
 reworded SHALL is a different question being asked of every scenario under it, and every
 judgement made under the old wording is worth taking again.
 
+The definitions of the terms the standard uses SHALL be part of it too, for the same reason:
+a definition is part of the standard, so a redefined word is a different question being asked
+of every promise that uses it. A promise whose standard uses no term SHALL key exactly as it
+did before any glossary existed — a repository that defines no terms has its ledger stand
+byte for byte as it stood, and that is a property of construction, not a rule to remember.
+
 A removed proof SHALL be keyed by its identity alone. Nothing of it is left to weigh, so the
 only question it raises — was this promise meant to die — is answered once and stays answered.
 
@@ -41,6 +48,8 @@ not what was judged, and an address that moved partway through a review would se
 reviewer nowhere.
 
 <!-- scenarios: generated -->
+- "A promise that uses a term keys its definition" → tests/review/digest.test.ts
+- "A promise that uses no term keys exactly as it did with no glossary" → tests/review/digest.test.ts
 - "A removed proof is keyed by its identity alone" → tests/review/digest.test.ts
 - "A requirement is addressed by its identity alone" → tests/review/digest.test.ts
 - "A rewritten claim gives the scenario a new key" → tests/review/digest.test.ts

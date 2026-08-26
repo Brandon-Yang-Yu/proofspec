@@ -67,6 +67,31 @@ it('moves the key of every scenario under a requirement whose description is rew
 })
 
 // Requirement: A key says what it is for
+// Scenario: A promise that uses a term keys its definition
+// GIVEN two readings of one scenario identical except that a term its standard uses has
+//       been redefined
+// WHEN each is keyed
+// THEN the keys differ, because the definition is part of the standard the claim is
+//      judged against, and a moved meaning is a judgement worth taking again
+it('moves the key when a term the standard uses is redefined', () => {
+  const before = judged({ definitions: [{ term: 'TURN', definition: 'One exchange of request and reply.' }] })
+  const after = judged({ definitions: [{ term: 'TURN', definition: 'One exchange, reply included.' }] })
+
+  expect(scenarioKey(after)).not.toBe(scenarioKey(before))
+})
+
+// Requirement: A key says what it is for
+// Scenario: A promise that uses no term keys exactly as it did with no glossary
+// GIVEN the fixture promise, judged with no terms, and the key it was filed under before
+//       any glossary existed
+// WHEN it is keyed
+// THEN the key is the one it has always been, because a repository that defines no terms
+//      has its ledger stand byte for byte as it stood
+it('keys a promise that uses no term exactly as it did with no glossary', () => {
+  expect(scenarioKey(judged())).toBe('0e5b6c4fb6b5')
+})
+
+// Requirement: A key says what it is for
 // Scenario: A removed proof is keyed by its identity alone
 // GIVEN one removed proof
 // WHEN it is keyed twice, and a differently named removed proof is keyed after it

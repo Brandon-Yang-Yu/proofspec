@@ -1,7 +1,7 @@
 import { compareStrings } from '../order.ts'
 import { identityKey } from '../spec-tree/index.ts'
 import type { ScenarioIdentity } from '../spec-tree/index.ts'
-import type { CapabilitySpec, RequirementSpec } from '../spec-file/index.ts'
+import type { CapabilitySpec, RequirementSpec, TermSpec } from '../spec-file/index.ts'
 import type { ProofSite } from '../test-scan/index.ts'
 import { firstSiteByIdentity } from './locate.ts'
 
@@ -27,6 +27,7 @@ const INTRO = '_The living spec: every capability, its requirements, and the sce
 const UNPROVEN = '_Unproven — no test currently proves this scenario._'
 const FULL_INTRO = '_The whole spec in one file: every capability, its requirements, and the scenarios that prove them._'
 const NO_CAPABILITIES = '_No capabilities yet._'
+const VOCAB_INTRO = '_Every term the spec defines, in name order. A requirement uses a term in the exact form it was defined in._'
 
 /** One rendered file: its path within the output directory, and its Markdown. */
 export type RenderedPage = {
@@ -52,23 +53,38 @@ export function renderSite(
   // read in must not change the site. Inside a capability the order is the one `spec-file`
   // handed over, kept as given, so the ordering rule stays in one place.
   const capabilities = [...specs].sort((a, b) => compareStrings(a.capability, b.capability))
+  const terms = [...specs.flatMap(spec => spec.terms)].sort((a, b) => compareStrings(a.term, b.term))
 
-  const index: RenderedPage = { path: 'index.md', content: renderIndex(capabilities) }
-  const full: RenderedPage = { path: 'spec.md', content: renderFullPage(capabilities, proven) }
+  const index: RenderedPage = { path: 'index.md', content: renderIndex(capabilities, { vocabulary: terms.length > 0 }) }
+  const full: RenderedPage = { path: 'spec.md', content: renderFullPage(capabilities, proven, terms) }
+  const vocabulary: RenderedPage[] =
+    terms.length > 0 ? [{ path: 'vocabulary.md', content: renderVocabularyPage(terms) }] : []
   const capabilityPages = capabilities.map(capability => ({
     path: `${capability.capability}.md`,
     content: renderCapabilityPage(capability, proven),
   }))
-  return [index, full, ...capabilityPages, ...renderCodePages(sites, tests)]
+  return [index, full, ...vocabulary, ...capabilityPages, ...renderCodePages(sites, tests)]
 }
 
-function renderIndex(capabilities: readonly CapabilitySpec[]): string {
+function renderIndex(
+  capabilities: readonly CapabilitySpec[],
+  withVocabulary: { readonly vocabulary: boolean },
+): string {
   const nav =
     capabilities.length === 0
       ? NO_CAPABILITIES
       : ['**Capabilities**', capabilities.map(one => `- [${one.capability}](${one.capability}.md)`).join('\n')].join('\n\n')
+  // Linked only when there is one: a spec that defines no terms is rendered exactly as it
+  // was before glossaries existed, and an empty vocabulary page is noise on top of that.
+  const vocabulary = withVocabulary.vocabulary ? '- [vocabulary](vocabulary.md)' : ''
   const whole = '[Read the whole spec in one page](spec.md)'
-  return `${[frontmatter('ProofSpec — living spec'), GENERATED, INTRO, nav, whole].join('\n\n')}\n`
+  return `${[frontmatter('ProofSpec — living spec'), GENERATED, INTRO, nav, vocabulary, whole].filter(one => one !== '').join('\n\n')}\n`
+}
+
+/** The vocabulary as its own page: every term in name order with its definition. */
+function renderVocabularyPage(terms: readonly TermSpec[]): string {
+  const entries = terms.map(term => [`## Term: ${term.term}`, term.definition].join('\n\n'))
+  return `${[frontmatter('ProofSpec — vocabulary'), GENERATED, VOCAB_INTRO, ...entries].join('\n\n')}\n`
 }
 
 function renderCapabilityPage(capability: CapabilitySpec, proven: ProvenSites): string {
@@ -81,11 +97,20 @@ function renderCapabilityPage(capability: CapabilitySpec, proven: ProvenSites): 
  * deeper than on a capability page. It is the same render as the capability pages, so the
  * whole-spec view cannot say something the per-capability view does not.
  */
-function renderFullPage(capabilities: readonly CapabilitySpec[], proven: ProvenSites): string {
+function renderFullPage(
+  capabilities: readonly CapabilitySpec[],
+  proven: ProvenSites,
+  vocabulary: readonly TermSpec[],
+): string {
   const sections = capabilities.map(capability =>
     [`## Capability: ${capability.capability}`, ...renderRequirements(capability, { proven, depth: 3 })].join('\n\n'),
   )
-  const body = sections.length === 0 ? [NO_CAPABILITIES] : sections
+  // The vocabulary rides along, definitions first: a model handed the one file is handed
+  // the meanings along with the promises, in the order a legal document puts them.
+  const defined = vocabulary.map(term => [`### Term: ${term.term}`, term.definition].join('\n\n'))
+  const headed =
+    defined.length > 0 ? [['## Vocabulary', ...defined].join('\n\n'), ...sections] : sections
+  const body = headed.length === 0 ? [NO_CAPABILITIES] : headed
   return `${[frontmatter('ProofSpec — full spec'), GENERATED, FULL_INTRO, ...body].join('\n\n')}\n`
 }
 

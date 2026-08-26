@@ -1,4 +1,4 @@
-import type { GoneProof, JudgedScenario, ProvingLines, ReviewEntry } from '../../src/review/index.ts'
+import type { GoneProof, JudgedScenario, ProvingLines, ReviewEntry, TermSpec } from '../../src/review/index.ts'
 import type { Step } from '../../src/test-scan/index.ts'
 
 /**
@@ -34,6 +34,7 @@ export function judged(fields: {
   readonly description?: string | undefined
   readonly claim?: readonly Step[]
   readonly proof?: readonly ProvingLines[]
+  readonly definitions?: readonly TermSpec[]
 } = {}): JudgedScenario {
   return {
     capability: fields.capability ?? CAPABILITY,
@@ -42,6 +43,7 @@ export function judged(fields: {
     description: 'description' in fields ? fields.description : DESCRIPTION,
     claim: fields.claim ?? claim(),
     proof: fields.proof ?? proof(),
+    definitions: fields.definitions ?? [],
   }
 }
 

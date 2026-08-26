@@ -9,6 +9,7 @@
 
 import type { LineRange } from '../locate/index.ts'
 import type { ScenarioIdentity } from '../spec-tree/index.ts'
+import type { TermSpec } from '../spec-file/index.ts'
 import type { Step } from '../test-scan/index.ts'
 
 /**
@@ -88,6 +89,10 @@ export type JudgedScenario = ScenarioIdentity & {
   readonly description: string | undefined
   readonly claim: readonly Step[]
   readonly proof: readonly ProvingLines[]
+  /** The definitions of the terms this promise's standard uses, directly or through another
+   * term's definition, in term order. Empty when the standard uses none — which is why a
+   * repository with no glossary keys exactly as it always did. */
+  readonly definitions: readonly TermSpec[]
 }
 
 /** A promise the change stopped proving. Nothing of it is left to judge but its name. */

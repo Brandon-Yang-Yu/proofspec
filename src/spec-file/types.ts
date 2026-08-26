@@ -15,6 +15,12 @@ export type RequirementSpec = RequirementNode & {
   readonly description: string
 }
 
+/** One `### Term:` heading and the definition written beneath it, as written. */
+export type TermSpec = {
+  readonly term: string
+  readonly definition: string
+}
+
 /**
  * One capability file, read. It is built on `CapabilityNode` rather than restated, so a
  * file that was read *is* a branch of the tree the guard compares against and cannot drift
@@ -24,4 +30,6 @@ export type RequirementSpec = RequirementNode & {
  */
 export type CapabilitySpec = Omit<CapabilityNode, 'requirements'> & {
   readonly requirements: readonly RequirementSpec[]
+  /** The file's vocabulary, in the order the file declares it. */
+  readonly terms: readonly TermSpec[]
 }

@@ -4,6 +4,7 @@ export { pendingPromises } from './pending.ts'
 export { REVIEW_PROTOCOL } from './protocol.ts'
 export { recordReview } from './record.ts'
 export { isVerdict, VERDICTS } from './verdict.ts'
+export type { TermSpec } from '../spec-file/index.ts'
 export type {
   Citation,
   GoneProof,

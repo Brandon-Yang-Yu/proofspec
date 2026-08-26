@@ -38,6 +38,30 @@ already a branch of it and reads the same on every machine.
 - "Requirements come back in the file's own order" → tests/spec-file/read.test.ts
 <!-- /scenarios -->
 
+### Requirement: Reading a file yields its terms and what they define
+
+Reading a capability file SHALL give back each `### Term:` heading and the definition
+written beneath it. A Term section SHALL be no part of a requirement's description: a term
+heading ends the prose above the block, wherever it is written, the way the next heading
+always has.
+
+A Term section ends where the next heading begins, whatever kind of heading that is — or
+where a generated block opens, because a block records scenarios for the requirement the
+section sits in, and is no more part of a definition than of a description. The fence rule
+that governs requirement headings governs Term ones too: a file showing the format as an
+example inside a code fence is saying what a term looks like, not defining one.
+
+The write-back SHALL leave Term sections exactly as they were. A definition is the human's
+half of the file, like a description; the tool that records where scenarios are has nothing
+to write there.
+
+<!-- scenarios: generated -->
+- "A Term heading inside a fenced code block is not a term" → tests/spec-file/terms.test.ts
+- "A Term heading reads as a term with the definition written under it" → tests/spec-file/terms.test.ts
+- "A Term section is not part of a requirement's description" → tests/spec-file/terms.test.ts
+- "Writing back leaves Term sections exactly as they were" → tests/spec-file/terms.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Writing back touches only the generated block
 
 The write-back SHALL replace the content between `<!-- scenarios: generated -->` and

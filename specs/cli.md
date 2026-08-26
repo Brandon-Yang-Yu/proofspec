@@ -265,6 +265,30 @@ gate would then measure is their willingness to let themselves through.
 - "Asking for one requirement exits zero however much is unjudged" → tests/cli/touched.test.ts
 <!-- /scenarios -->
 
+### Requirement: A changed term counts as a change the tests did not make
+
+The work list SHALL count the promises a changed term re-opened exactly as it counts the
+promises a changed test reached — the same shapes, the same gate — by reading where the
+capability files live against the same base revision the tests are measured from.
+
+The diff of the tests has one axis: a changed line reaches the proof that owns it. That
+leaves a door open. Rewrite a definition and every promise that uses the word changes what
+it is claimed to prove, without a line of the tests moving, so no gate would ever sound. A
+changed term is the second axis, and it feeds the same work list because it asks the same
+question — has anybody looked at what this change means for the promises it reached?
+
+A requirement asked for by address SHALL carry, for each scenario a term re-opened, the term
+and its definition as the base revision held it and as it stands now. The reviewer is judging
+whether a claim still reads its proof honestly under a meaning that moved, and the distance
+it moved is the whole of what they were asked about.
+
+<!-- scenarios: generated -->
+- "A changed term's promises are in the work list and hold the gate" → tests/cli/touched-terms.test.ts
+- "A promise both axes reached is gathered once, carrying the term changes with it" → tests/cli/touched-terms.test.ts
+- "A promise re-opened through another term's definition keys the definition it never names" → tests/cli/touched-terms.test.ts
+- "A scenario re-opened by a term carries the definition it is now judged under" → tests/cli/touched-terms.test.ts
+<!-- /scenarios -->
+
 ### Requirement: touched measures the tests a caller gives it
 
 A caller SHALL be able to hand the command the tests it has already read, with the roots they

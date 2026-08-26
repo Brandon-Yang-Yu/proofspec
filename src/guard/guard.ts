@@ -10,6 +10,7 @@ import type {
   TreeChange,
 } from '../spec-tree/index.ts'
 import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
+import type { TermSpec } from '../spec-file/index.ts'
 import { severityOf } from './report.ts'
 import type { Finding, GuardReport } from './types.ts'
 
@@ -23,9 +24,11 @@ import type { Finding, GuardReport } from './types.ts'
 export function guard({
   scans,
   committed,
+  terms = [],
 }: {
   readonly scans: readonly FileScan[]
   readonly committed: SpecTree
+  readonly terms?: readonly TermSpec[]
 }): GuardReport {
   const sites = scans.flatMap(scan => scan.sites)
   const errors = scans.flatMap(scan => scan.errors)
@@ -42,10 +45,33 @@ export function guard({
     ...unplacedFindings(unplaced),
     ...missingStepFindings(sites),
     ...unreadableFindings(errors),
+    ...termFindings(terms),
   ].sort(compareFindings)
 
   const hasFailure = findings.some(finding => severityOf(finding) === 'fail')
   return { status: hasFailure ? 'fail' : 'pass', findings }
+}
+
+/**
+ * What the vocabulary owes the build: definitions that define, names a requirement can use,
+ * and one meaning to a word. The vocabulary is global — terms from every capability file —
+ * because a word's meaning is not a capability's to keep.
+ */
+function termFindings(terms: readonly TermSpec[]): Finding[] {
+  const findings: Finding[] = []
+  const seen = new Set<string>()
+  for (const { term, definition } of terms) {
+    // Capitals, with words separated as they are used — a phrase in capitals is a term in
+    // capitals — because the name is the match key: a promise uses a term in the exact form
+    // it was defined in, and a name in lower case is a word no requirement can ever use.
+    // Plurals are left to the reader — a stemmer would be a guess about English, and the
+    // guard does not guess.
+    if (!/^[A-Z]+(?:[ -][A-Z]+)*$/.test(term)) findings.push({ kind: 'term-not-in-capitals', term })
+    if (/\bSHALL\b/.test(definition)) findings.push({ kind: 'term-promises', term })
+    if (seen.has(term)) findings.push({ kind: 'term-defined-twice', term })
+    seen.add(term)
+  }
+  return findings
 }
 
 /** The two trees every comparison here is between, named so neither can be taken for the other. */
@@ -313,6 +339,9 @@ const KIND_ORDER: Record<Finding['kind'], number> = {
   'scenario-moved': 7,
   'no-steps': 8,
   'duplicate-requirement': 9,
+  'term-not-in-capitals': 10,
+  'term-defined-twice': 11,
+  'term-promises': 12,
 }
 
 function compareFindings(a: Finding, b: Finding): number {
@@ -347,6 +376,10 @@ function orderParts(finding: Finding): OrderParts {
       return [finding.requirement, finding.scenario, finding.file, finding.line]
     case 'unreadable':
       return [finding.file, finding.line, finding.reason]
+    case 'term-not-in-capitals':
+    case 'term-defined-twice':
+    case 'term-promises':
+      return [finding.term]
     default:
       return assertNever(finding)
   }
