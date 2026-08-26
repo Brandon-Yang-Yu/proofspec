@@ -68,6 +68,13 @@ export type Finding =
   | { readonly kind: 'term-not-in-capitals'; readonly term: string }
   /** Two Term sections defining one word, leaving "the definition" not existing. */
   | { readonly kind: 'term-defined-twice'; readonly term: string }
+  /**
+   * A definition that spells another defined TERM in its everyday form — `claim` where CLAIM
+   * is defined. It warns rather than fails: the reviewer reading the definition's then and
+   * now is the backstop, and the warning is where the lost edge becomes visible. `term` is
+   * the TERM whose definition is at fault; `near` is the TERM it spelled everyday.
+   */
+  | { readonly kind: 'term-near-form'; readonly term: string; readonly near: string }
 
 export type FindingSeverity = 'fail' | 'warn'
 

@@ -1,4 +1,5 @@
 import { assertNever } from '../assert-never.ts'
+import { termsUsed } from '../glossary/index.ts'
 import { compareStrings } from '../order.ts'
 import { buildTree, comparePlacements, diffTree, identityKey } from '../spec-tree/index.ts'
 import type {
@@ -73,6 +74,31 @@ function termFindings(terms: readonly TermSpec[]): Finding[] {
     if (/\bSHALL\b/.test(definition)) findings.push({ kind: 'term-promises', term })
     if (seen.has(term)) findings.push({ kind: 'term-defined-twice', term })
     seen.add(term)
+  }
+  findings.push(...nearFormFindings(terms))
+  return findings
+}
+
+/**
+ * A definition that spells another defined TERM in its everyday form. The edges of the
+ * vocabulary live only in the exact form, so `claim` in a definition reads as ordinary
+ * English while CLAIM still carries a meaning the machine believes in — a paraphrase cuts
+ * an edge nobody can see, and the warning is where that becomes visible.
+ *
+ * Only the bare lowercase singular is matched: plurals are left alone, because a plural may
+ * be a verb — `claims` — or an ordinary plural, and telling them apart means stemming, which
+ * is a guess about English and the guard does not guess. A TERM never counts against its own
+ * definition: saying what a word is will naturally say the word.
+ */
+function nearFormFindings(terms: readonly TermSpec[]): Finding[] {
+  const findings: Finding[] = []
+  for (const { term, definition } of terms) {
+    for (const other of terms) {
+      if (other.term === term) continue
+      if (termsUsed(definition, [other.term.toLowerCase()]).size > 0) {
+        findings.push({ kind: 'term-near-form', term, near: other.term })
+      }
+    }
   }
   return findings
 }
@@ -345,6 +371,7 @@ const KIND_ORDER: Record<Finding['kind'], number> = {
   'term-not-in-capitals': 10,
   'term-defined-twice': 11,
   'term-promises': 12,
+  'term-near-form': 13,
 }
 
 function compareFindings(a: Finding, b: Finding): number {
@@ -383,6 +410,8 @@ function orderParts(finding: Finding): OrderParts {
     case 'term-defined-twice':
     case 'term-promises':
       return [finding.term]
+    case 'term-near-form':
+      return [finding.term, finding.near]
     default:
       return assertNever(finding)
   }

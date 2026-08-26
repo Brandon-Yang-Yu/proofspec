@@ -212,3 +212,18 @@ it, while a word with two meanings has no meaning to use.
 - "A Term heading not written in capitals fails the build" → tests/guard/terms.test.ts
 - "Two Term sections defining the same TERM fail the build" → tests/guard/terms.test.ts
 <!-- /scenarios -->
+
+### Requirement: A TERM's definition spells a defined TERM in a near form only at the risk of losing the edge
+
+The guard SHALL warn, without failing the build, when a TERM's definition spells another
+defined TERM in its everyday form, naming the TERM and the everyday spelling.
+
+The edges of the vocabulary live only in the exact form, so a paraphrase cuts an edge the
+machine still believes in — the warning is where that becomes visible. A plural is
+deliberately not matched: it may be a verb or an ordinary plural, and telling them apart
+means stemming, which is a guess about English.
+
+<!-- scenarios: generated -->
+- "A definition writing a defined TERM in its everyday form warns" → tests/guard/terms.test.ts
+- "A verb sharing the TERM's spelling is not a near form" → tests/guard/terms.test.ts
+<!-- /scenarios -->

@@ -7,9 +7,15 @@ import type { Finding, FindingSeverity } from './types.ts'
  * reader is left to judge. A `no-steps` site is co-location in name only: a tag with no
  * claim to judge the test against (design.md §7 rule 7). A `duplicate-requirement` file
  * records the same entries under both headings and nothing downstream reads them wrong, so
- * which heading is meant to survive is the author's call, not the build's.
+ * which heading is meant to survive is the author's call, not the build's. A `term-near-form`
+ * definition paraphrases an edge the machine still believes in; whether the paraphrase cost
+ * anything is a reading, and the warning is what sends the reader to read it.
  */
-const WARN_KINDS: ReadonlySet<Finding['kind']> = new Set(['no-steps', 'duplicate-requirement'])
+const WARN_KINDS: ReadonlySet<Finding['kind']> = new Set([
+  'no-steps',
+  'duplicate-requirement',
+  'term-near-form',
+])
 
 /**
  * Which findings stop a build. Kept in one place rather than as a field on every finding,
@@ -52,6 +58,8 @@ export function describeFinding(finding: Finding): string {
       return `Term ${finding.term}: defined more than once, and a word with two meanings has no meaning to use`
     case 'term-promises':
       return `Term ${finding.term}: the definition contains a SHALL, and a term defines — the promise belongs under a requirement`
+    case 'term-near-form':
+      return `Term ${finding.term}: its definition spells ${finding.near} in its everyday form '${finding.near.toLowerCase()}', and the edge of the vocabulary lives only in the exact form`
     default:
       return assertNever(finding)
   }

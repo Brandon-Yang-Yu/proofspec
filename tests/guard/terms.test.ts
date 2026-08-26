@@ -69,3 +69,35 @@ it('fails when two Term sections define the same term', () => {
   expect(report.status).toBe('fail')
   expect(report.findings).toEqual([{ kind: 'term-defined-twice', term: 'TURN' }])
 })
+
+// Requirement: A TERM's definition spells a defined TERM in a near form only at the risk of losing the edge
+// Scenario: A definition writing a defined TERM in its everyday form warns
+// GIVEN a vocabulary whose definition of PROOF_SITE writes claim where CLAIM is defined
+// WHEN the guard runs
+// THEN a warning names the definition and the everyday spelling and the build still
+//      passes, because the reviewer reading the changed definition's then and now is
+//      the backstop, and the warning tells them where to look
+it('warns when a definition spells a defined TERM in its everyday form', () => {
+  const report = overTerms([
+    { term: 'PROOF_SITE', definition: 'One place that puts a claim beside the code that bears it.' },
+    { term: 'CLAIM', definition: 'The behaviour text of a PROOF_SITE.' },
+  ])
+
+  expect(report.status).toBe('pass')
+  expect(report.findings).toEqual([{ kind: 'term-near-form', term: 'PROOF_SITE', near: 'CLAIM' }])
+})
+
+// Requirement: A TERM's definition spells a defined TERM in a near form only at the risk of losing the edge
+// Scenario: A verb sharing the TERM's spelling is not a near form
+// GIVEN a definition that says "one place that claims to prove"
+// WHEN the guard runs
+// THEN nothing is reported, because verbs are everyday English and the guard does
+//      not stem
+it('reports nothing for a verb sharing the TERM spelling', () => {
+  const report = overTerms([
+    { term: 'PROOF_SITE', definition: 'One place that claims to prove a scenario.' },
+    { term: 'CLAIM', definition: 'The behaviour text of a PROOF_SITE.' },
+  ])
+
+  expect(report).toEqual({ status: 'pass', findings: [] })
+})
