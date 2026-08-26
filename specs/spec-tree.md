@@ -1,10 +1,10 @@
 # spec-tree
 
-Turns the proof-site list into the stable tree — capability → requirement → scenario
+Turns every PROOF SITE into the stable tree — capability → requirement → scenario
 title → file — and compares two trees.
 
-This is the only place the stable-identity rule lands. Both `guard` and the capability
-file write-back read the tree from here instead of building their own. Two builders would
+This is the only place the stable-identity rule lands. Both `guard` and the CAPABILITY FILE
+write-back read the tree from here instead of building their own. Two builders would
 drift, and the tree is what the whole tool rests on.
 
 ### Requirement: The tree is the stable projection of a scan
@@ -13,7 +13,7 @@ The tree SHALL hold one thing per scenario: its title and the file that proves i
 its requirement, under its capability.
 
 Nothing else goes in. No line numbers, no columns, no Gherkin text. Line numbers move
-whenever anyone edits a test. Gherkin lives above its proof site and is not copied. What
+whenever anyone edits a test. Gherkin lives above its PROOF SITE and is not copied. What
 is left is exactly what changes when the spec changes: a scenario added, removed,
 renamed, or moved to another file.
 
@@ -37,12 +37,12 @@ requirement reports, does not also make the tree itself unstable.
 
 Each `(capability, requirement, scenario)` SHALL appear once.
 
-When two proof sites claim the same one, the tree SHALL carry the collision and name
+When two PROOF SITE claim the same one, the tree SHALL carry the collision and name
 every site that claimed it. It SHALL NOT keep one and drop the other. A broken bijection
 is a modelling error the author has to see, and a tree that quietly deduplicated would
 hide it.
 
-A parameterised test adds one entry, matching the one proof site the scan reported for
+A parameterised test adds one entry, matching the one PROOF SITE the scan reported for
 it.
 
 The collisions themselves SHALL come in a fixed order, so the report a build produces is
@@ -50,18 +50,18 @@ reproducible whatever order the scan walked the files.
 
 <!-- scenarios: generated -->
 - "Collisions are reported in a fixed order whatever the scan order" → tests/spec-tree/collision.test.ts
-- "The same scenario at two proof sites is reported, naming both" → tests/spec-tree/collision.test.ts
+- "The same scenario at two PROOF SITE is reported, naming both" → tests/spec-tree/collision.test.ts
 - "The same title under a different requirement is not a collision" → tests/spec-tree/collision.test.ts
 <!-- /scenarios -->
 
-### Requirement: A proof site with no capability is set aside
+### Requirement: A PROOF SITE with no capability is set aside
 
-A proof site with no `// Capability:` tag has no place under any capability, so the tree
+A PROOF SITE with no `// Capability:` tag has no place under any capability, so the tree
 SHALL set it aside rather than drop it.
 
 The scan reports such a site with no capability; the tree cannot key it. Setting it aside
 keeps it in view: `guard` reads the set-aside list and fails the build, instead of a
-proof site vanishing without a word.
+PROOF SITE vanishing without a word.
 
 <!-- scenarios: generated -->
 - "A site with no capability is set aside, not placed in the tree" → tests/spec-tree/unplaced.test.ts

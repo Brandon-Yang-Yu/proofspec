@@ -34,10 +34,10 @@ The tool SHALL answer every TURN.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: A Term heading reads as a term with the definition written under it
-// GIVEN a capability file holding two Term sections, each with a definition and each ended
+// GIVEN a CAPABILITY FILE holding two Term sections, each with a definition and each ended
 //       by the heading that follows it
 // WHEN the file is read
-// THEN both terms come back in the order the file declares them, each with the definition
+// THEN both TERM come back in the order the file declares them, each with the definition
 //      written beneath its heading
 it('reads each Term heading with the definition written under it', () => {
   const spec = readCapabilityFile(WITH_TERMS, { capability: CAPABILITY })
@@ -53,7 +53,7 @@ it('reads each Term heading with the definition written under it', () => {
 // GIVEN a requirement whose description is followed by a Term section and then the
 //       requirement's generated block
 // WHEN the file is read
-// THEN the description is the prose the person wrote and nothing of the term's, the term's
+// THEN the description is the prose the person wrote and nothing of the TERM's, the TERM's
 //      definition is the prose under its heading and nothing of the block's, and the
 //      entries the block records still come back — because a heading and a block both end
 //      prose, and neither one's content belongs to the other
@@ -83,9 +83,9 @@ The answer half of a TURN.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: A Term heading inside a fenced code block is not a term
-// GIVEN a capability file showing what a Term section looks like inside a fenced code block
+// GIVEN a CAPABILITY FILE showing what a Term section looks like inside a fenced code block
 // WHEN the file is read
-// THEN the file declares no terms, because the fence is the file saying what the format
+// THEN the file declares no TERM, because the fence is the file saying what the format
 //      looks like, not using it
 it('does not read a Term heading inside a fenced code block', () => {
   const source = `# spec-file
@@ -112,7 +112,7 @@ The tool SHALL answer every turn.
 
 // Requirement: Reading a file yields its terms and what they define
 // Scenario: Writing back leaves Term sections exactly as they were
-// GIVEN a capability file holding Term sections and a requirement whose block already
+// GIVEN a CAPABILITY FILE holding Term sections and a requirement whose block already
 //       records what the tests prove
 // WHEN the write-back runs with those same entries
 // THEN the file comes back byte for byte unchanged, Term sections included, because a

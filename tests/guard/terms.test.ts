@@ -16,9 +16,9 @@ function overTerms(terms: readonly TermSpec[]) {
   })
 }
 
-// Requirement: A term defines; it never promises
+// Requirement: A TERM defines; it never promises
 // Scenario: A Term section that promises fails the build
-// GIVEN a vocabulary whose term TURN is defined with a sentence containing SHALL
+// GIVEN a vocabulary whose TERM TURN is defined with a sentence containing SHALL
 // WHEN the guard runs
 // THEN the build fails naming TURN, because a definition holding a promise is a
 //      requirement in disguise that no scenario proves and no gate can see move
@@ -29,11 +29,11 @@ it('fails when a Term section promises', () => {
   expect(report.findings).toEqual([{ kind: 'term-promises', term: 'TURN' }])
 })
 
-// Requirement: A term defines; it never promises
+// Requirement: A TERM defines; it never promises
 // Scenario: A Term section that only defines passes the guard
-// GIVEN a vocabulary whose terms define without promising
+// GIVEN a vocabulary whose TERM define without promising
 // WHEN the guard runs
-// THEN the build passes, because saying what a word means is all a term is for
+// THEN the build passes, because saying what a word means is all a TERM is for
 it('passes a Term section that only defines', () => {
   const report = overTerms([{ term: 'TURN', definition: 'One exchange of request and reply.' }])
 
@@ -41,11 +41,11 @@ it('passes a Term section that only defines', () => {
   expect(report.findings).toEqual([])
 })
 
-// Requirement: A term is written the way it is used
+// Requirement: A TERM is written the way it is used
 // Scenario: A Term heading not written in capitals fails the build
-// GIVEN a vocabulary whose term is named Turn rather than TURN
+// GIVEN a vocabulary whose TERM is named Turn rather than TURN
 // WHEN the guard runs
-// THEN the build fails naming the term, because a promise uses a term in the exact form it
+// THEN the build fails naming the TERM, because a PROMISE uses a TERM in the exact form it
 //      was defined in, and a name in lower case is a word no requirement can ever use
 it('fails when a term is not written in capitals', () => {
   const report = overTerms([{ term: 'Turn', definition: 'One exchange of request and reply.' }])
@@ -54,8 +54,8 @@ it('fails when a term is not written in capitals', () => {
   expect(report.findings).toEqual([{ kind: 'term-not-in-capitals', term: 'Turn' }])
 })
 
-// Requirement: A term is written the way it is used
-// Scenario: Two Term sections defining the same term fail the build
+// Requirement: A TERM is written the way it is used
+// Scenario: Two Term sections defining the same TERM fail the build
 // GIVEN a vocabulary defining TURN twice, differently
 // WHEN the guard runs
 // THEN the build fails naming TURN, because a word with two meanings has no meaning to

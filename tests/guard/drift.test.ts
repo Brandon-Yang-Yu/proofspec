@@ -4,9 +4,9 @@ import { expect, it } from 'vitest'
 import { guard } from '../../src/guard/index.ts'
 import { CAPABILITY, FILE, REQUIREMENT, committed, scan, site } from './support.ts'
 
-// Requirement: A disagreement between the tests and the committed files fails the build
-// Scenario: A scenario the committed file does not record fails the build
-// GIVEN a capability file recording one scenario, and tests proving a second one under the
+// Requirement: A disagreement between the tests and the committed CAPABILITY FILE fails the build
+// Scenario: A scenario the committed CAPABILITY FILE does not record fails the build
+// GIVEN a CAPABILITY FILE recording one scenario, and tests proving a second one under the
 //       same requirement
 // WHEN the guard runs
 // THEN the build fails and the extra scenario is named as added, under the capability and
@@ -34,9 +34,9 @@ it('fails when the tests prove a scenario the committed file does not record', (
   ])
 })
 
-// Requirement: A disagreement between the tests and the committed files fails the build
+// Requirement: A disagreement between the tests and the committed CAPABILITY FILE fails the build
 // Scenario: A scenario the tests no longer prove fails the build
-// GIVEN a capability file recording a scenario that no test tags any more
+// GIVEN a CAPABILITY FILE recording a scenario that no test tags any more
 // WHEN the guard runs
 // THEN the build fails and the scenario is named as removed, under the capability and the
 //      requirement it belongs to
@@ -65,7 +65,7 @@ it('fails when the committed file records a scenario the tests no longer prove',
   ])
 })
 
-// Requirement: A disagreement between the tests and the committed files fails the build
+// Requirement: A disagreement between the tests and the committed CAPABILITY FILE fails the build
 // Scenario: A scenario proven in another file fails the build
 // GIVEN a scenario recorded against one file and now proven in another
 // WHEN the guard runs
@@ -93,9 +93,9 @@ it('fails when a scenario is proven in a file other than the one recorded', () =
   ])
 })
 
-// Requirement: A disagreement between the tests and the committed files fails the build
-// Scenario: Tests matching the committed files pass
-// GIVEN tests whose scenarios are exactly the ones the capability file records
+// Requirement: A disagreement between the tests and the committed CAPABILITY FILE fails the build
+// Scenario: Tests matching the committed CAPABILITY FILE pass
+// GIVEN tests whose scenarios are exactly the ones the CAPABILITY FILE records
 // WHEN the guard runs
 // THEN the build passes with nothing reported
 it('passes when the tests and the committed file agree', () => {
@@ -114,9 +114,9 @@ it('passes when the tests and the committed file agree', () => {
   expect(report).toEqual({ status: 'pass', findings: [] })
 })
 
-// Requirement: A disagreement between the tests and the committed files fails the build
+// Requirement: A disagreement between the tests and the committed CAPABILITY FILE fails the build
 // Scenario: A test that moved down its file compares clean
-// GIVEN a capability file recording where two scenarios are proven, and lines inserted
+// GIVEN a CAPABILITY FILE recording where two scenarios are proven, and lines inserted
 //       above both of their tests so every position in the file has shifted
 // WHEN the guard runs
 // THEN the build passes with nothing reported, because line numbers take no part in the

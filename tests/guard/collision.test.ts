@@ -4,12 +4,12 @@ import { expect, it } from 'vitest'
 import { guard } from '../../src/guard/index.ts'
 import { CAPABILITY, REQUIREMENT, committed, scan, site } from './support.ts'
 
-// Requirement: A scenario claimed by two proof sites fails the build
-// Scenario: The same scenario at two proof sites fails the build
-// GIVEN the same capability, requirement and scenario tagged at two proof sites
+// Requirement: A scenario claimed by two PROOF SITE fails the build
+// Scenario: The same scenario at two PROOF SITE fails the build
+// GIVEN the same capability, requirement and scenario tagged at two PROOF SITE
 // WHEN the guard runs
 // THEN the build fails and every site that claimed the scenario is named. One scenario has
-//      one proof, so two proofs mean the action was not the same after all
+//      one PROOF, so two PROOF mean the action was not the same after all
 it('fails when two proof sites claim the same scenario, naming both', () => {
   const report = guard({
     scans: [

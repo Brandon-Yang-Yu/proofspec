@@ -6,7 +6,7 @@ import { site } from './support.ts'
 
 // Requirement: The tree counts one entry per scenario and reports collisions
 // Scenario: Collisions are reported in a fixed order whatever the scan order
-// GIVEN two different scenarios that are each proven at two proof sites
+// GIVEN two different scenarios that are each proven at two PROOF SITE
 // WHEN the tree is built from those sites in either order
 // THEN the collisions are reported in the same fixed order, so a build is reproducible
 //      whatever order the scan walked the files
@@ -26,8 +26,8 @@ it('reports collisions in a fixed order whatever the scan order', () => {
 })
 
 // Requirement: The tree counts one entry per scenario and reports collisions
-// Scenario: The same scenario at two proof sites is reported, naming both
-// GIVEN two proof sites that share a capability, a requirement, and a scenario title
+// Scenario: The same scenario at two PROOF SITE is reported, naming both
+// GIVEN two PROOF SITE that share a capability, a requirement, and a scenario title
 // WHEN the tree is built
 // THEN one collision is reported, naming both sites' file and line, and the scenario
 //      appears only once in the tree
@@ -55,7 +55,7 @@ it('reports the same scenario at two proof sites, naming both', () => {
 
 // Requirement: The tree counts one entry per scenario and reports collisions
 // Scenario: The same title under a different requirement is not a collision
-// GIVEN two proof sites that share a scenario title but sit under different requirements
+// GIVEN two PROOF SITE that share a scenario title but sit under different requirements
 // WHEN the tree is built
 // THEN no collision is reported, because identity includes the requirement the scenario
 //      sits under

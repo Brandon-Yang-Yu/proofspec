@@ -55,7 +55,7 @@ A Term section ends where the next heading begins, whatever kind of heading that
 where a generated block opens, because a block records scenarios for the requirement the
 section sits in, and is no more part of a definition than of a description. The fence rule
 that governs requirement headings governs Term ones too: a file showing the format as an
-example inside a code fence is saying what a term looks like, not defining one.
+example inside a code fence is saying what a TERM looks like, not defining one.
 
 The write-back SHALL leave Term sections exactly as they were. A definition is the human's
 half of the file, like a description; the tool that records where scenarios are has nothing

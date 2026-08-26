@@ -8,7 +8,7 @@ import { FILE, lineOf, onlyError, onlySite, stepsOf } from './support.ts'
 // Scenario: The steps above a test are read in order
 // GIVEN a test with a GIVEN, a WHEN and a THEN on the lines above it
 // WHEN the file is scanned
-// THEN its proof site carries the three steps in the order written, each with its
+// THEN its PROOF SITE carries the three steps in the order written, each with its
 //      keyword and its text taken as written
 it('reads the steps above a test', () => {
   const source = `// Requirement: The guard fails the build on drift
@@ -100,7 +100,7 @@ it('fails on a stale capability file', () => {
 // Scenario: A block comment is not read as a step
 // GIVEN steps written in a `/* */` comment above a tagged test
 // WHEN the file is scanned
-// THEN the proof site carries no steps, because only `//` comments are read
+// THEN the PROOF SITE carries no steps, because only `//` comments are read
 it('ignores steps written in a block comment', () => {
   const source = `/* WHEN the tree is regenerated
    THEN the guard fails */
@@ -121,7 +121,7 @@ it('fails on a stale capability file', () => {
 // GIVEN a comment about something else, a blank line, then a tagged test with one step
 // WHEN the file is scanned
 // THEN only the step below the blank line is read, so a comment about something else
-//      never becomes a claim about a test
+//      never becomes a CLAIM about a test
 it('ignores a comment cut off from the test by a blank line', () => {
   const source = `// THEN this note is about the file, not about the test below it
 
@@ -145,7 +145,7 @@ it('fails on a stale capability file', () => {
 // GIVEN a test with a GIVEN and a WHEN above it and two tagged blocks inside it
 // WHEN the file is scanned
 // THEN every block carries the shared GIVEN and WHEN ahead of its own THEN, so the
-//      author writes the action once and each site still reads as a whole claim
+//      author writes the action once and each site still reads as a whole CLAIM
 it('delivers the shared steps on each block', () => {
   const source = `// GIVEN a document with one version
 // WHEN a turn is posted
@@ -185,7 +185,7 @@ it('posting a turn', async () => {
 // GIVEN a `//` comment that shares a line with code, sitting above a tagged test
 // WHEN the file is scanned
 // THEN it is not read as a step, because only a comment that owns its line leads the
-//      test, so a note trailing a line of code never becomes a claim
+//      test, so a note trailing a line of code never becomes a CLAIM
 it('ignores a comment that shares a code line', () => {
   const source = `const setup = prepare() // GIVEN a stale committed file
 // Requirement: The guard fails the build on drift

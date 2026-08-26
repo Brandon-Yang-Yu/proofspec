@@ -6,7 +6,7 @@ import { CAPABILITY, FILE, committed, scan, site } from './support.ts'
 
 // Requirement: Every declared requirement has something proving it
 // Scenario: A declared requirement no test proves fails the build
-// GIVEN a capability file declaring two requirements, and tests tagging only one of them
+// GIVEN a CAPABILITY FILE declaring two requirements, and tests tagging only one of them
 // WHEN the guard runs
 // THEN the build fails and the requirement nothing proves is reported as uncovered
 it('fails when a declared requirement has no scenario proving it', () => {

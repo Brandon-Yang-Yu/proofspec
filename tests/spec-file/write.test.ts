@@ -6,7 +6,7 @@ import { FENCE } from './support.ts'
 
 // Requirement: Writing back touches only the generated block
 // Scenario: Everything outside the generated blocks comes back unchanged
-// GIVEN a capability file with opening prose, blank lines and two requirements, each
+// GIVEN a CAPABILITY FILE with opening prose, blank lines and two requirements, each
 //       already carrying a generated block
 // WHEN the write-back runs with different entries
 // THEN the file comes back differing only between the markers, so headings, descriptions,
@@ -164,7 +164,7 @@ ${FENCE}
 
 // Requirement: Writing back touches only the generated block
 // Scenario: A requirement nothing proves any more is left with an empty block
-// GIVEN a capability file recording two entries for a requirement
+// GIVEN a CAPABILITY FILE recording two entries for a requirement
 // WHEN the write-back runs with no entries for it, whether the requirement is absent from
 //      what it was handed or present there with nothing under it
 // THEN its block comes back empty, which is what a requirement looks like when nothing
@@ -246,7 +246,7 @@ Its description.
 
 // Requirement: Writing back touches only the generated block
 // Scenario: A file that declares no requirements comes back unchanged
-// GIVEN a capability file that is all opening prose and declares no requirement heading
+// GIVEN a CAPABILITY FILE that is all opening prose and declares no requirement heading
 // WHEN the write-back runs, even handed entries for requirements the file never declares
 // THEN the file comes back byte for byte, because with no heading to own a block there is
 //      nothing the write-back may touch

@@ -6,7 +6,7 @@ import { CAPABILITY, FILE, committed, scan, site } from './support.ts'
 
 // Requirement: Every tag names a requirement that exists
 // Scenario: A tag naming a requirement its capability does not declare fails the build
-// GIVEN a test tagging a requirement that its capability file does not declare
+// GIVEN a test tagging a requirement that its CAPABILITY FILE does not declare
 // WHEN the guard runs
 // THEN the build fails and the tag is reported as naming a requirement that does not
 //      exist, with the file and line of the site that carries it

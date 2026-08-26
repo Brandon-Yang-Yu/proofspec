@@ -64,8 +64,8 @@ const CAUSED_BY_NO_SITE: readonly Case[] = [
 ]
 
 // Requirement: A failure says what to do about it
-// Scenario: A failure caused by a proof site names the site
-// GIVEN a failure that a proof site caused
+// Scenario: A failure caused by a PROOF SITE names the site
+// GIVEN a failure that a PROOF SITE caused
 // WHEN its message is written
 // THEN the message names the file and line of the site, and every part of the identity the
 //      failure carries, so the reader goes straight there instead of being handed the
@@ -77,8 +77,8 @@ it.each(CAUSED_BY_A_SITE)('names the site and the identity of $finding.kind', ({
 })
 
 // Requirement: A failure says what to do about it
-// Scenario: A failure with no proof site names what it is about
-// GIVEN a failure that no proof site caused, so there is no line to point at
+// Scenario: A failure with no PROOF SITE names what it is about
+// GIVEN a failure that no PROOF SITE caused, so there is no line to point at
 // WHEN its message is written
 // THEN the message names what the failure does have and points at no line, so the reader
 //      still knows where to look and is never sent to a position that does not exist

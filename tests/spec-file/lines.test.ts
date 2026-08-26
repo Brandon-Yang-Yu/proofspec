@@ -6,7 +6,7 @@ import { FENCE } from './support.ts'
 
 // Requirement: Where each requirement is written is delivered on demand
 // Scenario: A requirement's heading line is reported as it stands
-// GIVEN a capability file with two requirements
+// GIVEN a CAPABILITY FILE with two requirements
 // WHEN the lines its requirements are written on are asked for
 // THEN each requirement comes back with the 1-based line of its heading, so a reader can be
 //      sent straight to the promise
@@ -30,7 +30,7 @@ it('reports the line each requirement heading is written on', () => {
 
 // Requirement: Where each requirement is written is delivered on demand
 // Scenario: A heading shown inside a code fence is not a place a requirement is written
-// GIVEN a capability file whose description shows a requirement heading as an example in a fence
+// GIVEN a CAPABILITY FILE whose description shows a requirement heading as an example in a fence
 // WHEN the lines its requirements are written on are asked for
 // THEN only the real heading is reported, the same fence rule reading follows, so a file
 //      documenting the format does not gain a requirement by showing one

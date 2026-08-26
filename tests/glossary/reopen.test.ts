@@ -21,14 +21,14 @@ function promise(fields: Partial<PromiseStandard> = {}): PromiseStandard {
 
 const REDEFINED = { kind: 'reworded', term: 'TURN', before: 'One exchange of request and reply.', after: 'One exchange, reply included.' } as const
 
-// Requirement: A changed term re-opens every promise that uses it
-// Scenario: A term used in a requirement's heading or description re-opens every scenario under it
-// GIVEN a changed term TURN, one requirement whose description uses it with two scenarios
+// Requirement: A changed TERM re-opens every PROMISE that uses it
+// Scenario: A TERM used in a requirement's heading or description re-opens every scenario under it
+// GIVEN a changed TERM TURN, one requirement whose description uses it with two scenarios
 //       under it, one whose heading uses it with one scenario, and one requirement that
 //       does not use it at all
-// WHEN the promises the change reaches are found
+// WHEN every PROMISE the change reaches is found
 // THEN every scenario of the two requirements that use TURN is re-opened and none of the
-//      one that does not, because their standard moved and its did not
+//      one that does not, because their STANDARD moved and its did not
 it("re-opens every scenario under a requirement whose heading or description uses the term", () => {
   const promises = [
     promise({ scenario: 'A first behavior', description: 'The tool SHALL answer every TURN.' }),
@@ -47,11 +47,11 @@ it("re-opens every scenario under a requirement whose heading or description use
   expect(reopened.map(one => one.reopenedBy)).toEqual([[REDEFINED], [REDEFINED], [REDEFINED]])
 })
 
-// Requirement: A changed term re-opens every promise that uses it
-// Scenario: A term used in one scenario's title or steps re-opens that scenario alone
-// GIVEN a changed term TURN and three scenarios under one requirement, one using TURN in
+// Requirement: A changed TERM re-opens every PROMISE that uses it
+// Scenario: A TERM used in one scenario's title or steps re-opens that scenario alone
+// GIVEN a changed TERM TURN and three scenarios under one requirement, one using TURN in
 //       its title, one in its steps, and one not using it at all
-// WHEN the promises the change reaches are found
+// WHEN every PROMISE the change reaches is found
 // THEN the two that use TURN are re-opened and the third is not, because it shares the
 //      action, not the sentence
 it('re-opens only the scenario whose own title or steps use the term', () => {
@@ -73,12 +73,12 @@ it('re-opens only the scenario whose own title or steps use the term', () => {
   expect(reopened.map(one => one.scenario)).toEqual(['A TURN is always closed', 'A stepped behavior'])
 })
 
-// Requirement: A changed term re-opens every promise that uses it
-// Scenario: A term used only inside another term's definition re-opens that term's users
-// GIVEN a changed term REPLY that no promise uses directly, and a term MARGIN whose
-//       definition uses REPLY and that one promise's description does use
-// WHEN the promises the change reaches are found
-// THEN that promise is re-opened by REPLY's change, because MARGIN is a word built on a
+// Requirement: A changed TERM re-opens every PROMISE that uses it
+// Scenario: A TERM used only inside another TERM's definition re-opens that TERM's users
+// GIVEN a changed TERM REPLY that no PROMISE uses directly, and a TERM MARGIN whose
+//       definition uses REPLY and that one PROMISE's description does use
+// WHEN every PROMISE the change reaches is found
+// THEN that PROMISE is re-opened by REPLY's change, because MARGIN is a word built on a
 //      word that moved, and it moved with it
 it("re-opens the users of a term whose definition uses the changed term", () => {
   const changed = [{ kind: 'reworded', term: 'REPLY', before: 'The answer half.', after: 'The answer half, quoted.' }] as const
@@ -94,12 +94,12 @@ it("re-opens the users of a term whose definition uses the changed term", () => 
   expect(reopened[0]!.reopenedBy).toEqual(changed)
 })
 
-// Requirement: A changed term re-opens every promise that uses it
-// Scenario: A changed term no promise uses re-opens nothing
-// GIVEN a changed term TURN that no promise's standard uses
-// WHEN the promises the change reaches are found
+// Requirement: A changed TERM re-opens every PROMISE that uses it
+// Scenario: A changed TERM no PROMISE uses re-opens nothing
+// GIVEN a changed TERM TURN that no PROMISE's STANDARD uses
+// WHEN every PROMISE the change reaches is found
 // THEN none is re-opened, because the vocabulary is allowed to hold words nobody leans on
-//      yet, and a promise whose standard did not move is not worth judging again
+//      yet, and a PROMISE whose STANDARD did not move is not worth judging again
 it('re-opens nothing when no promise uses the changed term', () => {
   const reopened = reopenedByTerms({
     changed: [REDEFINED],
