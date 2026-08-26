@@ -1904,7 +1904,11 @@ Nothing passed unlooked-at, no review survived the wording it was filed under, a
 stale-review channel stayed closed the way §34 designed: not by detecting staleness, but
 by the key simply no longer being the one asked for. The editorial pass was wording-only
 and moved no code; the suite stayed green capability by capability throughout, which is
-what let the judging be a re-reading rather than a repair.
+what let the judging be a re-reading rather than a repair. On merged main the gate measures
+from the unpushed upstream, and 30 further PROMISE surfaced — re-opened by the term axis
+itself, because the glossary landed between upstream and here and their standards now use
+TERM that did not exist when they were last judged. That is the second axis working as
+designed, from the outside, unbidden.
 
 **Gone promises were judged drift, with the reason in the note.** A removed PROOF can be
 passed with no citation, but a pass says "this PROMISE was meant to die", and a re-keyed
