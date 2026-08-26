@@ -13,6 +13,18 @@ word: rewrite it and the promises have not moved a line of their tests, but what
 tests are claimed to prove has changed underneath them. This capability is what keeps that
 change from passing unreviewed.
 
+A TERM is not one of the format's reserved words. `### Requirement:`, `### Term:`, and the
+Gherkin step keywords are the tool's — written in backticks, defined by the capabilities
+that parse them, and meaning the same thing in every repository. A TERM is this project's:
+defined in a capability file, used in the exact form, and owned by whoever owns that repo's
+spec.
+
+### Term: TERM
+
+A word defined once, in a Term section, that means that one thing everywhere. A requirement
+uses a TERM in the exact form it was defined in — capitals, singular, unchanged — so a
+reader always knows which words carry a meaning of their own.
+
 ### Requirement: A term is used when it appears in the exact form it was defined in
 
 Finding the terms a promise's words use SHALL be a whole-word match of each defined term in

@@ -1869,3 +1869,13 @@ definition moved — it is gathered once with both, not twice: one promise, one 
 
 **The vocabulary is rendered as one page**, linked from the index only when terms exist, so
 a repo without a glossary renders exactly the pages it always did.
+
+**The edges live only in the exact form.** A definition rewritten to say "the site that
+proves" where it said PROOF SITE has cut an edge the machine still believes in: the word
+moved, nothing re-opened, and the promises hanging off it keep a key for a meaning they no
+longer have. Nothing mechanical catches a paraphrase — the guard's term rules check the
+names, not the uses — so the backstop is the reviewer reading a changed definition's then
+and now. A WARN for a definition spelling a defined term in a near form is deliberately not
+built yet: this repo's own prose still writes claim, proof and promise in lowercase
+throughout, so the rule would report nothing but the adoption it is waiting for. It is the
+first worktree after that adoption lands.
