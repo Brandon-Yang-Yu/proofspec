@@ -9,7 +9,6 @@
  */
 
 import type { Step } from '../test-scan/index.ts'
-import type { TermSpec } from '../spec-file/index.ts'
 
 /**
  * How one term moved between the base revision and the working tree. The three ways it can
