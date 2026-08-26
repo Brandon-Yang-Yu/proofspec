@@ -41,10 +41,10 @@ const CHAIN: readonly TermSpec[] = [
 ]
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
-// Scenario: The vocabulary page holds every term in name order
-// GIVEN a capability file declaring its terms out of name order
+// Scenario: The vocabulary page holds every TERM in name order
+// GIVEN a CAPABILITY FILE declaring its TERM out of name order
 // WHEN the site is rendered
-// THEN one vocabulary page holds every term with its definition, in name order, so a
+// THEN one vocabulary page holds every TERM with its definition, in name order, so a
 //      reader looking for a word finds it in the one place words are defined
 it('renders every term on one vocabulary page in name order', () => {
   const vocabulary = page(renderSite([spec({ capability: 'demo', terms: [TURN, REPLY] })], [], []), 'vocabulary.md')
@@ -59,7 +59,7 @@ it('renders every term on one vocabulary page in name order', () => {
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
 // Scenario: The index links the vocabulary page
-// GIVEN a site rendered from specs that define terms, and one rendered from specs that
+// GIVEN a site rendered from specs that define TERM, and one rendered from specs that
 //       define none
 // WHEN the index of each is read
 // THEN the first links the vocabulary page and the second does not, because a repository
@@ -75,10 +75,10 @@ it('links the vocabulary page from the index, and only when terms exist', () => 
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
 // Scenario: The whole-spec page carries the vocabulary
-// GIVEN a site rendered from specs that define terms
+// GIVEN a site rendered from specs that define TERM
 // WHEN the whole-spec page is read
 // THEN it carries the vocabulary with it, because a model handed the one file is handed
-//      the meanings along with the promises
+//      the meanings along with the PROMISE
 it('carries the vocabulary on the whole-spec page', () => {
   const whole = page(renderSite([spec({ capability: 'demo', terms: [TURN, REPLY] })], [], []), 'spec.md')
 
@@ -88,11 +88,11 @@ it('carries the vocabulary on the whole-spec page', () => {
 })
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
-// Scenario: A term's entry shows what it leans on and what a change to it reaches
-// GIVEN terms whose definitions lean on one another, one through another term's definition
+// Scenario: A TERM's entry shows what it leans on and what a change to it reaches
+// GIVEN TERM whose definitions lean on one another, one through another TERM's definition
 // WHEN the vocabulary page is read
-// THEN each entry says what its term leans on and what a change to it reaches, both
-//      through other terms' definitions, and the whole-spec page carries the definitions
+// THEN each entry says what its TERM leans on and what a change to it reaches, both
+//      through other TERM definitions, and the whole-spec page carries the definitions
 //      alone, because a model handed the one file wants the meanings, not the map
 it('shows each term what it leans on and what a change to it reaches', () => {
   const site = renderSite([spec({ capability: 'demo', terms: CHAIN })], [], [])

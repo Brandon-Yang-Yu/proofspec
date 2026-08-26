@@ -84,10 +84,10 @@ it('renders an index linking to every capability in name order', () => {
 
 // Requirement: The spec is rendered as one page per capability with an index
 // Scenario: A scenario is rendered with its Gherkin steps
-// GIVEN a capability recording a scenario, and the proof site carrying its GIVEN/WHEN/THEN steps
+// GIVEN a capability recording a scenario, and the PROOF SITE carrying its GIVEN/WHEN/THEN steps
 // WHEN the site is rendered
 // THEN the capability's page shows each step as its keyword and text, under the scenario and
-//      in GIVEN → WHEN → THEN order, the Gherkin pulled from the test not the committed file
+//      in GIVEN → WHEN → THEN order, the Gherkin pulled from the test not the committed CAPABILITY FILE
 it('renders a scenario with each of its Gherkin steps in order', () => {
   const steps: readonly Step[] = [
     { keyword: 'GIVEN', text: 'a scanned test file', line: 1 },
@@ -135,7 +135,7 @@ it('renders a requirement with its description prose after its heading', () => {
 
 // Requirement: The spec is rendered as one page per capability with an index
 // Scenario: A scenario is rendered with its current position
-// GIVEN a proof site proving a scenario at a file and a line
+// GIVEN a PROOF SITE proving a scenario at a file and a line
 // WHEN the site is rendered
 // THEN the scenario on its page carries that file and line, the live position a reader jumps
 //      to rather than a stored one
@@ -148,8 +148,8 @@ it('renders a scenario with its current file and line', () => {
 })
 
 // Requirement: The spec is rendered as one page per capability with an index
-// Scenario: A recorded scenario with no proof is rendered as unproven
-// GIVEN a scenario recorded in a capability file that no proof site proves
+// Scenario: A recorded scenario with no PROOF is rendered as unproven
+// GIVEN a scenario recorded in a CAPABILITY FILE that no PROOF SITE proves
 // WHEN the site is rendered
 // THEN the scenario is listed on its page with an unproven note and no steps, so drift is
 //      shown rather than dropped or crashing the render
@@ -170,11 +170,11 @@ it('renders a recorded scenario with no proof as unproven', () => {
   expect(content).not.toContain('- **')
 })
 
-// Requirement: Each proof is rendered as an anchored code snippet its scenario links to
-// Scenario: A proof is rendered as a code snippet
-// GIVEN a test file carrying a proof site spanning some lines, and its source
+// Requirement: Each PROOF is rendered as an anchored code snippet its scenario links to
+// Scenario: A PROOF is rendered as a code snippet
+// GIVEN a test file carrying a PROOF SITE spanning some lines, and its source
 // WHEN the site is rendered
-// THEN the test's page holds a code snippet of exactly those proving lines, so the proof a
+// THEN the test's page holds a code snippet of exactly those proving lines, so the PROOF a
 //      scenario points at can be read in the site itself
 it('renders a proof as a code snippet of its lines', () => {
   const tests = [{ path: 'tests/x.test.ts', source: "it('a', () => {\n  expect(sum(2, 2)).toBe(4)\n})\nconst untouched = 1\n" }]
@@ -186,7 +186,7 @@ it('renders a proof as a code snippet of its lines', () => {
   expect(code).not.toContain('const untouched = 1')
 })
 
-// Requirement: Each proof is rendered as an anchored code snippet its scenario links to
+// Requirement: Each PROOF is rendered as an anchored code snippet its scenario links to
 // Scenario: A scenario links to the snippet that proves it
 // GIVEN a scenario proven at a line in a test file
 // WHEN the site is rendered
@@ -213,9 +213,9 @@ it('links a scenario to the anchored snippet that proves it', () => {
   expect(anchor).toBe('a-scenario')
 })
 
-// Requirement: Each proof is rendered as an anchored code snippet its scenario links to
+// Requirement: Each PROOF is rendered as an anchored code snippet its scenario links to
 // Scenario: A snippet is headed by its scenario
-// GIVEN a proof site proving a scenario in a test file
+// GIVEN a PROOF SITE proving a scenario in a test file
 // WHEN the site is rendered
 // THEN the snippet's heading on the code page is the scenario title, so its anchor reads as
 //      the scenario the reader clicked rather than a bare line number
@@ -228,12 +228,12 @@ it('heads each snippet with its scenario title', () => {
   expect(code).toContain('## A scenario')
 })
 
-// Requirement: Each proof is rendered as an anchored code snippet its scenario links to
+// Requirement: Each PROOF is rendered as an anchored code snippet its scenario links to
 // Scenario: A snippet shows its scenario's Gherkin
-// GIVEN a proof site carrying its scenario's GIVEN/WHEN/THEN steps
+// GIVEN a PROOF SITE carrying its scenario's GIVEN/WHEN/THEN steps
 // WHEN the site is rendered
 // THEN the snippet on the code page shows those steps above the code, so a reader can judge
-//      the test against the claim without leaving the page
+//      the test against the CLAIM without leaving the page
 it("shows a scenario's Gherkin above its snippet", () => {
   const steps: readonly Step[] = [
     { keyword: 'GIVEN', text: 'a proof site', line: 1 },

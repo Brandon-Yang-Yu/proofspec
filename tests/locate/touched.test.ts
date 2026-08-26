@@ -93,28 +93,28 @@ function named(
 }
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A change in the Gherkin alone says the claim changed
-// GIVEN a proof whose Gherkin sits above its test, and a change reaching only those steps
+// Scenario: A change in the Gherkin alone says the CLAIM changed
+// GIVEN a PROOF whose Gherkin sits above its test, and a change reaching only those steps
 // WHEN the touched scenarios are found
-// THEN the report names the scenario with its claim changed, because the promise was
+// THEN the report names the scenario with its CLAIM changed, because the PROMISE was
 //      rewritten and the evidence was left alone
 it('says the claim changed when only the Gherkin moved', () => {
   expect(named([PROOF], [{ from: 9, to: 9 }])).toEqual([{ scenario: 'A scenario', changed: 'claim' }])
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A change in the test body alone says the proof changed
-// GIVEN a proof whose Gherkin sits above its test, and a change reaching only its code
+// Scenario: A change in the test body alone says the PROOF changed
+// GIVEN a PROOF whose Gherkin sits above its test, and a change reaching only its code
 // WHEN the touched scenarios are found
-// THEN the report names the scenario with its proof changed, because the evidence moved
-//      and the promise above it has not caught up
+// THEN the report names the scenario with its PROOF changed, because the evidence moved
+//      and the PROMISE above it has not caught up
 it('says the proof changed when only the test body moved', () => {
   expect(named([PROOF], [{ from: 14, to: 14 }])).toEqual([{ scenario: 'A scenario', changed: 'proof' }])
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
 // Scenario: A change reaching the Gherkin and the body says both changed
-// GIVEN a proof whose Gherkin sits above its test, and changes reaching the steps and the code
+// GIVEN a PROOF whose Gherkin sits above its test, and changes reaching the steps and the code
 // WHEN the touched scenarios are found
 // THEN the report names the scenario with both changed, because an author who moved the two
 //      together is a different case from one who moved only one
@@ -128,17 +128,17 @@ it('says both changed when the Gherkin and the body moved together', () => {
 // Scenario: A change in one block's own Gherkin names that block alone
 // GIVEN a test proving two scenarios, and a change reaching the first block's own THEN
 // WHEN the touched scenarios are found
-// THEN the report names that block alone with its claim changed, because the steps a block
+// THEN the report names that block alone with its CLAIM changed, because the steps a block
 //      writes for itself are no part of what its siblings promise
 it('names one block alone when its own Gherkin moved', () => {
   expect(named(BLOCKS, [{ from: 8, to: 8 }])).toEqual([{ scenario: 'First', changed: 'claim' }])
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A change in one block's own code says its proof changed
+// Scenario: A change in one block's own code says its PROOF changed
 // GIVEN a test proving two scenarios, and a change reaching the first block's own statement
 // WHEN the touched scenarios are found
-// THEN the report names that block alone with its proof changed, because the lines a block
+// THEN the report names that block alone with its PROOF changed, because the lines a block
 //      runs for itself prove nothing its siblings claim
 it('names one block alone when its own code moved', () => {
   expect(named(BLOCKS, [{ from: 9, to: 9 }])).toEqual([{ scenario: 'First', changed: 'proof' }])
@@ -157,10 +157,10 @@ it('says both changed when one block moved its own halves together', () => {
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A step shared above the blocks changes the claim of every scenario in the test
+// Scenario: A step shared above the blocks changes the CLAIM of every scenario in the test
 // GIVEN a test proving two scenarios under a shared GIVEN, and a change reaching that step
 // WHEN the touched scenarios are found
-// THEN both scenarios are named with their claim changed, because a shared step is part of
+// THEN both scenarios are named with their CLAIM changed, because a shared step is part of
 //      every sentence written under it
 it('changes the claim of every scenario when a shared step moved', () => {
   expect(named(BLOCKS, [{ from: 1, to: 1 }])).toEqual([
@@ -170,10 +170,10 @@ it('changes the claim of every scenario when a shared step moved', () => {
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: Setup shared above the blocks changes the proof of every scenario in the test
+// Scenario: Setup shared above the blocks changes the PROOF of every scenario in the test
 // GIVEN a test proving two scenarios after a shared setup, and a change reaching that setup
 // WHEN the touched scenarios are found
-// THEN both scenarios are named with their proof changed, because the shared action is part
+// THEN both scenarios are named with their PROOF changed, because the shared action is part
 //      of how every one of them is proven, and no part of what any of them promises
 it('changes the proof of every scenario when shared setup moved', () => {
   expect(named(BLOCKS, [{ from: 4, to: 4 }])).toEqual([
@@ -196,11 +196,11 @@ it('changes both for every scenario when the shared halves moved together', () =
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A line changed outside every proof is reported as matching none
-// GIVEN a changed line that falls in no proof site
+// Scenario: A line changed outside every PROOF is reported as matching none
+// GIVEN a changed line that falls in no PROOF SITE
 // WHEN the touched scenarios are found
 // THEN no scenario is named and the line comes back as unmatched, because a helper or an
-//      import is a real change with no promise behind it
+//      import is a real change with no PROMISE behind it
 it('reports a changed line that falls in no proof as unmatched', () => {
   const { scenarios, unmatched } = scenariosTouched([PROOF], [{ from: 3, to: 4 }])
 
@@ -210,9 +210,9 @@ it('reports a changed line that falls in no proof as unmatched', () => {
 
 // Requirement: The scenarios proven at a set of lines can be found
 // Scenario: A scenario is named once however many changed lines fall in it
-// GIVEN three changed runs of lines, all inside one proof
+// GIVEN three changed runs of lines, all inside one PROOF
 // WHEN the touched scenarios are found
-// THEN the scenario is named once, so a reader sees a promise touched, not a diff retold
+// THEN the scenario is named once, so a reader sees a PROMISE touched, not a diff retold
 it('names a scenario once however many changed lines fall in it', () => {
   const { scenarios } = scenariosTouched([PROOF], [{ from: 9, to: 9 }, { from: 12, to: 13 }, { from: 19, to: 20 }])
 
@@ -220,8 +220,8 @@ it('names a scenario once however many changed lines fall in it', () => {
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A proof with no capability names no scenario
-// GIVEN a proof site whose file declares no capability, and a changed line inside it
+// Scenario: A PROOF with no capability names no scenario
+// GIVEN a PROOF SITE whose file declares no capability, and a changed line inside it
 // WHEN the touched scenarios are found
 // THEN no scenario is named and the line is unmatched, because a site with no capability
 //      cannot be pointed at a requirement — the check reports that gap on its own
@@ -247,11 +247,11 @@ it('names no scenario for a proof whose file declares no capability', () => {
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A change to the line a scenario is named on says the claim changed
-// GIVEN a proof whose `// Scenario:` tag sits above its Gherkin, and a change to that tag
+// Scenario: A change to the line a scenario is named on says the CLAIM changed
+// GIVEN a PROOF whose `// Scenario:` tag sits above its Gherkin, and a change to that tag
 // WHEN the touched scenarios are found
-// THEN the scenario is named with its claim changed, because a site starts where its claim is
-//      written and renaming a scenario is the plainest rewrite of a promise there is
+// THEN the scenario is named with its CLAIM changed, because a site starts where its CLAIM is
+//      written and renaming a scenario is the plainest rewrite of a PROMISE there is
 it('says the claim changed when the line naming the scenario moved', () => {
   expect(named([PROOF], [{ from: 6, to: 6 }])).toEqual([{ scenario: 'A scenario', changed: 'claim' }])
 })
@@ -260,7 +260,7 @@ it('says the claim changed when the line naming the scenario moved', () => {
 // Scenario: A block reports the line its own tag opens on, not the prelude it shares
 // GIVEN a test proving two scenarios, and a change reaching the second block's own code
 // WHEN the touched scenarios are found
-// THEN the scenario reports the line its own tag opens on, so a reader is sent to the promise
+// THEN the scenario reports the line its own tag opens on, so a reader is sent to the PROMISE
 //      named rather than to the prelude every scenario in that test shares
 it('reports where a block opens, not where its shared prelude does', () => {
   const { scenarios } = scenariosTouched(BLOCKS, [{ from: 14, to: 14 }])
@@ -284,28 +284,28 @@ it('reports where a block opens, not where its shared prelude does', () => {
 // Scenario: The line between two blocks belongs to the block above it
 // GIVEN a test proving two scenarios, and a change to the blank line separating them
 // WHEN the touched scenarios are found
-// THEN the block above is named, because a block runs to the line before the next block's claim
+// THEN the block above is named, because a block runs to the line before the next block's CLAIM
 //      opens rather than stopping at its own last statement and leaving a line proving nothing
 it('gives the line between two blocks to the block above it', () => {
   expect(named(BLOCKS, [{ from: 10, to: 10 }])).toEqual([{ scenario: 'First', changed: 'proof' }])
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A shared step is claim down to the line the test opens on
+// Scenario: A shared step is CLAIM down to the line the test opens on
 // GIVEN a block whose shared GIVEN runs onto a second line before its test opens
 // WHEN the touched scenarios are found
-// THEN a change to that second line says the claim changed, because the shared steps are a run
+// THEN a change to that second line says the CLAIM changed, because the shared steps are a run
 //      down to the test rather than the lines their keywords sit on
 it('counts a shared step as claim where its text runs on', () => {
   expect(named([WRAPPED], [{ from: 2, to: 2 }])).toEqual([{ scenario: 'Wrapped', changed: 'claim' }])
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: A line that reached a proof is not also reported as matching none
-// GIVEN a change reaching only the code of a proof
+// Scenario: A line that reached a PROOF is not also reported as matching none
+// GIVEN a change reaching only the code of a PROOF
 // WHEN the touched scenarios are found
 // THEN no line comes back unmatched, because a line cannot both prove something and prove
-//      nothing, and the proof side of a site counts as reaching it just as its claim does
+//      nothing, and the PROOF side of a site counts as reaching it just as its CLAIM does
 it('does not report a line as unmatched when it reached a proof', () => {
   const { unmatched } = scenariosTouched([PROOF], [{ from: 14, to: 14 }])
 
@@ -316,8 +316,8 @@ it('does not report a line as unmatched when it reached a proof', () => {
 // Scenario: A touched scenario carries the Gherkin it claims
 // GIVEN a test proving two scenarios under a shared GIVEN, and a change reaching the first
 // WHEN the touched scenarios are found
-// THEN the scenario carries every step of its claim, the ones its test shares included, so a
-//      reader judging it against its proof has the whole sentence without opening the file
+// THEN the scenario carries every step of its CLAIM, the ones its test shares included, so a
+//      reader judging it against its PROOF has the whole sentence without opening the file
 it('carries the whole claim, the steps its test shares included', () => {
   const { scenarios } = scenariosTouched(BLOCKS, [{ from: 9, to: 9 }])
 
@@ -343,12 +343,12 @@ it('names the lines that prove a scenario and none that prove its sibling', () =
 })
 
 // Requirement: The scenarios proven at a set of lines can be found
-// Scenario: Every part of a changed run that no proof owns is reported
-// GIVEN one run of changed lines opening above one proof, running through a second, and ending
-//       below it, so that the lines no proof owns sit before, between, and after them
+// Scenario: Every part of a changed run that no PROOF owns is reported
+// GIVEN one run of changed lines opening above one PROOF, running through a second, and ending
+//       below it, so that the lines no PROOF owns sit before, between, and after them
 // WHEN the touched scenarios are found
 // THEN all three parts come back unmatched, because a run of changed lines is not all one
-//      promise, and every stretch of it that proved nothing is a change with nothing behind it
+//      PROMISE, and every stretch of it that proved nothing is a change with nothing behind it
 it('reports every part of a changed run that reached no proof', () => {
   const second = site({ scenario: 'A second scenario', tagLine: 26, line: 30, endLine: 40, steps: stepsAbove(30) })
 

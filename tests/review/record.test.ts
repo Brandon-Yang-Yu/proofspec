@@ -31,10 +31,10 @@ const OVER_THREE_LINES = [{ from: 20, to: 22, source: 'const outcome = act()\n\n
 
 // Requirement: Passing a scenario means citing the line that proves it
 // Scenario: A pass citing a proving line carries that line as it is written
-// GIVEN a scenario proven over lines 20 to 22, whose last line asserts the claim
+// GIVEN a scenario proven over lines 20 to 22, whose last line asserts the CLAIM
 // WHEN a pass is recorded citing line 22
 // THEN the entry carries that line as it is written, because the number alone tells whoever
-//      reads the ledger in a diff nothing about what the reviewer pointed at
+//      reads the LEDGER in a diff nothing about what the reviewer pointed at
 it('carries the cited line as it is written', () => {
   const recorded = recordReview({
     proposed: proposed({ proves: 22 }),
@@ -54,7 +54,7 @@ it('carries the cited line as it is written', () => {
 // Scenario: A pass citing a line outside the proving lines is refused
 // GIVEN a scenario whose proving lines run from 20 to 22
 // WHEN a pass is recorded citing line 30
-// THEN it is refused, because a line the proof does not own says nothing about this claim,
+// THEN it is refused, because a line the PROOF does not own says nothing about this CLAIM,
 //      and a citation nobody checked is a signature rather than a review
 it('refuses a pass citing a line the proof does not own', () => {
   const recorded = recordReview({
@@ -94,7 +94,7 @@ it('refuses a pass that cites nothing', () => {
 
 // Requirement: Passing a scenario means citing the line that proves it
 // Scenario: A reported problem is recorded with its note and no citation
-// GIVEN a reviewer who found the claim promising more than its proof asserts
+// GIVEN a reviewer who found the CLAIM promising more than its PROOF asserts
 // WHEN a gap is recorded with a note and no line cited
 // THEN it is accepted carrying the note, because reporting a problem has to stay the cheapest
 //      answer available: a reviewer charged for honesty will stop being honest
@@ -133,7 +133,7 @@ it('refuses a reported problem that says nothing', () => {
 // GIVEN a pass that would otherwise be accepted, with nobody named as its reviewer
 // WHEN it is recorded
 // THEN it is refused, because an unsigned judgement is one nobody can be asked about, and
-//      whether the reviewer was the author is the first thing a reader of the ledger asks
+//      whether the reviewer was the author is the first thing a reader of the LEDGER asks
 it('refuses a review nobody signed', () => {
   const recorded = recordReview({ proposed: proposed({ by: undefined }), promise: { kind: 'touched', scenario: judged() } })
 
@@ -141,11 +141,11 @@ it('refuses a review nobody signed', () => {
 })
 
 // Requirement: Passing a scenario means citing the line that proves it
-// Scenario: A pass on a removed proof cites nothing
-// GIVEN a proof the change removed, which a reviewer judges was meant to die
+// Scenario: A pass on a removed PROOF cites nothing
+// GIVEN a PROOF the change removed, which a reviewer judges was meant to die
 // WHEN a pass is recorded with no line cited
-// THEN it is accepted, because nothing of a removed proof is left to point at — and a pass
-//      that could not be recorded would leave a branch that deleted a proof unable to clear
+// THEN it is accepted, because nothing of a removed PROOF is left to point at — and a pass
+//      that could not be recorded would leave a branch that deleted a PROOF unable to clear
 //      the gate at all, which is the state that gets whoever hits it writing whichever verdict
 //      does go through rather than the one they reached
 it('accepts a pass on a removed proof, which has nothing left to cite', () => {
@@ -161,8 +161,8 @@ it('accepts a pass on a removed proof, which has nothing left to cite', () => {
 })
 
 // Requirement: Passing a scenario means citing the line that proves it
-// Scenario: A pass on a removed proof that cites a line is refused
-// GIVEN a proof the change removed, and a pass offering a line as its citation
+// Scenario: A pass on a removed PROOF that cites a line is refused
+// GIVEN a PROOF the change removed, and a pass offering a line as its citation
 // WHEN it is recorded
 // THEN it is refused, because the lines that proved it are gone, so whatever the citation
 //      names is not among them and saying so is better than filing a pointer to nothing

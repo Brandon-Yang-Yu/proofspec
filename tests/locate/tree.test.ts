@@ -7,7 +7,7 @@ import { site } from './support.ts'
 
 // Requirement: The whole tree can be read at once
 // Scenario: Every scenario in the tree is delivered with its file and line
-// GIVEN a stable tree and the proof sites it was built from, across more than one capability
+// GIVEN a stable tree and the PROOF SITE it was built from, across more than one capability
 //       and requirement
 // WHEN the whole tree is located
 // THEN the delivered tree holds every capability, requirement and scenario in the tree's
@@ -53,7 +53,7 @@ it('delivers every scenario in the tree with its file and line', () => {
 // GIVEN a tree built when a scenario was proven in one file, and sites proving it now in another
 // WHEN the tree is located against the now-current sites
 // THEN the scenario's entry carries the file it is proven in now, not the file the tree stored —
-//      the delivered tree is read from the tests as they stand, not from the committed files
+//      the delivered tree is read from the tests as they stand, not from the committed CAPABILITY FILE
 it("carries each scenario the current file, not the tree's stored one", () => {
   const treeWhenOld = buildTree([site({ scenario: 'a scenario', file: 'tests/old.test.ts' })]).tree
   const provenNowIn = [site({ scenario: 'a scenario', file: 'tests/new.test.ts', line: 3 })]

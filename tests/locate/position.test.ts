@@ -8,7 +8,7 @@ const IDENTITY = { capability: 'locate', requirement: 'A requirement', scenario:
 
 // Requirement: A position is read from the tests as they stand
 // Scenario: A scenario's position is the file and line of its tagged test
-// GIVEN a proof site proving a scenario at a known file and line
+// GIVEN a PROOF SITE proving a scenario at a known file and line
 // WHEN locate is asked where that scenario is
 // THEN it reports that file and that line
 it('reports the file and line of the tagged test', () => {

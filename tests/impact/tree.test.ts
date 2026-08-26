@@ -142,7 +142,7 @@ it('stops walking at the depth it was given', () => {
 // GIVEN a test file calling the changed function
 // WHEN the impact tree is built
 // THEN the test is named under the changed function with the line it calls from, so the
-//      reader sees the proof that sits closest to the change
+//      reader sees the PROOF that sits closest to the change
 it('names a test that calls the changed function under it', () => {
   const edited = node('edited', { from: 20, to: 30 })
   const test = testNode('tests/edited.test.ts')

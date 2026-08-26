@@ -9,10 +9,10 @@ function ledgerOf(entries: readonly ReturnType<typeof entry>[]): string {
   return entries.map(one => `${formatEntry(one)}\n`).join('')
 }
 
-// Requirement: The ledger keeps one review to a line, and the last one stands
-// Scenario: A review written to the ledger reads back as it was written
-// GIVEN a pass and a reported problem, written to a ledger
-// WHEN the ledger is read back
+// Requirement: The LEDGER keeps one review to a line, and the last one stands
+// Scenario: A review written to the LEDGER reads back as it was written
+// GIVEN a pass and a reported problem, written to a LEDGER
+// WHEN the LEDGER is read back
 // THEN both come back as they went in, because the two halves are the only agreement holding
 //      the record together — a format that wrote what the reader cannot parse would lose a
 //      judgement without anyone noticing it had gone
@@ -22,8 +22,8 @@ it('reads back every review it wrote', () => {
   expect(readLedger(ledgerOf(written))).toEqual({ ok: true, entries: written })
 })
 
-// Requirement: The ledger keeps one review to a line, and the last one stands
-// Scenario: A later review of the same key supersedes the earlier one
+// Requirement: The LEDGER keeps one review to a line, and the last one stands
+// Scenario: A later review of the same KEY supersedes the earlier one
 // GIVEN a scenario passed, and then judged again as drifting after a second look
 // WHEN the judgement that stands for it is asked for
 // THEN it is the later one, because appending is the only way to correct a record that
@@ -35,22 +35,22 @@ it('lets a later review of the same key stand over the earlier one', () => {
   expect(standingReviews([first, second]).get('aaaa11112222')).toEqual(second)
 })
 
-// Requirement: The ledger keeps one review to a line, and the last one stands
+// Requirement: The LEDGER keeps one review to a line, and the last one stands
 // Scenario: A line that is not a review is reported rather than skipped
-// GIVEN a ledger whose second line is not a review at all
+// GIVEN a LEDGER whose second line is not a review at all
 // WHEN it is read
 // THEN it says which line it could not read rather than returning the rest, because passing
-//      over a damaged record is how a promise gets through the gate unjudged — the one thing
-//      the ledger exists to prevent
+//      over a damaged record is how a PROMISE gets through the gate unjudged — the one thing
+//      the LEDGER exists to prevent
 it('refuses a ledger holding a line it cannot read', () => {
   const damaged = [formatEntry(entry({ key: 'aaaa11112222' })), '<<<<<<< HEAD', ''].join('\n')
 
   expect(readLedger(damaged)).toEqual({ ok: false, reason: expect.stringContaining('line 2') })
 })
 
-// Requirement: The ledger keeps one review to a line, and the last one stands
-// Scenario: A ledger with no lines holds no reviews
-// GIVEN a repository where nothing has been reviewed yet, so the ledger is empty
+// Requirement: The LEDGER keeps one review to a line, and the last one stands
+// Scenario: A LEDGER with no lines holds no reviews
+// GIVEN a repository where nothing has been reviewed yet, so the LEDGER is empty
 // WHEN it is read
 // THEN it holds no reviews rather than failing, because every branch starts here and an
 //      absent record is the ordinary case, not a damaged one
