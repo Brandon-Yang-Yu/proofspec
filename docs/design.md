@@ -1921,3 +1921,46 @@ spelling a defined TERM in a near form was deliberately not built while the pros
 wrote the terms lowercase — it would have reported nothing but its own adoption. That
 excuse is now gone: the spec text uses the terms or avoids them, so a near-form spelling
 in a definition is a real paraphrase, and the rule is buildable next.
+
+## 36. The underscore, the near form, and the description axis
+
+Three changes in one dependency order — R3, R2, R1 — each re-keying this repo's own
+promises, each judged in its own round. The order was the engineering: the rename in R3
+re-keys nearly everything, so it went first and alone, one edit batch and one judging
+round; had the rounds been interleaved, or the rename split per capability, every round
+would have re-opened the whole vocabulary's users again, and the judging would have gone
+quadratic in rounds for no information. R1 landed last for the same reason — built before
+the rename, the description axis would have measured the rename's own reworded standards
+and re-opened everything a second time.
+
+**One TERM is one token.** `PROOF SITE` and `CAPABILITY FILE` became `PROOF_SITE` and
+`CAPABILITY_FILE` across the specs and the tests' Gherkin and tags; the guard's capitals
+rule tightened to `/^[A-Z]+(?:_[A-Z]+)*$/`, so a spaced phrase no longer passes — two
+capitals standing beside each other are indistinguishable from ordinary emphasis, and
+`proof site` is ordinary English. The matcher needed no rule of its own: `_` is a word
+character to `wholeWord`, so an underscored phrase was already one whole word. README and
+`docs/` stay lowercase-spaced on purpose, as in §35. The rename was measured before it
+was made: 252 PROMISE — 208 re-opened under new KEY, 44 gone as their old KEY died —
+judged ok or drift by `underscore-review`, each pass citing the line that asserts its
+claim, each drift note naming the underscore spelling the promise now stands under.
+
+**§34's deferred WARN is built.** A definition that spells another defined TERM in its
+bare lowercase form — `claim` where CLAIM is defined — now warns (`term-near-form`)
+without failing the build: the edges of the vocabulary live only in the exact form, so a
+paraphrase cuts an edge the machine still believes in, and the warning is where that
+becomes visible. Plurals are deliberately unmatched — `claims` may be a verb or an
+ordinary plural, and stemming is a guess about English. This vocabulary self-checks
+clean under the rule, which is what §35's adoption bought.
+
+**The description is the third axis.** `touched` now compares each requirement's
+description against the same base revision the tests are measured from, and a reworded
+one re-opens every scenario under the requirement through the same gathering path as a
+changed TERM — the same work list, the same gate. Keying had folded the description into
+every key under it since the beginning; §34's argument for the term axis applies to the
+standard word for word, and only the term layer had been built. A requirement new to the
+working tree counts as changed (fresh keys, no judgements — entering the work list is the
+honest state); one left byte for byte unchanged re-opens nothing however the file moved;
+a promise a description change and a test change both reached is gathered once, carrying
+both. The report says which half moved — `[a term it uses was redefined]`,
+`[its requirement's description moved]` — and carries the wording then and now, because
+the distance the standard moved is the whole of what the reviewer was asked.
