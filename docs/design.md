@@ -1879,3 +1879,41 @@ and now. A WARN for a definition spelling a defined term in a near form is delib
 built yet: this repo's own prose still writes claim, proof and promise in lowercase
 throughout, so the rule would report nothing but the adoption it is waiting for. It is the
 first worktree after that adoption lands.
+
+## 35. The adoption
+
+This worktree is the one §34 was waiting for: every lowercase concept reference in the
+`specs/` prose and the tests' Gherkin blocks was changed to the exact capitalised form —
+TERM, CLAIM, PROOF, PROOF SITE, KEY, LEDGER, PROMISE, STANDARD, CAPABILITY FILE — leaving
+everyday English, the verbs (claims, promises, proves), fixture text, and code untouched.
+README and `docs/` were left lowercase on purpose: they are prose about the tool, not
+spec text the matcher reads.
+
+**Plurals were the one editorial decision.** The vocabulary has no plural forms, so a
+plural reference had to become either a legal-text plural over the singular ("both its
+PROOF", "the other CAPABILITY FILE") or a rewording through every/each/a. The matcher
+enforces the exact form on uses; the prose now obeys the same law it is judged by, which
+is the point of the convention — a reader who sees PROMISE knows it is the defined word,
+and a reader who sees "promise" knows it is not.
+
+**The re-key was the test §34 could not give itself.** Changing the wording of every THEN,
+scenario title, requirement heading and description moved every identity digest at once:
+291 PROMISE came back pending — 183 live under new KEY, 108 gone as their old KEY died —
+and the gate stayed shut until each was judged by a reviewer who had not written the tests.
+Nothing passed unlooked-at, no review survived the wording it was filed under, and the
+stale-review channel stayed closed the way §34 designed: not by detecting staleness, but
+by the key simply no longer being the one asked for. The editorial pass was wording-only
+and moved no code; the suite stayed green capability by capability throughout, which is
+what let the judging be a re-reading rather than a repair.
+
+**Gone promises were judged drift, with the reason in the note.** A removed PROOF can be
+passed with no citation, but a pass says "this PROMISE was meant to die", and a re-keyed
+promise did not die — its identity moved. The ledger has no verdict for *superseded*, so
+the 108 re-keyed entries carry drift and a note saying where the scenario went, which is
+the fact a later reader of the diff needs; the note is doing work the verdict cannot.
+
+**What this unlocks is §34's deferred WARN.** The rule that would flag a definition
+spelling a defined TERM in a near form was deliberately not built while the prose itself
+wrote the terms lowercase — it would have reported nothing but its own adoption. That
+excuse is now gone: the spec text uses the terms or avoids them, so a near-form spelling
+in a definition is a real paraphrase, and the rule is buildable next.
