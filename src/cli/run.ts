@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { changedTerms, definitionsFor, reopenedByTerms, standardTexts } from '../glossary/index.ts'
-import type { ReopenedPromise, TermChange } from '../glossary/index.ts'
+import type { TermChange } from '../glossary/index.ts'
 import { guard } from '../guard/index.ts'
 import { impactTree, testsRunning } from '../impact/index.ts'
 import type { GraphNode, ImpactNode, TestReach } from '../impact/index.ts'
@@ -34,6 +34,7 @@ import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
+  DescriptionChange,
   DistributiveOmit,
   GoneScenario,
   Outcome,
@@ -42,6 +43,7 @@ import type {
   RunOptions,
   SpecLocation,
   StandingReview,
+  StandardChange,
   TestProves,
   TouchedScenarioReport,
   TouchedSummary,
@@ -442,6 +444,26 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
     reopenedInto(found, promise, { sites, testLines })
   }
 
+  // The third axis. The tests and the vocabulary are read; this reads the descriptions —
+  // the STANDARD every scenario under a requirement is judged against — against the same
+  // base. Keying already folds a description into every key under it, so a reworded one is
+  // a different question being asked of every scenario; reading the change and not
+  // re-opening would let a branch change what its promises mean with the gate silent.
+  // Every scenario under the requirement re-opens, not a walk of which words it uses: the
+  // description is the standard of each of them, and the walk is the term axis's to make.
+  const descriptions = await changedDescriptionsSince({
+    cwd: options.cwd,
+    base: specDiff.base,
+    files: specDiff.files,
+    now: new Map(specReads.map(one => [one.path, one.read])),
+  })
+  for (const change of descriptions) {
+    for (const site of sites.filter(hasCapability)) {
+      if (site.capability !== change.capability || site.requirement !== change.requirement) continue
+      reopenedInto(found, { capability: change.capability, requirement: change.requirement, scenario: site.scenario, reopenedBy: [change] }, { sites, testLines })
+    }
+  }
+
   return {
     ok: true,
     base: diff.base,
@@ -475,13 +497,52 @@ async function changedTermsSince(from: {
 }
 
 /**
- * One re-opened promise, gathered under its requirement. A promise both axes reached is
- * gathered once, carrying the term changes with it — it is one promise, and one judgement
+ * Which requirement descriptions changed between the base revision and the working tree.
+ * Only the changed capability files are compared, the same files the term axis reads, so
+ * the two axes cannot disagree about what moved. Identity is the requirement's name within
+ * its file, and a description left byte for byte unchanged — moved or re-ordered though its
+ * requirement may be — changes nothing.
+ */
+async function changedDescriptionsSince(from: {
+  readonly cwd: string
+  readonly base: string
+  readonly files: readonly ChangedFile[]
+  readonly now: ReadonlyMap<string, CapabilitySpec>
+}): Promise<readonly DescriptionChange[]> {
+  const changes: DescriptionChange[] = []
+  for (const file of from.files) {
+    const capability = basename(file.path, '.md')
+    const was = await readFileAt({ cwd: from.cwd, rev: from.base, path: file.path })
+    // A file git has never seen has no base version, so every requirement in it is new.
+    const before = new Map(
+      (was !== undefined ? readCapabilityFile(was, { capability }).requirements : []).map(
+        requirement => [requirement.requirement, requirement.description] as const,
+      ),
+    )
+    for (const { requirement, description } of from.now.get(file.path)?.requirements ?? []) {
+      const wasDescription = before.get(requirement)
+      if (wasDescription === description) continue
+      changes.push(
+        wasDescription === undefined
+          ? { kind: 'description-new', capability, requirement, after: description }
+          : { kind: 'description-reworded', capability, requirement, before: wasDescription, after: description },
+      )
+    }
+  }
+  return changes
+}
+
+/**
+ * One re-opened promise, gathered under its requirement. A promise several axes reached is
+ * gathered once, carrying every change with it — it is one promise, and one judgement
  * settles it.
  */
 function reopenedInto(
   found: Map<string, Gathering>,
-  promise: ReopenedPromise,
+  promise: RequirementIdentity & {
+    readonly scenario: string
+    readonly reopenedBy: readonly StandardChange[]
+  },
   from: {
     readonly sites: readonly ProofSite[]
     readonly testLines: ReadonlyMap<string, readonly string[]>
@@ -490,7 +551,14 @@ function reopenedInto(
   const group = reached(found, { capability: promise.capability, requirement: promise.requirement })
   const gathered = group.scenarios.findIndex(one => one.scenario === promise.scenario)
   if (gathered !== -1) {
-    group.scenarios[gathered] = { ...group.scenarios[gathered]!, reopenedBy: promise.reopenedBy }
+    const held = group.scenarios[gathered]!
+    // A test-axis label keeps precedence — the test moving is what the reviewer checks
+    // first — and a reworded description outranks a redefined term, because it is the
+    // standard of every scenario under the requirement rather than one word of it. What
+    // re-opened the promise is carried whole either way, so the label orders the reading
+    // rather than deciding it.
+    const changed = held.changed === 'term' && isOpenedByDescription(promise.reopenedBy) ? 'description' : held.changed
+    group.scenarios[gathered] = { ...held, changed, reopenedBy: [...(held.reopenedBy ?? []), ...promise.reopenedBy] }
     return
   }
 
@@ -510,7 +578,16 @@ function reopenedInto(
   ).scenarios.find(one => one.scenario === promise.scenario)
   if (hit === undefined) return
   const lines = from.testLines.get(site.file) ?? []
-  group.scenarios.push({ ...withSource(hit, lines), changed: 'term', reopenedBy: promise.reopenedBy })
+  group.scenarios.push({
+    ...withSource(hit, lines),
+    changed: isOpenedByDescription(promise.reopenedBy) ? 'description' : 'term',
+    reopenedBy: promise.reopenedBy,
+  })
+}
+
+/** Whether a description is among what re-opened the promise: the requirement-wide standard moved. */
+function isOpenedByDescription(changes: readonly StandardChange[]): boolean {
+  return changes.some(change => change.kind === 'description-reworded' || change.kind === 'description-new')
 }
 
 /**

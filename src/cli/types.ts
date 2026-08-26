@@ -84,15 +84,43 @@ export type StandingReview = {
  * one entry above them rather than copied onto every scenario under it.
  */
 /**
- * What reached a promise, as the report says it. Three states rather than two flags: a
- * change to the test, a redefined term, or both — the last because a branch can move a
- * test line and a definition in one change, and that is still one promise, settled by one
- * judgement.
+ * What reached a promise, as the report says it. Five states rather than flags: a
+ * change to the test, a redefined term, a reworded description, or either of the last
+ * two beside a change to the test — because a branch can move a test line and a
+ * definition or a description in one change, and that is still one promise, settled by
+ * one judgement.
  */
 export type ScenarioReach =
   | { readonly changed: TouchedScenario['changed']; readonly reopenedBy?: undefined }
-  | { readonly changed: 'term'; readonly reopenedBy: readonly TermChange[] }
-  | { readonly changed: TouchedScenario['changed']; readonly reopenedBy: readonly TermChange[] }
+  | { readonly changed: 'term' | 'description'; readonly reopenedBy: readonly StandardChange[] }
+  | { readonly changed: TouchedScenario['changed']; readonly reopenedBy: readonly StandardChange[] }
+
+/** What re-opened a promise from the spec side: a moved meaning, or a moved standard. */
+export type StandardChange = TermChange | DescriptionChange
+
+/**
+ * How one requirement's description moved between the base revision and the working tree.
+ * The two ways it can move are the two arms: prose that reads differently now, and a
+ * requirement the base revision did not hold — whose scenarios have fresh keys and no
+ * judgements, so entering the work list is the honest state, symmetric with a new TERM
+ * re-opening its users. There is no arm for a requirement the working tree dropped: its
+ * proofs are gone and the check reports that, which is a different question from judging
+ * a standing promise.
+ */
+export type DescriptionChange =
+  | {
+      readonly kind: 'description-reworded'
+      readonly capability: string
+      readonly requirement: string
+      readonly before: string
+      readonly after: string
+    }
+  | {
+      readonly kind: 'description-new'
+      readonly capability: string
+      readonly requirement: string
+      readonly after: string
+    }
 
 export type TouchedScenarioReport = Omit<TouchedScenario, 'proves' | 'capability' | 'requirement' | 'changed'> & {
   /** The key a judgement of it is filed under — what `review` is given to record against. */

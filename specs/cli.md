@@ -290,6 +290,26 @@ it moved is the whole of what they were asked about.
 - "A scenario re-opened by a TERM carries the definition it is now judged under" → tests/cli/touched-terms.test.ts
 <!-- /scenarios -->
 
+### Requirement: A changed description counts as a change the tests did not make
+
+The work list SHALL count the PROMISE a changed description re-opened exactly as it counts
+the PROMISE a changed test or a changed TERM reached — the same shapes, the same gate — by
+comparing each requirement's description against the same base revision the tests are
+measured from.
+
+The description is the STANDARD every scenario under the requirement is judged against, and
+keying already folds it into every key under it: a reworded description is a different
+question being asked of every scenario, and every judgement made under the old wording is
+worth taking again. Reading the change and not re-opening would let a branch change what its
+PROMISE mean with the gate silent.
+
+<!-- scenarios: generated -->
+- "A PROMISE both a description change and a test change reached is gathered once" → tests/cli/touched-descriptions.test.ts
+- "A description the change left byte for byte unchanged re-opens nothing" → tests/cli/touched-descriptions.test.ts
+- "A reworded description's PROMISE are in the work list and hold the gate" → tests/cli/touched-descriptions.test.ts
+- "A scenario re-opened by a description carries the wording then and now" → tests/cli/touched-descriptions.test.ts
+<!-- /scenarios -->
+
 ### Requirement: touched measures the tests a caller gives it
 
 A caller SHALL be able to hand the command the tests it has already read, with the roots they
