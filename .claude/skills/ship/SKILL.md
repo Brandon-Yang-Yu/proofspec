@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Run the ProofSpec build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard ProofSpec flow.
+description: Run the ProofSpec build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, close the review gate (touched + review, a fresh subagent per promise), archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard ProofSpec flow.
 metadata:
   author: proofspec
   version: "1.0"
@@ -31,9 +31,10 @@ mode instead.
 
 **Two hats, kept apart.** Through the build you are the *builder*. A builder is a poor
 judge of their own fresh work — the context that just wrote the code is already convinced
-it is right, so it skims past what a cold reader would catch. That is why the two review
-gates (steps 4 and 5) hand off to a fresh subagent that never watched the code get
-written. Reviewing and fixing stay separate hats too: the subagent only reports; you act
+it is right, so it skims past what a cold reader would catch. That is why every judgement
+hands off to a fresh subagent that never watched the work get written: the guideline review
+(step 4), the completion check (step 5), and the promise reviews that close the review gate
+(step 6). Reviewing and fixing stay separate hats too: the subagent only reports; you act
 on what it finds.
 
 Announce a short plan first, then work the steps. Keep the human posted at each hand-off.
@@ -116,14 +117,49 @@ something weaker. It reports gaps and fixes nothing.
 
 Then close every gap, and run the gates green: `pnpm test` and `pnpm typecheck`.
 
-## 6. Archive the plan
+## 6. Close the review gate — a fresh subagent per promise
+
+The build is green and checked, but its promises are not yet judged. The repo's doors —
+`.githooks/pre-merge-commit` and `.githooks/pre-push` — hold exactly that: `proofspec
+touched` exits non-zero while any promise the change reached has no review standing against
+it. Close the gate here, on the final shape of the branch's tests, so the doors never hold.
+
+Run the work list:
+
+```sh
+pnpm proofspec touched --format text
+```
+
+Exit 0: every promise is judged — the gate is closed. Otherwise the list names one key per
+requirement reached. For each key:
+
+1. **Fetch** — `pnpm proofspec touched --requirement <key>`. The payload carries the
+   requirement's claims, the proving lines as they stand, and the judging protocol: the
+   question to judge by and the exact commands to record either verdict.
+2. **Judge** — a fresh subagent per key, the same two-hats rule as steps 4 and 5: the
+   context that wrote the promise is already convinced of it, and the ledger's first
+   reader asks whether the reviewer was the author. One subagent per key keeps each
+   context bounded to one requirement's claims. The reviewer records its own verdicts
+   with the payload's protocol, under a reviewer name of its own (`--by`) — never the
+   builder's.
+3. **Settle findings** — a verdict settles its promise whatever it said; the gate asks
+   whether every promise was looked at, not whether every judgement was favourable. A gap
+   or drift is a finding to fix, and the fix is itself a change: keep `pnpm test` green,
+   and a fix that touches a test re-keys the promises it proves, so re-run the work list.
+   Exit 0 on the final shape of the branch's tests is the only shape that closes.
+
+`.proofspec/reviews.jsonl` is committed, riding with the work it judges — this repo's
+convention is its own `chore(review):` commit when the judgements read cleaner apart from
+the change.
+
+## 7. Archive the plan
 
 Record the plan approved in step 1 so the reasoning survives the build. The committed
 `specs/<capability>.md` holds the requirements and scenarios; the plan's *why* — the
 decisions and trade-offs behind them — belongs in `docs/design.md`, the way §12–§14 record
 the earlier ones.
 
-## 7. Wait for the human to say commit
+## 8. Wait for the human to say commit
 
 Stop. Do not commit. Report what changed and that the gates are green, then wait.
 
@@ -134,5 +170,5 @@ push to a remote unless the human asks.
 
 ## Finish
 
-Report: the capability, the scenarios shipped, the gates green, and that the change waits
-uncommitted for the human's go-ahead.
+Report: the capability, the scenarios shipped, the gates green, the review gate closed
+(the work list exits 0), and that the change waits uncommitted for the human's go-ahead.
