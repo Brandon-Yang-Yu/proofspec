@@ -1,4 +1,5 @@
 import { compareStrings } from '../order.ts'
+import { definitionsFor, termsStandingOn } from '../glossary/index.ts'
 import { identityKey } from '../spec-tree/index.ts'
 import type { ScenarioIdentity } from '../spec-tree/index.ts'
 import type { CapabilitySpec, RequirementSpec, TermSpec } from '../spec-file/index.ts'
@@ -81,9 +82,28 @@ function renderIndex(
   return `${[frontmatter('ProofSpec — living spec'), GENERATED, INTRO, nav, vocabulary, whole].filter(one => one !== '').join('\n\n')}\n`
 }
 
-/** The vocabulary as its own page: every term in name order with its definition. */
+/**
+ * The vocabulary as its own page: every term in name order with its definition, and the
+ * two directions of its reach — what it leans on, and what a change to it reaches —
+ * computed from the definitions on every render. The edges are the definitions' own
+ * words, so drawing them here adds no second copy of anything to drift: a definition
+ * rewritten is a page re-rendered. The whole-spec page keeps its vocabulary flat, because
+ * the compact payload a model reads wants the meanings, not the map.
+ */
 function renderVocabularyPage(terms: readonly TermSpec[]): string {
-  const entries = terms.map(term => [`## Term: ${term.term}`, term.definition].join('\n\n'))
+  const entries = terms.map(term => {
+    const leansOn = definitionsFor([term.definition], terms)
+      .map(one => one.term)
+      .filter(name => name !== term.term)
+    const reaches = [...termsStandingOn([term.term], terms)]
+      .filter(name => name !== term.term)
+      .sort(compareStrings)
+    const reach = [
+      leansOn.length > 0 ? `- leans on: ${leansOn.join(', ')}` : '',
+      reaches.length > 0 ? `- a change reaches: ${reaches.join(', ')}` : '',
+    ].filter(one => one !== '')
+    return [`## Term: ${term.term}`, [term.definition, ...reach].join('\n\n')].join('\n\n')
+  })
   return `${[frontmatter('ProofSpec — vocabulary'), GENERATED, VOCAB_INTRO, ...entries].join('\n\n')}\n`
 }
 

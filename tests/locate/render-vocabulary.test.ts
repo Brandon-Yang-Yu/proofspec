@@ -22,8 +22,23 @@ function page(pages: readonly RenderedPage[], path: string): string {
   return pages.find(one => one.path === path)?.content ?? ''
 }
 
+/** One term's entry on the vocabulary page: from its heading to the next one. */
+function entry(vocabulary: string, term: string): string {
+  const from = vocabulary.indexOf(`## Term: ${term}`)
+  const to = vocabulary.indexOf('\n## Term:', from + 1)
+  return vocabulary.slice(from, to === -1 ? undefined : to)
+}
+
 const TURN: TermSpec = { term: 'TURN', definition: 'One exchange of request and reply.' }
 const REPLY: TermSpec = { term: 'REPLY', definition: 'The answer half of a TURN.' }
+
+/** A chain: REPLY leans on TURN, TURN on MARGIN — one edge direct, one reached through
+ * another term's definition. */
+const CHAIN: readonly TermSpec[] = [
+  { term: 'MARGIN', definition: 'The space a page leaves empty.' },
+  { term: 'TURN', definition: 'One exchange, framed by a MARGIN.' },
+  { term: 'REPLY', definition: 'The answer half of a TURN.' },
+]
 
 // Requirement: The vocabulary is rendered as one page, linked from the index
 // Scenario: The vocabulary page holds every term in name order
@@ -70,4 +85,32 @@ it('carries the vocabulary on the whole-spec page', () => {
   expect(whole).toContain('## Vocabulary')
   expect(whole).toContain('One exchange of request and reply.')
   expect(whole).toContain('The answer half of a TURN.')
+})
+
+// Requirement: The vocabulary is rendered as one page, linked from the index
+// Scenario: A term's entry shows what it leans on and what a change to it reaches
+// GIVEN terms whose definitions lean on one another, one through another term's definition
+// WHEN the vocabulary page is read
+// THEN each entry says what its term leans on and what a change to it reaches, both
+//      through other terms' definitions, and the whole-spec page carries the definitions
+//      alone, because a model handed the one file wants the meanings, not the map
+it('shows each term what it leans on and what a change to it reaches', () => {
+  const site = renderSite([spec({ capability: 'demo', terms: CHAIN })], [], [])
+  const vocabulary = page(site, 'vocabulary.md')
+
+  const turn = entry(vocabulary, 'TURN')
+  expect(turn).toContain('- leans on: MARGIN')
+  expect(turn).toContain('- a change reaches: REPLY')
+
+  const reply = entry(vocabulary, 'REPLY')
+  expect(reply).toContain('- leans on: MARGIN, TURN')
+  expect(reply).not.toContain('a change reaches')
+
+  const margin = entry(vocabulary, 'MARGIN')
+  expect(margin).not.toContain('leans on')
+  expect(margin).toContain('- a change reaches: REPLY, TURN')
+
+  const whole = page(site, 'spec.md')
+  expect(whole).toContain('The answer half of a TURN.')
+  expect(whole).not.toContain('leans on')
 })
