@@ -7,6 +7,22 @@ Gherkin steps, and where it sits right now.
 This is the only capability that knows TypeScript. Everything downstream reads the list
 and nothing else.
 
+### Term: CLAIM
+
+The behaviour text of a PROOF SITE: its scenario title and its GIVEN, WHEN and THEN steps,
+read as the assertion its PROOF has to keep. A CLAIM sits above the code, not inside it, so
+editing the code never silently rewrites what was claimed.
+
+### Term: PROOF
+
+The code a CLAIM is proven by: everything from the CLAIM to the last line of its test. A
+PROOF is what a change to the tests puts its hands on, and what a PROMISE stands on.
+
+### Term: PROOF SITE
+
+One place that claims to prove a scenario: a whole test, or a tagged block of assertions
+inside one. A parameterised test is one PROOF SITE however many rows its table has.
+
 ### Requirement: A tag pair's layer decides the proof site
 
 The scan SHALL decide what a proof site is from where its `// Requirement:` and

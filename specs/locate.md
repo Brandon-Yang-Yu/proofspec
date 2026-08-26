@@ -100,6 +100,7 @@ A spec that defines no terms SHALL render no vocabulary page and link none. A re
 with no glossary is rendered exactly as it was before glossaries existed.
 
 <!-- scenarios: generated -->
+- "A term's entry shows what it leans on and what a change to it reaches" → tests/locate/render-vocabulary.test.ts
 - "The index links the vocabulary page" → tests/locate/render-vocabulary.test.ts
 - "The vocabulary page holds every term in name order" → tests/locate/render-vocabulary.test.ts
 - "The whole-spec page carries the vocabulary" → tests/locate/render-vocabulary.test.ts

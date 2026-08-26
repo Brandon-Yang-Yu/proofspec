@@ -47,6 +47,30 @@ export function definitionsFor(texts: readonly string[], terms: readonly TermSpe
   return terms.filter(one => reached.has(one.term)).sort((a, b) => compareStrings(a.term, b.term))
 }
 
+/**
+ * The terms a change to `changed` reaches: every term whose definition leans on one of
+ * them, directly or through another term's definition, the changed ones included. The
+ * outward walk of the same relation `definitionsFor` walks inward — what a change touches,
+ * against what a use stands on. Names only: re-opening keeps its own walk because it must
+ * carry which root change reached which term, and this one answers only the reader's
+ * question, what is the reach of rewriting a word.
+ */
+export function termsStandingOn(changed: readonly string[], terms: readonly TermSpec[]): ReadonlySet<string> {
+  const moved = new Set(changed)
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const term of terms) {
+      if (moved.has(term.term)) continue
+      if (termsUsed(term.definition, [...moved]).size > 0) {
+        moved.add(term.term)
+        grew = true
+      }
+    }
+  }
+  return moved
+}
+
 /** The term as a pattern matching it and nothing else: exact form, whole word, both edges. */
 function wholeWord(term: string): RegExp {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
