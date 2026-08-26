@@ -62,6 +62,12 @@ export type Finding =
       readonly file: string
       readonly line: number
     }
+  /** A Term section whose definition holds a promise. The fault is in the vocabulary, so it names the term. */
+  | { readonly kind: 'term-promises'; readonly term: string }
+  /** A term named in other than capitals: the match key no requirement can ever use. */
+  | { readonly kind: 'term-not-in-capitals'; readonly term: string }
+  /** Two Term sections defining one word, leaving "the definition" not existing. */
+  | { readonly kind: 'term-defined-twice'; readonly term: string }
 
 export type FindingSeverity = 'fail' | 'warn'
 

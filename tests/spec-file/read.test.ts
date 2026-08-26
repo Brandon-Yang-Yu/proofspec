@@ -45,6 +45,7 @@ A second paragraph of the same description.
         ],
       },
     ],
+    terms: [],
   })
 })
 
@@ -85,7 +86,7 @@ Opening prose about the capability, and not one requirement declared yet.
 
   const spec = readCapabilityFile(source, { capability: CAPABILITY })
 
-  expect(spec).toEqual({ capability: 'spec-file', requirements: [] })
+  expect(spec).toEqual({ capability: 'spec-file', requirements: [], terms: [] })
 })
 
 // Requirement: Reading a file yields its requirements and what they record

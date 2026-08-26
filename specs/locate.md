@@ -86,6 +86,25 @@ the index links to it, so the one entry point offers both ways in.
 - "The index links to the full-spec page" → tests/locate/render.test.ts
 <!-- /scenarios -->
 
+### Requirement: The vocabulary is rendered as one page, linked from the index
+
+Locate SHALL render every term on one vocabulary page in name order with its definition,
+link that page from the index, and carry the vocabulary on the whole-spec page.
+
+A spec with defined terms is read half in its requirements and half in its vocabulary: the
+requirement says what the tool SHALL do, the term says what the words in that sentence mean.
+A reader sent from an index straight into a requirement that uses TURN has to know where TURN
+is defined, and one page of vocabulary in name order is that place.
+
+A spec that defines no terms SHALL render no vocabulary page and link none. A repository
+with no glossary is rendered exactly as it was before glossaries existed.
+
+<!-- scenarios: generated -->
+- "The index links the vocabulary page" → tests/locate/render-vocabulary.test.ts
+- "The vocabulary page holds every term in name order" → tests/locate/render-vocabulary.test.ts
+- "The whole-spec page carries the vocabulary" → tests/locate/render-vocabulary.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Each proof is rendered as an anchored code snippet its scenario links to
 
 Locate SHALL render each proof as a code snippet of its lines on the test's page, headed by

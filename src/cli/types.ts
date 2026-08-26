@@ -7,6 +7,7 @@
  */
 
 import type { GuardReport } from '../guard/index.ts'
+import type { TermChange } from '../glossary/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import type { ProvingLines, ReviewEntry, ReviewProtocol } from '../review/index.ts'
@@ -82,13 +83,27 @@ export type StandingReview = {
  * they prove, so the capability, the requirement and where it is written are read from the
  * one entry above them rather than copied onto every scenario under it.
  */
-export type TouchedScenarioReport = Omit<TouchedScenario, 'proves' | 'capability' | 'requirement'> & {
+/**
+ * What reached a promise, as the report says it. Three states rather than two flags: a
+ * change to the test, a redefined term, or both — the last because a branch can move a
+ * test line and a definition in one change, and that is still one promise, settled by one
+ * judgement.
+ */
+export type ScenarioReach =
+  | { readonly changed: TouchedScenario['changed']; readonly reopenedBy?: undefined }
+  | { readonly changed: 'term'; readonly reopenedBy: readonly TermChange[] }
+  | { readonly changed: TouchedScenario['changed']; readonly reopenedBy: readonly TermChange[] }
+
+export type TouchedScenarioReport = Omit<TouchedScenario, 'proves' | 'capability' | 'requirement' | 'changed'> & {
   /** The key a judgement of it is filed under — what `review` is given to record against. */
   readonly key: string
   readonly proof: readonly ProvingLines[]
   /** The judgement standing against it, or nothing when none does. */
   readonly reviewed: StandingReview | undefined
-}
+} & ScenarioReach
+
+/** `Omit` as a distributing operation: a union of shapes stays a union, key by key. */
+export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 
 /** Where a requirement is written and what it says there. The two are read together or not at all. */
 export type RequirementDeclaration = SpecLocation & {

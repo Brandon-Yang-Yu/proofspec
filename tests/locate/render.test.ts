@@ -21,6 +21,7 @@ function spec(fields: {
     requirements: [
       { requirement: fields.requirement, description: fields.description, scenarios: fields.scenarios },
     ],
+    terms: [],
   }
 }
 

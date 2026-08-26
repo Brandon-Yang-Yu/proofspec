@@ -158,6 +158,9 @@ compares. Rules:
 | 6 | Duplicate scenario — the same (capability, requirement, scenario) tagged at 2+ proof sites | bijection broken; the action was not the same after all | FAIL |
 | 7 | Empty behavior — `// Scenario:` with no GIVEN/WHEN/THEN beneath before the assertion | co-location in name only | WARN (may become FAIL) |
 | 8 | Mixed site — one `it` carries a Requirement/Scenario pair above it **and** tagged blocks inside it | the proof-site count is ambiguous | FAIL |
+| 9 | Term that promises — a `### Term:` definition contains a `SHALL` | a definition smuggled a requirement past the review gate | FAIL |
+| 10 | Term not in capitals — a term's name is not written in capitals (words separated as used) | the exact-form convention is unenforceable on a lowercase name | FAIL |
+| 11 | Term defined twice — two `### Term:` sections carry the same name | the vocabulary means two things; the matcher cannot tell which | FAIL |
 
 A proof site is a whole test, or a tagged block of assertions inside one — rules 4-7
 apply to each site, not to each `it(`. A parameterised test (`it.each`) is one site
@@ -178,6 +181,11 @@ not built, and must not fail the build; the first tag switches enforcement on. O
 are not forced to retag all at once, and a tag whose capability has no file is left alone
 too (the mirror case). *Earlier draft said "simply by having a `.md`", which would fail
 every spec written ahead of its tests — see guard.md.*
+
+The term rules (9–11) sit outside opt-in, on purpose. A glossary file may hold nothing but
+terms — no requirements, so no tags, ever — and leaving its rules off until a test arrives
+would mean the one file whose whole job is the vocabulary is the one file never checked for
+it. Terms are global across files (§34), so their rules are global too.
 
 ## 8. Relationship to OpenSpec
 
@@ -1819,3 +1827,45 @@ kind alone; the scan-order scenario beside it does not.
 *page* does, which is the thing that was broken and the thing a reader sees. Both exist: the
 read's scenario is where the rule lives, the render command's scenario is where its
 consequence is visible.
+
+## 34. The vocabulary
+
+A capability file may define terms — `### Term: TURN` with a definition beneath, parallel
+to `### Requirement:`. A term is defined once in a repo and means that one thing everywhere:
+the vocabulary is global across files, because a word the spec leans on cannot mean one
+thing in one file and another in the next.
+
+**The hole this closes is a smuggling channel.** Before terms, a definition could be
+rewritten and every requirement that leaned on it changed meaning with no line of any test
+moving — the review key stayed put, the gate stayed shut, and the change passed unreviewed.
+Folding the definitions a promise's standard uses into its key closes it: a redefined word
+is a different question being asked of every promise that uses it, so the key moves and the
+promise is judged again. The material is appended only when a term is used, so a repo with
+no glossary digests byte-for-byte as before — proven by a golden key, not asserted, because
+audan runs sibling code directly and must not see so much as a byte move.
+
+**The convention is the matcher.** A use is a whole word in the exact form the term was
+defined in — ALL CAPS, singular, verbatim. No case folding, no plurals, no stemming: a
+stemmer is a guess about English, and the guard does not guess. Capitals are what make the
+convention checkable by machine (rule 10); whether a requirement wrote the singular where
+the plural was meant is a judgement, and it is left where judgements live — with the
+reviewer reading the claim.
+
+**One relation, walked in two directions.** Keying asks *what does this promise use*: it
+walks from the terms the standard names *into* their definitions, transitively — a
+definition that leans on another term leans on it in every promise that uses the first.
+Re-opening asks *what does this change touch*: it walks from the changed term *out* to every
+term whose definition leans on it. The first build got the keying walk backwards — it
+followed a change's direction instead of a use's — and the completion pass caught it
+end-to-end: a review was filed, the underlying term was redefined again, the key stood
+still, and the gate opened for a meaning the promise was never judged under. Both walks now
+share one function that says which texts are a promise's standard, because keying and
+re-opening must read the same texts or they disagree about what a change meant.
+
+**A re-opened promise carries its history.** The report says which terms re-opened it and
+what each meant then and now, because the distance the meaning moved is the whole of what
+the reviewer was asked about. When both axes reach a promise — a test line moved *and* a
+definition moved — it is gathered once with both, not twice: one promise, one judgement.
+
+**The vocabulary is rendered as one page**, linked from the index only when terms exist, so
+a repo without a glossary renders exactly the pages it always did.

@@ -1,4 +1,5 @@
 import { assertNever } from '../assert-never.ts'
+import type { TermChange } from '../glossary/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { ReviewEntry } from '../review/index.ts'
@@ -240,19 +241,41 @@ function renderOneRequirement(report: TouchedRequirement): string {
 
 /**
  * The claim is the promise itself, so which half moved is the difference between "review this
- * sentence", "review this test", and "the author moved both — check they still agree".
+ * sentence", "review this test", and "the author moved both — check they still agree". A
+ * redefined term is the fourth case: nothing in the file moved, and the meaning did.
  */
 const CHANGED_LABEL: Record<TouchedScenarioReport['changed'], string> = {
   claim: '[the claim changed]',
   proof: '[the proof changed]',
   both: '[claim and proof changed]',
+  term: '[a term it uses was redefined]',
 }
 
 function renderTouchedScenario(scenario: TouchedScenarioReport): string {
   return [
     `${scenario.file}:${scenario.from}  ${scenario.scenario}  ${CHANGED_LABEL[scenario.changed]}`,
+    ...renderTermChanges(scenario.reopenedBy),
     `    ${scenario.key}  ${judgement(scenario.reviewed)}`,
   ].join('\n')
+}
+
+/**
+ * The definitions a promise is now judged under, when a term re-opened it. Both versions
+ * when the meaning moved, because the distance it moved is the whole of what the reviewer
+ * was asked about.
+ */
+function renderTermChanges(changes: readonly TermChange[] | undefined): readonly string[] {
+  if (changes === undefined) return []
+  return changes.flatMap(change => {
+    switch (change.kind) {
+      case 'reworded':
+        return [`    ${change.term} was: ${change.before}`, `    ${change.term} now: ${change.after}`]
+      case 'new':
+        return [`    ${change.term} now: ${change.after} (newly defined)`]
+      case 'gone':
+        return [`    ${change.term} was: ${change.before} (no longer defined)`]
+    }
+  })
 }
 
 function renderUnmatchedLines(report: TouchedUnmatched): string {

@@ -180,3 +180,33 @@ arrive in the order they were written, so the report has to put them in order it
 - "Findings come in a fixed order whatever order a file declares its requirements" → tests/guard/order.test.ts
 - "Findings come in a fixed order whatever order the tests were scanned" → tests/guard/order.test.ts
 <!-- /scenarios -->
+
+### Requirement: A term defines; it never promises
+
+The guard SHALL fail when a Term section's definition contains a promise written as SHALL.
+
+A definition holding a promise is a requirement in disguise: no scenario proves it, nothing
+can drift against it, and no gate can see it move. A term says what a word means — the
+promise it smuggles in belongs under a requirement, where the tests can hold it to account.
+
+<!-- scenarios: generated -->
+- "A Term section that only defines passes the guard" → tests/guard/terms.test.ts
+- "A Term section that promises fails the build" → tests/guard/terms.test.ts
+<!-- /scenarios -->
+
+### Requirement: A term is written the way it is used
+
+The guard SHALL fail when a term's name is not written in capitals, and when two Term
+sections define the same term.
+
+The name is the match key: a promise uses a term by writing it in the exact form it was
+defined in, so a name in lower case is a word no requirement can ever use, and it fails
+rather than warns because a silent term is a missing one. Two definitions under one name
+leave "the definition" not existing. A duplicate term fails where a duplicate requirement
+only warns, because a requirement declared twice still has one set of scenarios to prove
+it, while a word with two meanings has no meaning to use.
+
+<!-- scenarios: generated -->
+- "A Term heading not written in capitals fails the build" → tests/guard/terms.test.ts
+- "Two Term sections defining the same term fail the build" → tests/guard/terms.test.ts
+<!-- /scenarios -->

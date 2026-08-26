@@ -46,6 +46,12 @@ export function describeFinding(finding: Finding): string {
       return `${finding.requirement} › ${finding.scenario}: ${siteOf(finding)} has no GIVEN, WHEN or THEN above it`
     case 'unreadable':
       return `${siteOf(finding)}: ${finding.message}`
+    case 'term-not-in-capitals':
+      return `Term ${finding.term}: a term's name is written in capitals and nothing else, so a requirement can use it in the exact form it was defined in`
+    case 'term-defined-twice':
+      return `Term ${finding.term}: defined more than once, and a word with two meanings has no meaning to use`
+    case 'term-promises':
+      return `Term ${finding.term}: the definition contains a SHALL, and a term defines — the promise belongs under a requirement`
     default:
       return assertNever(finding)
   }

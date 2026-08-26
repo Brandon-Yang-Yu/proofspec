@@ -1,8 +1,8 @@
 import { compareStrings } from '../order.ts'
 import type { ScenarioNode } from '../spec-tree/index.ts'
-import { findSections, parseEntry, readMarkdown } from './format.ts'
-import type { RequirementSection } from './format.ts'
-import type { CapabilitySpec, RequirementSpec } from './types.ts'
+import { findSections, findTermSections, parseEntry, readMarkdown } from './format.ts'
+import type { RequirementSection, TermSection } from './format.ts'
+import type { CapabilitySpec, RequirementSpec, TermSpec } from './types.ts'
 
 /**
  * Reads one committed capability file: its requirements, the description written under
@@ -21,26 +21,57 @@ import type { CapabilitySpec, RequirementSpec } from './types.ts'
  */
 export function readCapabilityFile(source: string, options: { capability: string }): CapabilitySpec {
   const markdown = readMarkdown(source)
-  const requirements = findSections(markdown).map(section => toRequirementSpec(section, markdown.lines))
-  return { capability: options.capability, requirements }
+  const termSections = findTermSections(markdown)
+  const requirements = findSections(markdown).map(section =>
+    toRequirementSpec(section, { lines: markdown.lines, termSections }),
+  )
+  return { capability: options.capability, requirements, terms: termsOf(termSections, markdown.lines) }
 }
 
-function toRequirementSpec(section: RequirementSection, lines: readonly string[]): RequirementSpec {
+function toRequirementSpec(
+  section: RequirementSection,
+  from: { readonly lines: readonly string[]; readonly termSections: readonly TermSection[] },
+): RequirementSpec {
   return {
     requirement: section.requirement,
-    description: descriptionOf(section, lines),
-    scenarios: recordedEntries(section, lines),
+    description: descriptionOf(section, from),
+    scenarios: recordedEntries(section, from.lines),
   }
+}
+
+/** The file's vocabulary, as written. A Term heading inside a fence is an example, not a term. */
+function termsOf(termSections: readonly TermSection[], lines: readonly string[]): TermSpec[] {
+  return termSections.map(section => ({
+    term: section.term,
+    definition: lines.slice(section.headingLine + 1, section.endLine).join('\n').trim(),
+  }))
+}
+
+/**
+ * Just the terms a source declares. The second axis of `touched` reads these from two
+ * revisions of a file and needs nothing else the read produces.
+ */
+export function readTerms(source: string): readonly TermSpec[] {
+  const markdown = readMarkdown(source)
+  return termsOf(findTermSections(markdown), markdown.lines)
 }
 
 /**
  * The prose between the heading and the generated block, with the blank lines around it
- * dropped. Where a section has no block, its description runs to the next heading.
+ * dropped. A Term heading ends the prose wherever it is written, because a definition is
+ * never part of a description; where a section has no block, its description runs to the
+ * next heading.
  */
-function descriptionOf(section: RequirementSection, lines: readonly string[]): string {
+function descriptionOf(
+  section: RequirementSection,
+  from: { readonly lines: readonly string[]; readonly termSections: readonly TermSection[] },
+): string {
   const blockBegins = section.block.kind === 'present' ? section.block.replaced.from : section.endLine
-  const prose = lines.slice(section.headingLine + 1, blockBegins)
-  return prose.join('\n').trim()
+  const termBegins = from.termSections.find(
+    one => one.headingLine > section.headingLine && one.headingLine < blockBegins,
+  )?.headingLine
+  const proseEnd = termBegins ?? blockBegins
+  return from.lines.slice(section.headingLine + 1, proseEnd).join('\n').trim()
 }
 
 /**

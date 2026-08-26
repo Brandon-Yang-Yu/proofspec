@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { compareStrings } from '../order.ts'
+import type { TermSpec } from '../spec-file/index.ts'
 import type { GoneProof, JudgedScenario } from './types.ts'
 
 /**
@@ -31,7 +33,19 @@ export function scenarioKey(scenario: JudgedScenario): string {
     // formatting change.
     scenario.claim.map(step => [step.keyword, step.text]),
     scenario.proof.map(run => run.source),
+    // The definitions of the terms the standard uses — part of the standard, so a redefined
+    // word is a different question being asked of every promise that uses it. Spread in
+    // rather than appended: a promise that uses no term digests exactly the material it
+    // always did, and a repository with no glossary keeps its ledger standing untouched.
+    ...termMaterial(scenario.definitions),
   ])
+}
+
+/** The definitions as key material, or nothing at all when the standard uses no term. */
+function termMaterial(definitions: readonly TermSpec[]): unknown[] {
+  if (definitions.length === 0) return []
+  const inTermOrder = [...definitions].sort((a, b) => compareStrings(a.term, b.term))
+  return [inTermOrder.map(one => [one.term, one.definition])]
 }
 
 export function goneKey(gone: GoneProof): string {
