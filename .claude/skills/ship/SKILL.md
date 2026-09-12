@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Run the ProofSpec build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, close the review gate (touched + review, a fresh subagent per promise), archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard ProofSpec flow.
+description: Run the ProofSpec build pipeline for one capability or one requirement — plan in Claude Code plan mode, tests-red, build-to-green, a fresh-subagent guideline review, a fresh-subagent completion check, close the review gate (touched + review, a fresh subagent per promise), a fresh-subagent acceptance check that runs the human-approved acceptance script for real against the CLI, archive the plan, then stop and wait for the human to say commit. Use when the user says "/ship <capability>" or asks to take work through the standard ProofSpec flow.
 metadata:
   author: proofspec
   version: "1.0"
@@ -33,9 +33,9 @@ mode instead.
 judge of their own fresh work — the context that just wrote the code is already convinced
 it is right, so it skims past what a cold reader would catch. That is why every judgement
 hands off to a fresh subagent that never watched the work get written: the guideline review
-(step 4), the completion check (step 5), and the promise reviews that close the review gate
-(step 6). Reviewing and fixing stay separate hats too: the subagent only reports; you act
-on what it finds.
+(step 4), the completion check (step 5), the promise reviews that close the review gate
+(step 6), and the acceptance check (step 7). Reviewing and fixing stay separate hats too:
+the subagent only reports; you act on what it finds.
 
 Announce a short plan first, then work the steps. Keep the human posted at each hand-off.
 
@@ -55,6 +55,19 @@ This is the behavior gate — the one place the human confirms *intent*. State t
 as `GIVEN/WHEN/THEN` in plain English, and get explicit confirmation that they are the
 behavior the human wants before writing any test or code. Leave plan mode only when the
 human approves the plan.
+
+Alongside the scenarios, draft the **acceptance script** — the outside view of the same
+intent. A scenario is a promise inside the system; this is what a person would actually
+run to see the promise land, since ProofSpec is a CLI library and "using the product"
+means running the `proofspec` binary the way a consuming project would. Write an ordered
+list of concrete steps — each one a literal invocation (`proofspec <verb> ...`, or
+`pnpm test`) paired with the literal thing you'd see printed or written if it worked —
+plain enough to run by hand with no more context than the list itself. Confirm it with
+the human in the same round as the scenarios; it is part of the one intent, not a second
+approval. Once confirmed, persist it — `git rev-parse --git-dir` names this worktree's
+own private admin directory, never tracked and never part of the working tree, so write
+it to `$(git rev-parse --git-dir)/ship-acceptance-<capability>.md` — so step 7 reads it
+back verbatim rather than relying on a plan that may no longer be in context by then.
 
 ## 2. Tests, red
 
@@ -152,14 +165,30 @@ requirement reached. For each key:
 convention is its own `chore(review):` commit when the judgements read cleaner apart from
 the change.
 
-## 7. Archive the plan
+## 7. Acceptance check — fresh subagent
+
+Spawn a fresh subagent that did not write the code or the plan. Hand it the acceptance
+script from step 1 — read `$(git rev-parse --git-dir)/ship-acceptance-<capability>.md`
+back rather than retyping it from memory — and the worktree root. It runs the script for
+real, one step at a time, from bash: a read-only verb (`check`, `touched`, `render`) runs
+directly against this repo, a verb that writes (`write`) runs against a disposable scratch
+copy instead, so nothing the check does leaves a side effect in the working tree. Per
+step it reports **pass** (saw the literal thing named), **fail** (what it actually saw
+instead), or **can't-tell** (the step could not be run as written) — and fixes nothing.
+
+A fail is a finding like any other: fix it, and because the fix touches code, steps 4–6
+run again on the new shape before the acceptance check runs once more. It never edits the
+script itself — a step that asks the wrong thing is a step-1 question, not one this gate
+quietly corrects.
+
+## 8. Archive the plan
 
 Record the plan approved in step 1 so the reasoning survives the build. The committed
 `specs/<capability>.md` holds the requirements and scenarios; the plan's *why* — the
 decisions and trade-offs behind them — belongs in `docs/design.md`, the way §12–§14 record
 the earlier ones.
 
-## 8. Wait for the human to say commit
+## 9. Wait for the human to say commit
 
 Stop. Do not commit. Report what changed and that the gates are green, then wait.
 
@@ -171,4 +200,5 @@ push to a remote unless the human asks.
 ## Finish
 
 Report: the capability, the scenarios shipped, the gates green, the review gate closed
-(the work list exits 0), and that the change waits uncommitted for the human's go-ahead.
+(the work list exits 0), the acceptance check clean, and that the change waits uncommitted
+for the human's go-ahead.
