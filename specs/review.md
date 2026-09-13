@@ -13,30 +13,6 @@ of that LEDGER means, what KEY a judgement is filed under, and whether a change 
 judged through are this capability's — the same split `spec-file` and `cli` already keep over
 the CAPABILITY_FILE.
 
-### Term: KEY
-
-The digest a judgement is filed under, made of the CLAIM, the PROOF, the STANDARD, and the
-definition of every TERM the STANDARD uses. What line anything sits on is no part of a KEY,
-so a file reformatted moves no judgement.
-
-### Term: LEDGER
-
-The append-only record of judgements: one line per reviewed PROMISE, filed under the KEY it
-was judged under. A line is a fact about a KEY, so two branches that both reviewed both keep
-their lines.
-
-### Term: PROMISE
-
-One scenario claimed at one PROOF_SITE: its CLAIM, its PROOF, and the STANDARD it is judged
-against, bound into the one unit the gate holds. Change any of the three and the PROMISE that
-was judged is not this one.
-
-### Term: STANDARD
-
-The description of a requirement — what every scenario under it is judged against. The
-definition of every TERM the STANDARD uses is part of it, so a redefined word is a different
-question asked of every PROMISE beneath it.
-
 ### Requirement: A KEY says what it is for
 
 A judgement SHALL be filed under a digest of the scenario's identity, the description written

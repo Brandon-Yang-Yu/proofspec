@@ -4,9 +4,9 @@ Answers what the spec's own words mean, and what happens when one of them change
 
 A spec speaks in words — a turn, the margin — and two readers can hear two things in the
 same one. A TERM fixes a meaning once, the way a legal document defines its defined terms:
-the vocabulary is written in each CAPABILITY_FILE beside the requirements that use it, and a
-requirement uses a TERM in the exact form it was defined in — capitals, singular,
-unchanged — so a reader always knows which words carry a meaning of their own.
+the vocabulary is written once, in the glossary, and a requirement uses a TERM in the exact
+form it was defined in — capitals, singular, unchanged — so a reader always knows which
+words carry a meaning of their own.
 
 The other half is the price of that. A definition is part of every PROMISE that uses the
 word: rewrite it and the PROMISE behind it has not moved a line of its tests, but what
@@ -24,6 +24,52 @@ spec.
 A word defined once, in a Term section, that means that one thing everywhere. A requirement
 uses a TERM in the exact form it was defined in — capitals, singular, unchanged — so a
 reader always knows which words carry a meaning of their own.
+
+### Term: CAPABILITY_FILE
+
+The committed markdown file that holds one capability: the descriptions of its requirements,
+the TERM sections it defines, and the generated block that records where their scenarios are
+proven.
+
+### Term: CLAIM
+
+The behaviour text of a PROOF_SITE: its scenario title and its GIVEN, WHEN and THEN steps,
+read as the assertion its PROOF has to keep. A CLAIM sits above the code, not inside it, so
+editing the code never silently rewrites what was claimed.
+
+### Term: KEY
+
+The digest a judgement is filed under, made of the CLAIM, the PROOF, the STANDARD, and the
+definition of every TERM the STANDARD uses. What line anything sits on is no part of a KEY,
+so a file reformatted moves no judgement.
+
+### Term: LEDGER
+
+The append-only record of judgements: one line per reviewed PROMISE, filed under the KEY it
+was judged under. A line is a fact about a KEY, so two branches that both reviewed both keep
+their lines.
+
+### Term: PROMISE
+
+One scenario claimed at one PROOF_SITE: its CLAIM, its PROOF, and the STANDARD it is judged
+against, bound into the one unit the gate holds. Change any of the three and the PROMISE that
+was judged is not this one.
+
+### Term: PROOF
+
+The code a CLAIM is proven by: everything from the CLAIM to the last line of its test. A
+PROOF is what a change to the tests puts its hands on, and what a PROMISE stands on.
+
+### Term: PROOF_SITE
+
+One place that claims to prove a scenario: a whole test, or a tagged block of assertions
+inside one. A parameterised test is one PROOF_SITE however many rows its table has.
+
+### Term: STANDARD
+
+The description of a requirement — what every scenario under it is judged against. The
+definition of every TERM the STANDARD uses is part of it, so a redefined word is a different
+question asked of every PROMISE beneath it.
 
 ### Requirement: A TERM is used when it appears in the exact form it was defined in
 
