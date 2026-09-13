@@ -32,29 +32,47 @@ mode instead.
 **Two hats, kept apart.** Through the build you are the *builder*. A builder is a poor
 judge of their own fresh work — the context that just wrote the code is already convinced
 it is right, so it skims past what a cold reader would catch. That is why every judgement
-hands off to a fresh subagent that never watched the work get written: the guideline review
-(step 4), the completion check (step 5), the promise reviews that close the review gate
-(step 6), and the acceptance check (step 7). Reviewing and fixing stay separate hats too:
-the subagent only reports; you act on what it finds.
+hands off to a fresh subagent that never watched the work get written: the spec draft
+(step 1), the guideline review (step 4), the completion check (step 5), the promise
+reviews that close the review gate (step 6), and the acceptance check (step 7). Reviewing
+and fixing stay separate hats too: the subagent only reports; you act on what it finds.
 
 Announce a short plan first, then work the steps. Keep the human posted at each hand-off.
 
 ## 1. Plan (Claude Code plan mode)
 
-Enter plan mode. Produce the capability's spec: each `### Requirement:` with its one SHALL
-sentence, and the Gherkin scenarios each requirement will carry. Written to
-`specs/<capability>.md`, one file per capability.
+Enter plan mode. Work out the shape of the change with the human — which capability, which
+requirements, what a "new" one needs from scratch or what a "fix"/"amendment" changes — but
+the requirement's SHALL sentence and its rationale, and any TERM's definition, are not yours
+to write. Spawn a fresh subagent, the **spec steward**, to draft them.
 
-For a **fix**, the spec usually already exists — the plan names the requirement and
-scenario the code violates, and adds a scenario only if the defect fell between the
-existing ones. For an **amendment**, this step is where the spec changes: rewrite the
-SHALL sentence and scenarios to say the new behavior, and get the human to confirm the
-new wording the same way they would confirm a new capability's.
+**The spec steward drafts prose, you never do.** You are the builder, and a builder is a
+poor judge of their own fresh wording the same way step 4-6's reviewers exist because you
+are a poor judge of your own fresh code. Hand it the change intent in the human's own words
+and the worktree root. It runs the real census — `rg -n '^### Requirement:' specs/*.md` and
+`rg -n '^### Term:' specs/*.md` (this repo's vocabulary is distributed across capability
+files, not centralized in one glossary) — classifies every row **die / rewrite / keep /
+new** against the intent, and drafts real prose for every non-keep row, in the register the
+surrounding spec already uses.
+
+It commits directly onto **this task branch**, never a branch of its own: the worktree was
+already cut for this one change, so nothing a separate branch would protect is not already
+protected by the task branch itself. The first round commits (`git add specs && git commit
+-m "docs(specs): <capability>"`); every round after that **amends the same commit** (`git
+commit --amend --no-edit`) rather than adding another one, so however many rounds the human
+needs, the branch never carries more than this one spec commit.
+
+When a row touches a TERM, the ripple is measured, not guessed: after committing, it runs
+`pnpm proofspec touched --since "$(git merge-base HEAD main)" --format json` against its
+own real commit and reports every requirement the changed TERM reopens, for the human to
+rule on alongside the table. It returns the table, the ripple, and the drafted prose quoted
+back from the file after committing — never retyped from memory, so the report the human
+rules on and the commit that lands are never two different things.
 
 This is the behavior gate — the one place the human confirms *intent*. State the scenarios
-as `GIVEN/WHEN/THEN` in plain English, and get explicit confirmation that they are the
-behavior the human wants before writing any test or code. Leave plan mode only when the
-human approves the plan.
+as `GIVEN/WHEN/THEN` in plain English, and get explicit confirmation — of the spec steward's
+wording and of the scenarios — before writing any test or code. Leave plan mode only when
+the human approves the plan.
 
 Alongside the scenarios, draft the **acceptance script** — the outside view of the same
 intent. A scenario is a promise inside the system; this is what a person would actually
