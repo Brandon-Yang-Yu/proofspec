@@ -1982,3 +1982,40 @@ On 2026-09-08 a coordination session in the Audan workspace hand-rolled a dispat
 **State lives in files; processes are stateless readers and writers of them.** This is how sessions themselves persist (JSONL on disk, resumable) and how the merge lock works (a `mkdir`, released by any crash). The queue follows: an append-only event log for audit, one directory per task holding the manifest, the checklist, a one-word `state` written atomically, and the open ASKs — `queued → building → mergeable → merged`, plus the parked states `held-for(X)` and `blocked-on-question` and the failure state `gate-failed`. A persistent agent is not a resident process; it is a state any session or CLI can pick up by opening the directory. v0 has no daemon — the scheduling loop wakes on events (enqueue, merge done, extension startup scan) and earns a timer only when that proves insufficient.
 
 **The path.** v0: the queue directory, a small `dispatch` CLI (add, list, status, hold), hand-written manifests, RPC-spawned work agents, and one scenario proven end to end — task B runs half way, then waits for task A. v1: a pi extension, so the investigation agent hands off by tool call and the census reads the queue natively. v2, only if the deterministic rules run out: LLM-assisted reordering, a resident loop, the headless entry into ship. Open questions: email transport; how mid-build manifest drift is recorded (leaning: append an event); how much of ship's interactive entry has to change to run headless — its review gates are already fresh subagents, so the machinery is closer than the entry point is.
+
+## 38. Every TERM has one home, and the guard says so
+
+§35 moved the vocabulary into `specs/glossary.md` and rewrote this file's own prose to
+say so — *"the vocabulary is written once, here."* Nothing enforced it. `readCapabilityFile`
+reads a Term section out of whatever capability file it is handed, and the flattened list
+`guard` receives forgot which file each term came from before the rule that mattered could
+ever see it. The gap was not hypothetical: three capabilities — `review`, `spec-file`,
+`test-scan` — still carried eight terms of their own, untouched since before §35, because
+moving the ones §35 was written about was never the same act as forbidding the next one
+from staying where it was written.
+
+**The home is named, not inferred.** Every other capability's name comes from a filename
+the consuming repo chooses; `glossary` is the first name the tool itself knows. The
+alternative — fail when Term sections appear in more than one file, whichever file that
+turns out to be — was considered and rejected: it protects the invariant "one home" without
+saying which one, so a repo could still end up with its vocabulary sitting in `review.md`
+by accident of which file got there first. Naming the home costs a repo adopting ProofSpec
+exactly one thing — call the file `specs/glossary.md` — and buys a fixed place a reader
+looks without having to ask.
+
+**It fails, not warns.** This makes four term rules the guard fails on, the third and
+fourth (defined-twice, outside-glossary) sharing one shape: `term-not-in-capitals` and
+`term-promises` are wrong on their own text; `term-defined-twice` and
+`term-outside-glossary` are only wrong in relation to where else a word's definition
+stands — one to another definition, one to a place the tool has already named. Both said
+so unambiguously enough that a warning would have been a fix deferred for no reason: move
+the section.
+
+**The fix ran on the change itself.** Landing this on the repo's actual branch turned up
+the exact drift the rule exists to catch — the eight terms above, plus ten commits of
+unrelated dispatch work that had drifted `main` ahead of `origin/main` and taken
+`specs/glossary.md` along with it as a side effect of an unreviewed move. Rebasing this
+branch back onto `origin/main` before shipping restored the scattered terms this rule was
+written for, which is what let the acceptance script's second step — cut `LEDGER` out of
+the glossary, watch the guard name it — prove something a clean repository never would
+have exercised for real.
