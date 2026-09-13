@@ -213,6 +213,21 @@ it, while a word with two meanings has no meaning to use.
 - "Two Term sections defining the same TERM fail the build" → tests/guard/terms.test.ts
 <!-- /scenarios -->
 
+### Requirement: A TERM is defined in one place, and that place is the glossary
+
+The guard SHALL fail when a Term section appears in a CAPABILITY_FILE other than the
+glossary, naming the TERM and the capability it was found in.
+
+A word's meaning is not a capability's to keep. A vocabulary spread across the files that
+happen to use it makes a reader hunt every file to learn what a word means, and makes a
+definition's change one diff among many rather than the one place the vocabulary moves. The
+glossary is that one place, and the rule is what holds it there.
+
+<!-- scenarios: generated -->
+- "A Term section defined outside the glossary fails the build" → tests/guard/terms.test.ts
+- "A Term section defined in the glossary passes the guard" → tests/guard/terms.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A TERM's definition spells a defined TERM in a near form only at the risk of losing the edge
 
 The guard SHALL warn, without failing the build, when a TERM's definition spells another

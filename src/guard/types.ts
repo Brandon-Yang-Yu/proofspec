@@ -5,7 +5,11 @@
  */
 
 import type { Placement, ScenarioIdentity } from '../spec-tree/index.ts'
+import type { TermSpec } from '../spec-file/index.ts'
 import type { ScanErrorKind } from '../test-scan/index.ts'
+
+/** A term as the guard receives it: the definition, plus the CAPABILITY_FILE it was written in. */
+export type TermDeclaration = TermSpec & { readonly capability: string }
 
 /**
  * One thing the guard has to say. Every kind carries where to look, because a diagnostic
@@ -68,6 +72,8 @@ export type Finding =
   | { readonly kind: 'term-not-in-capitals'; readonly term: string }
   /** Two Term sections defining one word, leaving "the definition" not existing. */
   | { readonly kind: 'term-defined-twice'; readonly term: string }
+  /** A Term section found outside the glossary: the vocabulary is written in one place. */
+  | { readonly kind: 'term-outside-glossary'; readonly term: string; readonly capability: string }
   /**
    * A definition that spells another defined TERM in its everyday form — `claim` where CLAIM
    * is defined. It warns rather than fails: the reviewer reading the definition's then and

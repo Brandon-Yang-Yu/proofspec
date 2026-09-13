@@ -1,18 +1,22 @@
 // Capability: guard
 
 import { expect, it } from 'vitest'
-import { guard } from '../../src/guard/index.ts'
+import { guard, VOCABULARY_HOME } from '../../src/guard/index.ts'
 import type { TermSpec } from '../../src/spec-file/index.ts'
 import { CAPABILITY, REQUIREMENT, committed, scan, site } from './support.ts'
 
-/** A guard run over one committed tree in sync with its one proof site, with a vocabulary. */
-function overTerms(terms: readonly TermSpec[]) {
+/**
+ * A guard run over one committed tree in sync with its one proof site, with a vocabulary.
+ * Terms default to the glossary — the only home the guard accepts — so a test about some
+ * other term rule is not also a test of this one.
+ */
+function overTerms(terms: readonly TermSpec[], { capability = VOCABULARY_HOME } = {}) {
   return guard({
     scans: [scan({ sites: [site({ scenario: 'proven' })] })],
     committed: committed({
       [CAPABILITY]: { [REQUIREMENT]: [{ scenario: 'proven', file: 'tests/example.test.ts' }] },
     }),
-    terms,
+    terms: terms.map(term => ({ ...term, capability })),
   })
 }
 
@@ -100,4 +104,32 @@ it('reports nothing for a verb sharing the TERM spelling', () => {
   ])
 
   expect(report).toEqual({ status: 'pass', findings: [] })
+})
+
+// Requirement: A TERM is defined in one place, and that place is the glossary
+// Scenario: A Term section defined outside the glossary fails the build
+// GIVEN a vocabulary whose TERM LEDGER is defined in the review capability file
+// WHEN the guard runs
+// THEN the build fails naming LEDGER and the capability it was found in, because the
+//      vocabulary is written once, in the glossary, and a definition elsewhere is a
+//      second place a reader would have to check for what the word means
+it('fails when a Term section is defined outside the glossary', () => {
+  const report = overTerms([{ term: 'LEDGER', definition: 'One line per reviewed PROMISE.' }], {
+    capability: 'review',
+  })
+
+  expect(report.status).toBe('fail')
+  expect(report.findings).toEqual([{ kind: 'term-outside-glossary', term: 'LEDGER', capability: 'review' }])
+})
+
+// Requirement: A TERM is defined in one place, and that place is the glossary
+// Scenario: A Term section defined in the glossary passes the guard
+// GIVEN a vocabulary whose TERM LEDGER is defined in the glossary
+// WHEN the guard runs
+// THEN the build passes, because the glossary is where a definition belongs
+it('passes a Term section defined in the glossary', () => {
+  const report = overTerms([{ term: 'LEDGER', definition: 'One line per reviewed PROMISE.' }])
+
+  expect(report.status).toBe('pass')
+  expect(report.findings).toEqual([])
 })

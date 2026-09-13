@@ -11,9 +11,16 @@ import type {
   TreeChange,
 } from '../spec-tree/index.ts'
 import type { FileScan, ProofSite, ScanError } from '../test-scan/index.ts'
-import type { TermSpec } from '../spec-file/index.ts'
 import { severityOf } from './report.ts'
-import type { Finding, GuardReport } from './types.ts'
+import type { Finding, GuardReport, TermDeclaration } from './types.ts'
+
+/**
+ * The one capability a Term section may live in. Every other capability name comes from a
+ * filename the consuming repo chooses; this is the one name the tool itself knows, because
+ * a vocabulary spread across the files that happen to use it makes a reader hunt every file
+ * to learn what a word means.
+ */
+export const VOCABULARY_HOME = 'glossary'
 
 /**
  * Decides whether a build can proceed. It rebuilds the tree from the tests, compares it
@@ -29,7 +36,7 @@ export function guard({
 }: {
   readonly scans: readonly FileScan[]
   readonly committed: SpecTree
-  readonly terms?: readonly TermSpec[]
+  readonly terms?: readonly TermDeclaration[]
 }): GuardReport {
   const sites = scans.flatMap(scan => scan.sites)
   const errors = scans.flatMap(scan => scan.errors)
@@ -58,10 +65,10 @@ export function guard({
  * and one meaning to a word. The vocabulary is global — terms from every capability file —
  * because a word's meaning is not a capability's to keep.
  */
-function termFindings(terms: readonly TermSpec[]): Finding[] {
+function termFindings(terms: readonly TermDeclaration[]): Finding[] {
   const findings: Finding[] = []
   const seen = new Set<string>()
-  for (const { term, definition } of terms) {
+  for (const { term, definition, capability } of terms) {
     // Capitals, the words of a phrase joined by underscores — one TERM one token —
     // because the name is the match key: a promise uses a term in the exact form it was
     // defined in, and a name in lower case is a word no requirement can ever use. Spaces
@@ -73,6 +80,7 @@ function termFindings(terms: readonly TermSpec[]): Finding[] {
     if (!/^[A-Z]+(?:_[A-Z]+)*$/.test(term)) findings.push({ kind: 'term-not-in-capitals', term })
     if (/\bSHALL\b/.test(definition)) findings.push({ kind: 'term-promises', term })
     if (seen.has(term)) findings.push({ kind: 'term-defined-twice', term })
+    if (capability !== VOCABULARY_HOME) findings.push({ kind: 'term-outside-glossary', term, capability })
     seen.add(term)
   }
   findings.push(...nearFormFindings(terms))
@@ -90,7 +98,7 @@ function termFindings(terms: readonly TermSpec[]): Finding[] {
  * is a guess about English and the guard does not guess. A TERM never counts against its own
  * definition: saying what a word is will naturally say the word.
  */
-function nearFormFindings(terms: readonly TermSpec[]): Finding[] {
+function nearFormFindings(terms: readonly TermDeclaration[]): Finding[] {
   const findings: Finding[] = []
   for (const { term, definition } of terms) {
     for (const other of terms) {
@@ -371,7 +379,8 @@ const KIND_ORDER: Record<Finding['kind'], number> = {
   'term-not-in-capitals': 10,
   'term-defined-twice': 11,
   'term-promises': 12,
-  'term-near-form': 13,
+  'term-outside-glossary': 13,
+  'term-near-form': 14,
 }
 
 function compareFindings(a: Finding, b: Finding): number {
@@ -410,6 +419,8 @@ function orderParts(finding: Finding): OrderParts {
     case 'term-defined-twice':
     case 'term-promises':
       return [finding.term]
+    case 'term-outside-glossary':
+      return [finding.term, finding.capability]
     case 'term-near-form':
       return [finding.term, finding.near]
     default:

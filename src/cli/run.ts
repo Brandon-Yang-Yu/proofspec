@@ -76,7 +76,11 @@ export async function check(options: RunOptions): Promise<Outcome> {
   const committed: SpecTree = { capabilities: specs }
   return {
     kind: 'checked',
-    report: guard({ scans, committed, terms: specs.flatMap(spec => spec.terms) }),
+    report: guard({
+      scans,
+      committed,
+      terms: specs.flatMap(spec => spec.terms.map(term => ({ ...term, capability: spec.capability }))),
+    }),
   }
 }
 

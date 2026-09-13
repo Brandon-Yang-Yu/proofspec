@@ -56,6 +56,8 @@ export function describeFinding(finding: Finding): string {
       return `Term ${finding.term}: a term's name is written in capitals, its words joined by underscores, and nothing else, so a requirement can use it in the exact form it was defined in`
     case 'term-defined-twice':
       return `Term ${finding.term}: defined more than once, and a word with two meanings has no meaning to use`
+    case 'term-outside-glossary':
+      return `Term ${finding.term}: defined in ${finding.capability}, and the vocabulary is written once, in the glossary`
     case 'term-promises':
       return `Term ${finding.term}: the definition contains a SHALL, and a term defines — the promise belongs under a requirement`
     case 'term-near-form':

@@ -2,7 +2,7 @@
 
 import { expect, it } from 'vitest'
 import { termsUsed } from '../../src/glossary/index.ts'
-import { guard } from '../../src/guard/index.ts'
+import { guard, VOCABULARY_HOME } from '../../src/guard/index.ts'
 import { CAPABILITY, committed, REQUIREMENT, scan, site } from '../guard/support.ts'
 
 // Requirement: The words of a phrase TERM are joined by underscores
@@ -18,7 +18,9 @@ it("fails the build when a TERM heading spaces its words", () => {
     committed: committed({
       [CAPABILITY]: { [REQUIREMENT]: [{ scenario: 'proven', file: 'tests/example.test.ts' }] },
     }),
-    terms: [{ term: 'PROOF SITE', definition: 'One place that claims to prove a scenario.' }],
+    terms: [
+      { term: 'PROOF SITE', definition: 'One place that claims to prove a scenario.', capability: VOCABULARY_HOME },
+    ],
   })
 
   expect(report.status).toBe('fail')
