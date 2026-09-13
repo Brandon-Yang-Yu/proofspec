@@ -412,3 +412,59 @@ either.
 - "A recording that cannot be read is a cannot-run" → tests/cli/impact.test.ts
 - "Only the scenarios a run executed are named" → tests/cli/impact.test.ts
 <!-- /scenarios -->
+
+### Requirement: A command answers the dispatch graph as JSON
+
+The CLI SHALL provide a `dispatch` command that reads the queue directory and answers the
+graph this capability computes, as JSON by default, and SHALL exit its ok code whatever it
+finds.
+
+This report is read by another program — an orchestrator, in a later round — far more often
+than by a person, which is this CLI's own rule for when JSON is the default rather than
+something asked for. Like `touched` and `impact`, it reports and holds no gate: a
+relationship the graph found is not a build the graph is entitled to fail, and ranking one
+relationship over another is exactly the judgement this capability refuses to make.
+
+The command carries no sub-verb: add, list, and hold belong to a more ambitious design this
+round deliberately narrowed away, and `dispatch` answers the one question this capability
+asks. A sub-verb parser would be built for choices the capability does not make.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
+### Requirement: Two revisions can be compared without checking either one out
+
+The CLI SHALL provide a way to compare two named git revisions without checking either one
+out: where their histories last agreed, which paths under a pathspec differ between them,
+every path either one holds, and whether one is an ancestor of the other.
+
+`touched` already reads one revision's diff against a working tree; the dispatch graph needs
+the same kind of answer about two revisions neither of which is checked out — a task's own
+branch against another task's, or against `main` — so it is this capability's job to answer
+without disturbing whatever the caller has checked out, the same way `touched` never
+requires the base revision to be the one in the working directory.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
+### Requirement: A conventional queue directory is read one task at a time
+
+The CLI SHALL provide a way to read a conventional queue directory — one task per
+subdirectory, each holding a MANIFEST and a state file — into whatever the graph needs,
+reading one TASK at a time so that one unreadable TASK answers a problem for that TASK
+alone. A queue directory that does not exist SHALL answer an empty list of TASK. A queue
+directory that exists but cannot be listed SHALL be a refusal naming the path.
+
+A missing queue directory is the ordinary state between rounds, not a failure: no TASK has
+been handed off yet, and the answer is the same one an empty directory would give — no TASK
+in flight. A directory that exists and still cannot be listed — permissions denied, a file
+sitting where a directory belongs — is a different fact about the repository, one no TASK's
+absence explains, so it is refused rather than answered as empty.
+
+The same asymmetry `touched` already draws between a repo it cannot run in at all and a file
+inside it that cannot be read applies here one level down: a directory that lists fine but
+holds one unreadable task is a per-task problem — refusing the whole read over one bad TASK
+would be the very defeat the graph's own resilience exists to avoid.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
