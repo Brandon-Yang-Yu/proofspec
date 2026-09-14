@@ -43,6 +43,14 @@ The digest a judgement is filed under, made of the CLAIM, the PROOF, the STANDAR
 definition of every TERM the STANDARD uses. What line anything sits on is no part of a KEY,
 so a file reformatted moves no judgement.
 
+### Term: LEASE
+
+A time-bounded claim scoped to one TASK, taken before starting its work-agent session so
+that two scheduling passes finding the same ready TASK do not both start one. A LEASE is not
+renewed and carries no notion of whether the process behind it is still alive: it expires,
+and becomes reclaimable, once a short grace period passes without the TASK's state
+advancing to `building`.
+
 ### Term: LEDGER
 
 The append-only record of judgements: one line per reviewed PROMISE, filed under the KEY it
