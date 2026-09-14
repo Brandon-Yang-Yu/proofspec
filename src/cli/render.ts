@@ -3,6 +3,7 @@ import type { Graph, Node, Relationship, TaskEntry } from '../dispatch/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { ReviewEntry } from '../review/index.ts'
+import type { RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import type {
   GoneScenario,
   ImpactReport,
@@ -58,6 +59,10 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     // A relationship the graph found, or a problem one of its TASK carries, is not a build
     // this command is entitled to fail — the same way `impact`'s tree never fails a build.
     case 'dispatch':
+    // What a scheduling pass did, or a recorded ruling, are reports of an action taken, not a
+    // verdict on the build.
+    case 'scheduled':
+    case 'ruled':
       return EXIT_OK
     case 'cannot-run':
       return EXIT_CANNOT_RUN
@@ -129,6 +134,10 @@ function defaultFormatOf(outcome: Outcome): Format {
     case 'checked':
     case 'wrote':
     case 'reviewed':
+    // What a scheduling pass did, or a recorded ruling: an action report a person triggering it
+    // by hand reads, the same shape as `wrote` and `reviewed`.
+    case 'scheduled':
+    case 'ruled':
     case 'impact':
     case 'cannot-run':
       return 'text'
@@ -156,6 +165,10 @@ export function renderText(outcome: Outcome): string {
       return renderImpact(outcome.report)
     case 'dispatch':
       return renderDispatch(outcome.report)
+    case 'scheduled':
+      return renderScheduled(outcome.report)
+    case 'ruled':
+      return renderRuled(outcome.entry)
     case 'cannot-run':
       return outcome.reason
     default:
@@ -177,8 +190,10 @@ export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string
     case 'touched':
     case 'impact':
     case 'dispatch':
+    case 'scheduled':
       return stringify(outcome.report, layout)
     case 'reviewed':
+    case 'ruled':
       return stringify(outcome.entry, layout)
     case 'cannot-run':
       return stringify({ error: outcome.reason }, layout)
@@ -403,6 +418,25 @@ function renderTask(task: TaskEntry): string {
 
 function renderRelationship(relationship: Relationship): string {
   return `  ${nodeLabel(relationship.node)}: ${relationship.tasks.join(', ')}`
+}
+
+/** What one scheduling pass did, as a person reads it. */
+function renderScheduled(plan: SchedulePlan): string {
+  if (plan.pruned.length === 0 && plan.started.length === 0 && plan.blocked.length === 0 && plan.raised.length === 0) {
+    return 'nothing to do'
+  }
+  const lines = [
+    ...plan.pruned.map(task => `pruned ${task}`),
+    ...plan.started.map(task => `started ${task}`),
+    ...plan.blocked.map(task => `blocked ${task} (a LEASE already stands)`),
+    ...plan.raised.map(relationship => `raised ${nodeLabel(relationship.node)}: ${relationship.tasks.join(', ')}`),
+  ]
+  return lines.join('\n')
+}
+
+/** One recorded ruling, said back so the person who wrote it sees what was filed. */
+function renderRuled(entry: Extract<RaisedEntry, { readonly kind: 'ruled' }>): string {
+  return `ruled ${entry.key}\n    ${entry.ruling}`
 }
 
 function nodeList(nodes: readonly Node[]): string {

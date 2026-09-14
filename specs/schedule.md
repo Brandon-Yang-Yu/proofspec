@@ -28,6 +28,13 @@ while the graph still reports it live. There is exactly one graph of what is in 
 both this capability and `dispatch` read it the same way.
 
 <!-- scenarios: generated -->
+- "A TASK based on main carries no hold status at all" → tests/schedule/holds.test.ts
+- "A TASK held on a TASK that has since merged is dispatched" → tests/schedule/end-to-end.test.ts
+- "A TASK held on a still in-flight TASK is not dispatched" → tests/schedule/end-to-end.test.ts
+- "A TASK whose base names a TASK absent from the queue entirely is released" → tests/schedule/holds.test.ts
+- "A TASK whose base names a merged TASK is released" → tests/schedule/holds.test.ts
+- "A TASK whose base names a still in-flight TASK is held" → tests/schedule/holds.test.ts
+- "A held TASK is never ready to dispatch, however queued its own word is" → tests/schedule/lease.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A merged TASK's queue entry is pruned once nothing still names it
@@ -44,6 +51,11 @@ gone and nothing is served by keeping it. The criterion is answerable from the s
 of its own to decide when a name has gone quiet.
 
 <!-- scenarios: generated -->
+- "A merged TASK an in-flight TASK still names is kept" → tests/schedule/end-to-end.test.ts
+- "A merged TASK an in-flight TASK's base still names is not pruned" → tests/schedule/prune.test.ts
+- "A merged TASK no in-flight TASK's base names is pruned" → tests/schedule/prune.test.ts
+- "A merged TASK nothing still names is pruned from the queue directory" → tests/schedule/end-to-end.test.ts
+- "An in-flight TASK is never pruned" → tests/schedule/prune.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Dispatching a ready TASK starts exactly one work-agent session
@@ -59,6 +71,14 @@ keeps two agreeing passes from starting two sessions for it, without holding eve
 TASK's dispatch hostage to the LEASE on one.
 
 <!-- scenarios: generated -->
+- "A TASK already building is not ready to dispatch again" → tests/schedule/lease.test.ts
+- "A queued, unheld TASK is ready" → tests/schedule/lease.test.ts
+- "A ready TASK starts a session and takes a LEASE" → tests/schedule/end-to-end.test.ts
+- "A ready TASK with no LEASE decides to take one" → tests/schedule/lease.test.ts
+- "A ready TASK with no startSession action given cannot run" → tests/schedule/end-to-end.test.ts
+- "A second pass finding an unexpired LEASE decides to block" → tests/schedule/lease.test.ts
+- "The real command blocks a second pass from starting a second session for a ready TASK" → tests/schedule/end-to-end.test.ts
+- "Two passes racing at the same instant still start exactly one session" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process
@@ -78,6 +98,10 @@ change a real session makes almost immediately works the same way whether the se
 never started, or is running on a machine nobody watching has ever heard of.
 
 <!-- scenarios: generated -->
+- "A LEASE outliving the grace period without the state advancing is reclaimed" → tests/schedule/lease.test.ts
+- "A LEASE whose TASK has advanced to building is never reclaimed by elapsed time alone" → tests/schedule/lease.test.ts
+- "A pass after the grace period reclaims a LEASE nothing advanced past" → tests/schedule/end-to-end.test.ts
+- "Two passes racing to reclaim the same stale LEASE still start exactly one session" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A relationship is judged by a fresh agent before a human is asked
@@ -93,6 +117,10 @@ conflict, and reading both intents is cheap enough to run on every relationship 
 finds, which is what keeps a human's attention for the ones that actually need it.
 
 <!-- scenarios: generated -->
+- "A relationship the fresh agent resolved is never raised" → tests/schedule/relationships.test.ts
+- "A relationship the fresh agent resolves is never raised" → tests/schedule/end-to-end.test.ts
+- "A relationship's key names the same node and TASK regardless of the order they arrive in" → tests/schedule/relationships.test.ts
+- "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A judgement the fresh agent cannot resolve reaches a human, traceably
@@ -107,6 +135,11 @@ can go and check, the same way a review's verdict traces to a line in the LEDGER
 notification may be relayed on the human's behalf, but a verdict may not.
 
 <!-- scenarios: generated -->
+- "A recorded ruling traces to exactly the text given" → tests/schedule/end-to-end.test.ts
+- "A relationship the fresh agent could not resolve is raised to a human" → tests/schedule/end-to-end.test.ts
+- "A relationship the fresh agent could not resolve, never raised before, is raised" → tests/schedule/relationships.test.ts
+- "A ruled entry read back from the ledger carries the exact text the human wrote" → tests/schedule/raised.test.ts
+- "The real command line records a ruling through its one positional and --ruling" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The same finding is not raised to a human twice
@@ -125,6 +158,11 @@ nothing: the first thing this capability needs to remember across runs, and the 
 allowed to.
 
 <!-- scenarios: generated -->
+- "A damaged ledger line is skipped rather than refused" → tests/schedule/raised.test.ts
+- "A raised entry read back from the ledger is the same entry that was written" → tests/schedule/raised.test.ts
+- "A relationship already raised is not raised again by a later pass" → tests/schedule/end-to-end.test.ts
+- "A relationship already raised is not raised again, however many passes recompute it" → tests/schedule/relationships.test.ts
+- "A relationship already ruled on still counts as already raised" → tests/schedule/raised.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A scheduling pass is triggered by events, not a resident process or a timer
@@ -141,4 +179,6 @@ lets a LEASE, rather than an assumption that only one pass ever runs, be the thi
 keeps two triggered-together passes from acting twice.
 
 <!-- scenarios: generated -->
+- "A later pass does not repeat work an earlier pass already did" → tests/schedule/end-to-end.test.ts
+- "A pass over an empty queue answers with nothing to do, needing no actions at all" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->

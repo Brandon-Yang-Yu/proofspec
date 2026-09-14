@@ -12,6 +12,7 @@ import type { TermChange } from '../glossary/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
 import type { ProvingLines, ReviewEntry, ReviewProtocol } from '../review/index.ts'
+import type { RaisedEntry, ScheduleActions, SchedulePlan } from '../schedule/index.ts'
 import type { SourceFile } from './discover.ts'
 
 /** Where a repo keeps its capability files and its tests, both as directories under the root. */
@@ -57,9 +58,22 @@ export type RunOptions = {
   readonly ask?: TouchedAsk
   /** The review `review` is asked to record. */
   readonly review?: ProposedInput
+  /** A human's ruling `schedule` is asked to record, instead of running a scheduling pass. */
+  readonly ruling?: ProposedRuling
+  /** The external actions a scheduling pass hands off: starting a session, judging a relationship,
+   *  notifying a human. Only required when a pass actually needs one of them. */
+  readonly schedule?: ScheduleActions
+  /** What a scheduling pass treats as "now", for a LEASE's elapsed time; left out, the real clock. */
+  readonly now?: Date
   /** Tests read by the caller, instead of discovering them under `testsDir`. */
   readonly tests?: GivenTests
 } & Partial<Locations>
+
+/** A human's ruling on one relationship `schedule` already raised, as the command line gives it. */
+export type ProposedRuling = {
+  readonly key: string
+  readonly ruling: string
+}
 
 /** Where a requirement is written: the capability file, and the line of its heading. */
 export type SpecLocation = {
@@ -325,4 +339,6 @@ export type Outcome =
   | { readonly kind: 'impact'; readonly report: ImpactReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
   | { readonly kind: 'dispatch'; readonly report: Graph }
+  | { readonly kind: 'scheduled'; readonly report: SchedulePlan }
+  | { readonly kind: 'ruled'; readonly entry: Extract<RaisedEntry, { readonly kind: 'ruled' }> }
   | { readonly kind: 'cannot-run'; readonly reason: string }

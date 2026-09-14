@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { compareStrings } from '../order.ts'
 
@@ -6,11 +6,16 @@ import { compareStrings } from '../order.ts'
  * The conventional queue directory: one task per subdirectory, each holding a MANIFEST and a
  * state file. This reads them as strings, one task at a time, so one unreadable task never
  * stops the rest — `dispatch` decides what the bytes mean; this only fetches them.
+ *
+ * `schedule` is the one capability with permission to write here — pruning a merged entry and
+ * taking a LEASE on a ready one — so the write-side helpers live beside the read-side ones that
+ * already own this directory's shape, rather than a second module holding its own copy of it.
  */
 
 const QUEUE_DIR = ['.proofspec', 'dispatch'] as const
 const MANIFEST_FILE = 'MANIFEST'
 const STATE_FILE = 'state'
+const LEASE_FILE = 'LEASE'
 
 /** One task's MANIFEST and state as read, or the reason that task alone could not be read. */
 export type QueueEntry =
@@ -64,4 +69,68 @@ async function readOptional(path: string): Promise<string | undefined> {
   } catch {
     return undefined
   }
+}
+
+/** A TASK's LEASE, as raw text (the instant it was taken), or nothing when it carries none. */
+export async function readLease(cwd: string, task: string): Promise<string | undefined> {
+  return readOptional(join(cwd, ...QUEUE_DIR, task, LEASE_FILE))
+}
+
+/**
+ * Takes a LEASE by creating its file exclusively — `wx` fails with `EEXIST` rather than
+ * overwriting, which is what makes the take itself the single atomic step two scheduling
+ * passes race on. Deciding a LEASE is missing or stale and then writing it in two separate
+ * steps would leave a window between them for another pass to decide the very same thing;
+ * this collapses that window to the one filesystem call the OS already makes atomic.
+ * Answers whether this call is the one that won.
+ */
+export async function takeLease(cwd: string, task: string, takenAt: string): Promise<boolean> {
+  const dir = join(cwd, ...QUEUE_DIR, task)
+  await mkdir(dir, { recursive: true })
+  try {
+    await writeFile(join(dir, LEASE_FILE), takenAt, { flag: 'wx' })
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    throw error
+  }
+}
+
+const RECLAIM_LOCK = 'LEASE.reclaiming'
+
+/**
+ * Reclaims a LEASE observed as stale, holding exactly the instant it was read as `staleAt` —
+ * clearing and re-taking it as one step no second pass can land inside of, and only when the
+ * LEASE still holds that exact value.
+ *
+ * A lock directory alone is not enough: two passes can each read the same stale LEASE, and by
+ * the time the second reaches this call the first may already have cleared and retaken it — a
+ * lock only stops them from clearing it *at the same time*, not from one of them clearing a
+ * LEASE that is no longer the stale one either of them saw. Re-reading the LEASE once inside the
+ * lock and refusing unless it still equals `staleAt` is what actually closes that gap: a pass
+ * that loses the race sees a LEASE some other value now, answers `false`, and is blocked the
+ * same way a losing `takeLease` call is.
+ */
+export async function reclaimLease(cwd: string, task: string, staleAt: string, takenAt: string): Promise<boolean> {
+  const dir = join(cwd, ...QUEUE_DIR, task)
+  const lock = join(dir, RECLAIM_LOCK)
+  try {
+    await mkdir(lock)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false
+    throw error
+  }
+  try {
+    const current = await readOptional(join(dir, LEASE_FILE))
+    if (current !== staleAt) return false
+    await rm(join(dir, LEASE_FILE), { force: true })
+    return await takeLease(cwd, task, takenAt)
+  } finally {
+    await rm(lock, { recursive: true, force: true })
+  }
+}
+
+/** Removes a TASK's whole queue entry — the prune this capability alone is permitted to make. */
+export async function removeQueueEntry(cwd: string, task: string): Promise<void> {
+  await rm(join(cwd, ...QUEUE_DIR, task), { recursive: true, force: true })
 }

@@ -27,14 +27,17 @@ import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY, readManifest, stateOf } from '../dispatch/index.ts'
-import type { TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../dispatch/index.ts'
+import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../dispatch/index.ts'
+import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, toRaise } from '../schedule/index.ts'
+import type { JudgeVerdict, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedPathsBetween, isAncestor, mergeBase, readChangedFiles, readFileAt } from './diff.ts'
 import type { ChangedFile } from './diff.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { readQueue } from './queue.ts'
+import { reclaimLease, readLease, readQueue, removeQueueEntry, takeLease } from './queue.ts'
+import { appendRaised, readRaisedLedger } from './raised.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,
@@ -1064,19 +1067,43 @@ const EMPTY_VOCABULARY: Vocabulary = { terms: [], capabilities: [] }
  * same way every other command's inputs can.
  */
 export async function dispatch(options: RunOptions): Promise<Outcome> {
+  const gathered = await gatherQueue(options)
+  if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
+  return { kind: 'dispatch', report: computeGraph(gathered) }
+}
+
+/** Every in-flight TASK's own basis and record, alongside the raw state word `schedule` needs and
+ * `dispatch`'s own summary does not keep — read once so `dispatch` and `schedule` read the queue
+ * exactly the same way. */
+type QueueGathered =
+  | {
+      readonly ok: true
+      readonly changes: readonly TaskChange[]
+      readonly failures: readonly TaskFailure[]
+      readonly vocabulary: Vocabulary
+      readonly records: readonly TaskRecord[]
+      readonly bases: readonly TaskBasis[]
+      readonly words: ReadonlyMap<string, string>
+    }
+  | { readonly ok: false; readonly reason: string }
+
+async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   const queue = await readQueue(options.cwd)
-  if (!queue.ok) return { kind: 'cannot-run', reason: queue.reason }
+  if (!queue.ok) return { ok: false, reason: queue.reason }
   // No TASK in flight needs no vocabulary to check anything against — a bare repo with no
   // `specs/` directory yet answers the same empty graph as one with an empty queue, rather
   // than failing on an input nothing here would have gone on to read.
-  if (queue.tasks.length === 0) return { kind: 'dispatch', report: computeGraph({ changes: [], failures: [], vocabulary: EMPTY_VOCABULARY }) }
+  if (queue.tasks.length === 0) {
+    return { ok: true, changes: [], failures: [], vocabulary: EMPTY_VOCABULARY, records: [], bases: [], words: new Map() }
+  }
 
   const specs = await readSpecFiles(options.cwd, options.specsDir ?? DEFAULT_SPECS_DIR)
-  if (!specs.ok) return { kind: 'cannot-run', reason: specs.reason }
+  if (!specs.ok) return { ok: false, reason: specs.reason }
   const vocabulary = vocabularyOf(specs.files.map(file => readCapabilityFile(file.source, { capability: file.capability })))
 
   const failures: TaskFailure[] = []
   const records: TaskRecord[] = []
+  const words = new Map<string, string>()
   for (const entry of queue.tasks) {
     if (!entry.ok) {
       failures.push({ task: entry.task, reason: entry.reason })
@@ -1087,11 +1114,13 @@ export async function dispatch(options: RunOptions): Promise<Outcome> {
       failures.push({ task: entry.task, reason: manifest.reason })
       continue
     }
+    words.set(entry.task, entry.state)
     records.push({ task: entry.task, manifest: manifest.manifest, state: stateOf(entry.state) })
   }
 
+  const bases = basesFor(records)
   const changes: TaskChange[] = []
-  for (const basis of basesFor(records)) {
+  for (const basis of bases) {
     const measured = await measure(options.cwd, basis)
     if (!measured.ok) {
       failures.push({ task: basis.task, reason: measured.reason })
@@ -1100,7 +1129,151 @@ export async function dispatch(options: RunOptions): Promise<Outcome> {
     changes.push(measured.change)
   }
 
-  return { kind: 'dispatch', report: computeGraph({ changes, failures, vocabulary }) }
+  return { ok: true, changes, failures, vocabulary, records, bases, words }
+}
+
+/**
+ * Runs one scheduling pass: prunes a merged TASK nothing still names, dispatches every TASK
+ * that is ready (queued, not held, and not covered by a live LEASE), and puts an unresolved
+ * relationship in front of a human at most once. Given a ruling instead, records it and does
+ * nothing else — a ruling is a human answering a finding this command already raised, not a
+ * pass over the queue.
+ *
+ * `dispatch`'s own graph is read exactly as `cli` reads a TASK's own MANIFEST and state file:
+ * as something to act on, not something to recompute — `specs/dispatch.md` stays untouched by
+ * everything here.
+ */
+export async function schedule(options: RunOptions): Promise<Outcome> {
+  if (options.ruling !== undefined) {
+    const entry: RaisedEntry = { kind: 'ruled', key: options.ruling.key, at: now(options), ruling: options.ruling.ruling }
+    await appendRaised(options.cwd, entry)
+    return { kind: 'ruled', entry }
+  }
+
+  const gathered = await gatherQueue(options)
+  if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
+  const graph = computeGraph(gathered)
+
+  const held = new Set(
+    holdStatusFor(gathered.bases)
+      .filter(status => status.kind === 'held')
+      .map(status => status.task),
+  )
+  const ready = readyToDispatch(
+    [...gathered.words].map(([task, word]) => ({ task, word })),
+    held,
+  )
+
+  // Checked before anything below actually touches the queue: a pass that cannot finish must
+  // not have already pruned an entry or started a session nothing in its outcome reports.
+  const startSession = options.schedule?.startSession
+  if (ready.length > 0 && startSession === undefined) {
+    return { kind: 'cannot-run', reason: `cannot schedule: ${ready[0]} is ready, but no startSession action was given to start its work-agent session` }
+  }
+  if (graph.relationships.length > 0 && options.schedule?.judge === undefined) {
+    return { kind: 'cannot-run', reason: 'cannot schedule: a relationship was found, but no judge action was given to have a fresh agent read it' }
+  }
+
+  const pruned = entriesToPrune(gathered.records)
+  for (const task of pruned) await removeQueueEntry(options.cwd, task)
+
+  const started: string[] = []
+  const blocked: string[] = []
+  for (const task of ready) {
+    const leaseAt = await readLease(options.cwd, task)
+    const decision = leaseDecision({
+      existing: leaseAt === undefined ? undefined : { takenAt: leaseAt },
+      word: gathered.words.get(task) ?? '',
+      now: options.now ?? new Date(),
+    })
+    if (decision.kind === 'blocked') {
+      blocked.push(task)
+      continue
+    }
+    const took =
+      leaseAt === undefined
+        ? await takeLease(options.cwd, task, now(options))
+        : await reclaimLease(options.cwd, task, leaseAt, now(options))
+    if (!took) {
+      blocked.push(task)
+      continue
+    }
+    // Unreachable: the guard above already returned if a ready TASK existed with no
+    // `startSession` given, so `ready` is only ever non-empty here once one is in hand.
+    if (startSession === undefined) continue
+    await startSession(task)
+    started.push(task)
+  }
+
+  const raised = await raiseRelationships(options, graph.relationships, gathered.records)
+  if (!raised.ok) return { kind: 'cannot-run', reason: raised.reason }
+
+  const plan: SchedulePlan = { pruned, started, blocked, raised: raised.raised }
+  return { kind: 'scheduled', report: plan }
+}
+
+function now(options: RunOptions): string {
+  return (options.now ?? new Date()).toISOString()
+}
+
+/**
+ * Requirements: A relationship is judged by a fresh agent before a human is asked /
+ * A judgement the fresh agent cannot resolve reaches a human, traceably /
+ * The same finding is not raised to a human twice
+ *
+ * Every relationship the graph reports is handed to the fresh agent, reading both TASKs' intent
+ * from their own MANIFEST — a relationship the graph never reports never reaches a human at all,
+ * and one it does is judged before anything about it is shown to a person. Only the ones the
+ * judge could not resolve, and that no earlier pass already raised, are put in front of a human
+ * and recorded so a later pass does not raise them again.
+ */
+async function raiseRelationships(
+  options: RunOptions,
+  relationships: readonly Relationship[],
+  records: readonly TaskRecord[],
+): Promise<{ readonly ok: true; readonly raised: readonly Relationship[] } | { readonly ok: false; readonly reason: string }> {
+  if (relationships.length === 0) return { ok: true, raised: [] }
+  if (options.schedule?.judge === undefined) {
+    return { ok: false, reason: 'cannot schedule: a relationship was found, but no judge action was given to have a fresh agent read it' }
+  }
+  const judge = options.schedule.judge
+
+  const verdicts = new Map<string, JudgeVerdict['kind']>()
+  for (const relationship of relationships) {
+    const intents = await intentsFor(options.cwd, relationship.tasks, records)
+    const verdict = await judge({ relationship, intents })
+    verdicts.set(relationshipKey(relationship), verdict.kind)
+  }
+
+  const already = alreadyRaised(await readRaisedLedger(options.cwd))
+  const toNotify = toRaise({ relationships, verdicts, alreadyRaised: already })
+  if (toNotify.length > 0 && options.schedule.notifyHuman === undefined) {
+    return { ok: false, reason: 'cannot schedule: an unresolved relationship was found, but no notifyHuman action was given' }
+  }
+  for (const relationship of toNotify) {
+    await appendRaised(options.cwd, { kind: 'raised', key: relationshipKey(relationship), at: now(options) })
+    await options.schedule.notifyHuman?.(relationship)
+  }
+  return { ok: true, raised: toNotify }
+}
+
+/** Both TASKs' own intent, read from each MANIFEST's `intentRef` on the TASK's own branch. A
+ * TASK whose intent could not be read is simply absent — the fresh agent judges with what it
+ * has, the same way a TASK's own MANIFEST failure elsewhere is a failure, not a fabricated intent. */
+async function intentsFor(
+  cwd: string,
+  tasks: readonly string[],
+  records: readonly TaskRecord[],
+): Promise<Readonly<Record<string, string>>> {
+  const byTask = new Map(records.map(record => [record.task, record]))
+  const intents: Record<string, string> = {}
+  for (const task of tasks) {
+    const record = byTask.get(task)
+    if (record === undefined) continue
+    const content = await readFileAt({ cwd, rev: record.manifest.branch, path: record.manifest.intentRef })
+    if (content !== undefined) intents[task] = content
+  }
+  return intents
 }
 
 /** The shared spec every TASK's changes are checked against: the glossary, and every other file's words. */

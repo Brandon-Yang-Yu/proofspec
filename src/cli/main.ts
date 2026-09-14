@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, dispatch, impact, render, review, touched, write } from './run.ts'
+import { check, dispatch, impact, render, review, schedule, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
 import type { Format, Layout } from './render.ts'
-import type { Outcome, ProposedInput, RunOptions, TouchedAsk } from './types.ts'
+import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
 
 /**
  * The command line the commands are actually run from. This is thin glue: it parses the
@@ -35,6 +35,13 @@ Commands:
            reach it and the requirements they prove. Needs a codebase-memory index.
   dispatch Read the conventional queue directory and answer how the in-flight TASK found there
            relate to one another. Reports only, and always exits ok.
+  schedule Run one scheduling pass over the queue: prune a merged TASK nothing still names,
+           dispatch every ready TASK, and raise an unresolved relationship at most once. Given
+           --ruling, records a human's ruling on an already-raised relationship instead.
+           Dispatching a ready TASK or judging a relationship needs a startSession/judge/
+           notifyHuman action, which only an embedder passing RunOptions can supply — there is
+           no flag for one, so the bare command line can only prune and record a ruling; given
+           a ready TASK or a relationship with none of these wired up, it reports cannot-run.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -53,6 +60,9 @@ Options:
   --note <text>   What is wrong with the claim. Required by a gap or a drift
   --by <who>      Who made the review. Always required: an unsigned judgement is one
                   nobody can be asked about
+  --ruling <text> A human's own ruling on the relationship named by schedule's one positional —
+                  the key a raised relationship was reported under. Records it rather than
+                  running a scheduling pass.
   --format <fmt>  Output format: text, json, quickfix, diagnostics. Left out, touched
                   answers as JSON and everything else as text.
   --json          The legacy spelling of --format json; touched answers that way anyway
@@ -81,6 +91,7 @@ try {
       proves: { type: 'string' },
       note: { type: 'string' },
       by: { type: 'string' },
+      ruling: { type: 'string' },
       format: { type: 'string' },
       json: { type: 'boolean', default: false },
       pretty: { type: 'boolean', default: false },
@@ -125,6 +136,7 @@ const options: RunOptions = {
   cwd: process.cwd(),
   ask,
   review: values.verdict === undefined ? undefined : reviewOf(values.verdict, positionals[1]),
+  ruling: values.ruling === undefined ? undefined : rulingOf(values.ruling, positionals[1]),
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,
@@ -162,6 +174,18 @@ function reviewOf(verdict: string, key: string | undefined): ProposedInput {
   }
 }
 
+/**
+ * The ruling as typed. `schedule` takes the key as its one positional the same way `review`
+ * does, so a missing one is reported as missing rather than recorded against nothing.
+ */
+function rulingOf(ruling: string, key: string | undefined): ProposedRuling {
+  if (key === undefined) {
+    process.stderr.write(`schedule needs the key of the relationship to rule on.\n\n${USAGE}\n`)
+    process.exit(2)
+  }
+  return { key, ruling }
+}
+
 function askedFor(requirement: string | undefined, unmatched: boolean): TouchedAsk | undefined {
   if (requirement !== undefined) return { kind: 'requirement', key: requirement }
   if (unmatched) return { kind: 'unmatched' }
@@ -176,10 +200,11 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'review') return review(options)
   if (command === 'impact') return impact(options)
   if (command === 'dispatch') return dispatch(options)
+  if (command === 'schedule') return schedule(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", or "dispatch".`,
+    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", "dispatch", or "schedule".`,
   })
 }
 
