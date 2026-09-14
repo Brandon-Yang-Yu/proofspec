@@ -430,6 +430,8 @@ round deliberately narrowed away, and `dispatch` answers the one question this c
 asks. A sub-verb parser would be built for choices the capability does not make.
 
 <!-- scenarios: generated -->
+- "The `dispatch` command answers JSON by default" → tests/cli/dispatch.test.ts
+- "The command exits its ok code even when the graph carries problems" → tests/cli/dispatch.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out
@@ -445,6 +447,11 @@ without disturbing whatever the caller has checked out, the same way `touched` n
 requires the base revision to be the one in the working directory.
 
 <!-- scenarios: generated -->
+- "A revision the repository does not have is a refusal naming it" → tests/cli/revisions.test.ts
+- "Every path either revision holds is answered" → tests/cli/revisions.test.ts
+- "Where two revisions last agreed is answered without either being checked out" → tests/cli/revisions.test.ts
+- "Whether one revision is an ancestor of the other is answered both ways" → tests/cli/revisions.test.ts
+- "Which paths under a pathspec differ between two revisions is answered" → tests/cli/revisions.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A conventional queue directory is read one task at a time
@@ -467,4 +474,10 @@ holds one unreadable task is a per-task problem — refusing the whole read over
 would be the very defeat the graph's own resilience exists to avoid.
 
 <!-- scenarios: generated -->
+- "A queue directory is read into one entry per task subdirectory" → tests/cli/queue.test.ts
+- "A queue directory that does not exist answers an empty list of tasks" → tests/cli/queue.test.ts
+- "A queue directory that exists but cannot be listed is a refusal naming the path" → tests/cli/queue.test.ts
+- "A real in-flight TASK still needs the specs directory even when the queue is not empty" → tests/cli/dispatch.test.ts
+- "One unreadable task answers a problem for that task alone, the rest still read" → tests/cli/queue.test.ts
+- "The command answers an empty graph in a bare repository with no specs directory at all" → tests/cli/dispatch.test.ts
 <!-- /scenarios -->

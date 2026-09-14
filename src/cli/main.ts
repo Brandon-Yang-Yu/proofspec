@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, impact, render, review, touched, write } from './run.ts'
+import { check, dispatch, impact, render, review, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, RunOptions, TouchedAsk } from './types.ts'
@@ -33,6 +33,8 @@ Commands:
            .proofspec/reviews.jsonl. A pass has to cite the line that proves the claim.
   impact   Walk from the source this branch changed, up the call graph, to the tests that
            reach it and the requirements they prove. Needs a codebase-memory index.
+  dispatch Read the conventional queue directory and answer how the in-flight TASK found there
+           relate to one another. Reports only, and always exits ok.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -173,10 +175,11 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'touched') return touched(options)
   if (command === 'review') return review(options)
   if (command === 'impact') return impact(options)
+  if (command === 'dispatch') return dispatch(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", "touched", "review", or "impact".`,
+    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", or "dispatch".`,
   })
 }
 

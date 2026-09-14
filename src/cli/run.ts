@@ -26,12 +26,15 @@ import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
-import { readChangedFiles, readFileAt } from './diff.ts'
+import { basesFor, computeGraph, GLOSSARY_CAPABILITY, readManifest, stateOf } from '../dispatch/index.ts'
+import type { TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../dispatch/index.ts'
+import { changedPathsBetween, isAncestor, mergeBase, readChangedFiles, readFileAt } from './diff.ts'
 import type { ChangedFile } from './diff.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
+import { readQueue } from './queue.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,
@@ -1049,3 +1052,118 @@ async function gather(options: RunOptions): Promise<Gathered> {
   if (!tests.ok) return tests
   return { ok: true, specs: specs.files, tests: tests.files }
 }
+
+/** What an empty queue is checked against — nothing, since there is no TASK to check it for. */
+const EMPTY_VOCABULARY: Vocabulary = { terms: [], capabilities: [] }
+
+/**
+ * Reads the queue directory and answers the graph `dispatch` computes: every in-flight TASK's
+ * edges, and the relationships between them. Once a graph is produced it exits ok whatever it
+ * found — a relationship, or a TASK's own problem, is not a build this command is entitled to
+ * fail — but reading the queue directory or the spec themselves can still be a cannot-run, the
+ * same way every other command's inputs can.
+ */
+export async function dispatch(options: RunOptions): Promise<Outcome> {
+  const queue = await readQueue(options.cwd)
+  if (!queue.ok) return { kind: 'cannot-run', reason: queue.reason }
+  // No TASK in flight needs no vocabulary to check anything against — a bare repo with no
+  // `specs/` directory yet answers the same empty graph as one with an empty queue, rather
+  // than failing on an input nothing here would have gone on to read.
+  if (queue.tasks.length === 0) return { kind: 'dispatch', report: computeGraph({ changes: [], failures: [], vocabulary: EMPTY_VOCABULARY }) }
+
+  const specs = await readSpecFiles(options.cwd, options.specsDir ?? DEFAULT_SPECS_DIR)
+  if (!specs.ok) return { kind: 'cannot-run', reason: specs.reason }
+  const vocabulary = vocabularyOf(specs.files.map(file => readCapabilityFile(file.source, { capability: file.capability })))
+
+  const failures: TaskFailure[] = []
+  const records: TaskRecord[] = []
+  for (const entry of queue.tasks) {
+    if (!entry.ok) {
+      failures.push({ task: entry.task, reason: entry.reason })
+      continue
+    }
+    const manifest = readManifest(entry.manifest)
+    if (!manifest.ok) {
+      failures.push({ task: entry.task, reason: manifest.reason })
+      continue
+    }
+    records.push({ task: entry.task, manifest: manifest.manifest, state: stateOf(entry.state) })
+  }
+
+  const changes: TaskChange[] = []
+  for (const basis of basesFor(records)) {
+    const measured = await measure(options.cwd, basis)
+    if (!measured.ok) {
+      failures.push({ task: basis.task, reason: measured.reason })
+      continue
+    }
+    changes.push(measured.change)
+  }
+
+  return { kind: 'dispatch', report: computeGraph({ changes, failures, vocabulary }) }
+}
+
+/** The shared spec every TASK's changes are checked against: the glossary, and every other file's words. */
+function vocabularyOf(specs: readonly CapabilitySpec[]): Vocabulary {
+  const glossary = specs.find(spec => spec.capability === GLOSSARY_CAPABILITY)
+  return {
+    terms: glossary?.terms ?? [],
+    capabilities: specs
+      .filter(spec => spec.capability !== GLOSSARY_CAPABILITY)
+      .map(spec => ({
+        capability: spec.capability,
+        texts: spec.requirements.flatMap(one => [one.requirement, one.description]),
+      })),
+  }
+}
+
+/** What one in-flight TASK's branch changed, relative to its own base — or why it could not be measured. */
+async function measure(cwd: string, basis: TaskBasis): Promise<{ readonly ok: true; readonly change: TaskChange } | { readonly ok: false; readonly reason: string }> {
+  const merged = await mergeBase({ cwd, a: basis.manifest.branch, b: basis.against })
+  if (!merged.ok) return { ok: false, reason: merged.reason }
+
+  const changedPaths = await changedPathsBetween({ cwd, from: merged.base, to: basis.manifest.branch, paths: [DEFAULT_SPECS_DIR] })
+  if (!changedPaths.ok) return { ok: false, reason: changedPaths.reason }
+  const editedCapabilities = changedPaths.paths
+    .filter(path => SPEC_PATH.test(path))
+    .map(path => basename(path, '.md'))
+
+  const glossaryPath = `${DEFAULT_SPECS_DIR}/${GLOSSARY_CAPABILITY}.md`
+  const before = (await readFileAt({ cwd, rev: merged.base, path: glossaryPath })) ?? ''
+  const after = (await readFileAt({ cwd, rev: basis.manifest.branch, path: glossaryPath })) ?? ''
+  const changed = changedTerms({ before: readTerms(before), after: readTerms(after) }).map(one => one.term)
+
+  const basedOn = await verifiedClaim(cwd, basis)
+  if (basedOn !== undefined && !basedOn.ok) return { ok: false, reason: basedOn.reason }
+  return {
+    ok: true,
+    change: { task: basis.task, editedCapabilities, changedTerms: changed, basedOn: basedOn?.claim },
+  }
+}
+
+/**
+ * Whether a TASK's basedOn claim holds, or `undefined` when it made none. A claim naming a TASK
+ * not in the queue at all is broken without git being asked anything — there is no branch
+ * behind the name to check ancestry against. A claim naming a real branch is checked for real;
+ * a git failure while checking it is not itself a verdict on the claim, so it is propagated as
+ * a reason this TASK could not be measured, the same as any other git step here.
+ */
+async function verifiedClaim(
+  cwd: string,
+  basis: TaskBasis,
+): Promise<{ readonly ok: true; readonly claim: VerifiedClaim } | { readonly ok: false; readonly reason: string } | undefined> {
+  if (basis.claim === undefined) return undefined
+  const claim = basis.claim
+  if (claim.kind === 'unresolved') {
+    return { ok: true, claim: { kind: 'broken', task: claim.task, reason: claim.reason, why: `no TASK named ${claim.task} is in the queue` } }
+  }
+  const ancestry = await isAncestor({ cwd, ancestor: claim.branch, descendant: basis.manifest.branch })
+  if (!ancestry.ok) return { ok: false, reason: ancestry.reason }
+  const verified: VerifiedClaim = ancestry.isAncestor
+    ? { kind: 'holds', task: claim.task, reason: claim.reason }
+    : { kind: 'broken', task: claim.task, reason: claim.reason, why: `${claim.task}'s branch is not an ancestor` }
+  return { ok: true, claim: verified }
+}
+
+/** A path directly under the conventional specs directory, one requirement file: `specs/<name>.md`. */
+const SPEC_PATH = new RegExp(`^${DEFAULT_SPECS_DIR}/[^/]+\\.md$`)

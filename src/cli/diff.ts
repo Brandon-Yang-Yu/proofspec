@@ -109,6 +109,99 @@ async function defaultBase(cwd: string): Promise<string | undefined> {
   return (await git(cwd, ['merge-base', 'HEAD', published]))?.trim() ?? branchPoint
 }
 
+/** Where two revisions last agreed, or the reason git could not answer. */
+export type MergeBaseRead = { readonly ok: true; readonly base: string } | { readonly ok: false; readonly reason: string }
+
+/** A list of paths, or the reason git could not answer. */
+export type PathsRead = { readonly ok: true; readonly paths: readonly string[] } | { readonly ok: false; readonly reason: string }
+
+/** Whether one revision is an ancestor of another, or the reason git could not answer. */
+export type AncestorRead = { readonly ok: true; readonly isAncestor: boolean } | { readonly ok: false; readonly reason: string }
+
+/**
+ * Where two named revisions last agreed, without checking either one out. `dispatch` measures
+ * a task's branch against another task's, or against `main`, and neither is the working tree.
+ */
+export async function mergeBase(options: { readonly cwd: string; readonly a: string; readonly b: string }): Promise<MergeBaseRead> {
+  const a = await verifiedRevision(options.cwd, options.a)
+  if (a === undefined) return { ok: false, reason: `${options.a} is not a revision this repository has` }
+  const b = await verifiedRevision(options.cwd, options.b)
+  if (b === undefined) return { ok: false, reason: `${options.b} is not a revision this repository has` }
+  const base = (await git(options.cwd, ['merge-base', a, b]))?.trim()
+  if (base === undefined) return { ok: false, reason: `${options.a} and ${options.b} share no common history` }
+  return { ok: true, base }
+}
+
+/** The paths under a pathspec that differ between two revisions, name-only. */
+export async function changedPathsBetween(options: {
+  readonly cwd: string
+  readonly from: string
+  readonly to: string
+  readonly paths: readonly string[]
+}): Promise<PathsRead> {
+  const from = await verifiedRevision(options.cwd, options.from)
+  if (from === undefined) return { ok: false, reason: `${options.from} is not a revision this repository has` }
+  const to = await verifiedRevision(options.cwd, options.to)
+  if (to === undefined) return { ok: false, reason: `${options.to} is not a revision this repository has` }
+  const diff = await git(options.cwd, ['diff', '--name-only', from, to, '--', ...options.paths])
+  if (diff === undefined) return { ok: false, reason: `git could not diff ${options.from} against ${options.to}` }
+  return { ok: true, paths: linesOf(diff).sort(compareStrings) }
+}
+
+/** Every path either of two revisions holds, under a pathspec. */
+export async function pathsAtEither(options: {
+  readonly cwd: string
+  readonly a: string
+  readonly b: string
+  readonly paths: readonly string[]
+}): Promise<PathsRead> {
+  const a = await verifiedRevision(options.cwd, options.a)
+  if (a === undefined) return { ok: false, reason: `${options.a} is not a revision this repository has` }
+  const b = await verifiedRevision(options.cwd, options.b)
+  if (b === undefined) return { ok: false, reason: `${options.b} is not a revision this repository has` }
+  const atA = await git(options.cwd, ['ls-tree', '-r', '--name-only', a, '--', ...options.paths])
+  const atB = await git(options.cwd, ['ls-tree', '-r', '--name-only', b, '--', ...options.paths])
+  if (atA === undefined || atB === undefined) {
+    return { ok: false, reason: `git could not list paths at ${options.a} and ${options.b}` }
+  }
+  const paths = new Set([...linesOf(atA), ...linesOf(atB)])
+  return { ok: true, paths: [...paths].sort(compareStrings) }
+}
+
+/**
+ * Whether `ancestor` is an ancestor of `descendant`. `git merge-base --is-ancestor` answers
+ * through its exit code alone — 0 true, 1 false, anything else a real failure — so this cannot
+ * share the swallow-everything `git()` wrapper below: that would read "not an ancestor" as
+ * indistinguishable from "git broke".
+ */
+export async function isAncestor(options: {
+  readonly cwd: string
+  readonly ancestor: string
+  readonly descendant: string
+}): Promise<AncestorRead> {
+  const ancestor = await verifiedRevision(options.cwd, options.ancestor)
+  if (ancestor === undefined) return { ok: false, reason: `${options.ancestor} is not a revision this repository has` }
+  const descendant = await verifiedRevision(options.cwd, options.descendant)
+  if (descendant === undefined) return { ok: false, reason: `${options.descendant} is not a revision this repository has` }
+  try {
+    await run('git', ['merge-base', '--is-ancestor', ancestor, descendant], { cwd: options.cwd })
+    return { ok: true, isAncestor: true }
+  } catch (error) {
+    if ((error as { readonly code?: number }).code === 1) return { ok: true, isAncestor: false }
+    return { ok: false, reason: `git could not check whether ${options.ancestor} is an ancestor of ${options.descendant}` }
+  }
+}
+
+/** A revision confirmed to exist, resolved to its commit — or `undefined` when it does not. */
+async function verifiedRevision(cwd: string, rev: string): Promise<string | undefined> {
+  return (await git(cwd, ['rev-parse', '--verify', `${rev}^{commit}`]))?.trim()
+}
+
+/** Non-empty lines of a command's output, split the way git's `--name-only` output separates them. */
+function linesOf(output: string): string[] {
+  return output.split('\n').filter(line => line.length > 0)
+}
+
 async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {
   try {
     const { stdout } = await run('git', [...args], { cwd, maxBuffer: MAX_OUTPUT })

@@ -7,6 +7,7 @@
  */
 
 import type { GuardReport } from '../guard/index.ts'
+import type { Graph } from '../dispatch/index.ts'
 import type { TermChange } from '../glossary/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
@@ -323,4 +324,5 @@ export type Outcome =
   | { readonly kind: 'reviewed'; readonly entry: ReviewEntry }
   | { readonly kind: 'impact'; readonly report: ImpactReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
+  | { readonly kind: 'dispatch'; readonly report: Graph }
   | { readonly kind: 'cannot-run'; readonly reason: string }

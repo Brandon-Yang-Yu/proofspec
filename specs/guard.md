@@ -224,8 +224,8 @@ definition's change one diff among many rather than the one place the vocabulary
 glossary is that one place, and the rule is what holds it there.
 
 <!-- scenarios: generated -->
-- "A Term section defined outside the glossary fails the build" → tests/guard/terms.test.ts
 - "A Term section defined in the glossary passes the guard" → tests/guard/terms.test.ts
+- "A Term section defined outside the glossary fails the build" → tests/guard/terms.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TERM's definition spells a defined TERM in a near form only at the risk of losing the edge

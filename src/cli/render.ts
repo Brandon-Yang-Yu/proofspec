@@ -1,4 +1,5 @@
 import { assertNever } from '../assert-never.ts'
+import type { Graph, Node, Relationship, TaskEntry } from '../dispatch/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { ReviewEntry } from '../review/index.ts'
@@ -53,6 +54,10 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     case 'touched':
       return unjudgedIn(outcome.report) ? EXIT_DRIFT : EXIT_OK
     case 'impact':
+      return EXIT_OK
+    // A relationship the graph found, or a problem one of its TASK carries, is not a build
+    // this command is entitled to fail — the same way `impact`'s tree never fails a build.
+    case 'dispatch':
       return EXIT_OK
     case 'cannot-run':
       return EXIT_CANNOT_RUN
@@ -117,6 +122,9 @@ export function renderAnswer(outcome: Outcome, { format, layout = 'compact' }: A
 function defaultFormatOf(outcome: Outcome): Format {
   switch (outcome.kind) {
     case 'touched':
+    // Read by another program — an orchestrator, in a later round — far more often than by a
+    // person, the same reason `touched` defaults to JSON.
+    case 'dispatch':
       return 'json'
     case 'checked':
     case 'wrote':
@@ -146,6 +154,8 @@ export function renderText(outcome: Outcome): string {
       return renderReviewed(outcome.entry)
     case 'impact':
       return renderImpact(outcome.report)
+    case 'dispatch':
+      return renderDispatch(outcome.report)
     case 'cannot-run':
       return outcome.reason
     default:
@@ -166,6 +176,7 @@ export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string
       return stringify({ changed: outcome.files }, layout)
     case 'touched':
     case 'impact':
+    case 'dispatch':
       return stringify(outcome.report, layout)
     case 'reviewed':
       return stringify(outcome.entry, layout)
@@ -365,6 +376,41 @@ function renderImpactNode(node: ImpactNode, depth: number): string[] {
   for (const test of node.tests) lines.push(`${pad}  [test] ${test.file}:${test.line}`)
   for (const caller of node.callers) lines.push(...renderImpactNode(caller, depth + 1))
   return lines
+}
+
+/**
+ * The graph as a person reads it: one line per TASK, then the relationships between them. A
+ * TASK carrying a problem still shows its writes and reopened edges — a problem rides beside
+ * what could be read, not instead of it.
+ */
+function renderDispatch(graph: Graph): string {
+  if (graph.tasks.length === 0) return 'no TASK in flight'
+  const parts = [graph.tasks.map(renderTask).join('\n')]
+  if (graph.relationships.length > 0) {
+    parts.push(['relationships:', ...graph.relationships.map(renderRelationship)].join('\n'))
+  }
+  return parts.join('\n\n')
+}
+
+function renderTask(task: TaskEntry): string {
+  const lines = [
+    `${task.task}  writes: ${nodeList(task.writes)}  reopened: ${nodeList(task.reopened)}`,
+    task.basedOn === null ? undefined : `    basedOn ${task.basedOn.task} (${task.basedOn.reason})`,
+    task.problem === null ? undefined : `    problem: ${task.problem}`,
+  ]
+  return lines.filter(line => line !== undefined).join('\n')
+}
+
+function renderRelationship(relationship: Relationship): string {
+  return `  ${nodeLabel(relationship.node)}: ${relationship.tasks.join(', ')}`
+}
+
+function nodeList(nodes: readonly Node[]): string {
+  return nodes.length === 0 ? 'none' : nodes.map(nodeLabel).join(', ')
+}
+
+function nodeLabel(node: Node): string {
+  return `${node.kind}:${node.name}`
 }
 
 function renderProves(proves: TestProves): string {

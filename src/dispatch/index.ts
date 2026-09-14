@@ -1,0 +1,7 @@
+export { basesFor } from './bases.ts'
+export type { BasedOnClaim, TaskBasis, TaskRecord } from './bases.ts'
+export { computeGraph, GLOSSARY_CAPABILITY } from './graph.ts'
+export type { TaskChange, TaskFailure, VerifiedClaim, Vocabulary, VocabularyCapability, VocabularyTerm } from './graph.ts'
+export { readManifest } from './manifest.ts'
+export { stateOf } from './state.ts'
+export type { BasedOn, Graph, Manifest, ManifestBase, ManifestRead, Node, Relationship, TaskEntry, TaskState } from './types.ts'
