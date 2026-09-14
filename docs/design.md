@@ -2173,3 +2173,55 @@ supplies none of them, and says so plainly (`cannot-run`, naming exactly which a
 missing) rather than pretending a fabricated default would be real. Building that default
 before anything needs it would have been exactly the kind of speculative plumbing this
 codebase's own YAGNI rule warns against.
+
+## 42. The investigation agent's census has to read the queue, not just main
+
+§37 gave the investigation agent everything up to and including disposition review; §40
+recorded that its MANIFEST ended up carrying none of the footprint §37 imagined it would
+declare. What neither section settled is what the investigation agent's own drafting step
+— the census `ship`'s spec steward already runs (`rg -n '^### Requirement:' specs/*.md`,
+classify every row against the change intent) — should do differently once more than one
+TASK is in flight at once. Today it only ever reads its own worktree's specs, which are
+whatever `main` looked like when that worktree was cut. With one TASK queued at a time that
+is the whole world; with a real queue it is stale the moment a second TASK starts drafting
+against the same requirement or TERM — the same "two boats rewriting the same prose" pain
+ordering exists to avoid, just moved from merge time to draft time, where nothing today
+catches it at all.
+
+**Reading for context is not the same relationship as building on top of.** The instinct
+was to reach for `base.task` — the MANIFEST already has a shape for "this TASK's worktree
+depends on another in-flight TASK's" — but that shape is a real git-ancestry claim, checked
+against the ancestry itself, and adopting it just to let one TASK glance at another's
+current wording would force it to inherit every other commit on that TASK's branch too,
+whether or not any of it is relevant. Wanting to know what another TASK currently says about
+a TERM is not a build dependency; it does not belong in the MANIFEST at all, and does not
+need `base.task`'s all-or-nothing granularity. It is closer to what `dispatch` itself
+already does when it reads a TASK's branch to compute `writes` edges: a fresh read, not a
+declared relationship.
+
+**Branch, not worktree, is the source of truth for the read.** A TASK counts as in flight
+by its queue entry, not by whether a worktree for it still happens to be checked out on
+disk — a session can end before `/killworktree` runs, or a worktree can be torn down while
+its queue entry still stands. Reading via `git show <branch>:<path>` rather than `cd`-ing
+into another TASK's worktree keeps the census working regardless of which TASKs currently
+have a live checkout, the same discipline `dispatch` already keeps of trusting only what git
+itself will say.
+
+**A cheap filter has to come before the expensive read, or the cost tracks the wrong
+number.** Reading every in-flight TASK's full `specs/*.md` on every census would make the
+cost scale with how many TASKs are queued, not with how many actually overlap — exactly
+backwards once a queue holds more than a handful. `dispatch` already computes, fresh from
+git on every run, which in-flight TASK touches which CAPABILITY_FILE and TERM; the census
+can ask that graph first — a file-level question it is already answering for an unrelated
+reason — and only reach for the per-branch `git show` read on whichever TASKs the filter
+actually names. The investigation agent's own TASK does not need to appear in that graph to
+ask the question: the graph is built from the queue as it already stands, and the TASK being
+disposed has not been handed off yet, so it is only ever a reader of it, never a member.
+
+**Left open.** This session did not decide whether the queue-aware census belongs to a
+capability of its own — an `investigator` alongside `dispatch` and `schedule` — or is
+`ship`'s existing spec-steward step grown a new input; nor whether a TASK reading another's
+current wording leaves any trace anywhere (a MANIFEST field, a ledger line) or is, like
+`dispatch`'s own reads, computed fresh and remembered by nothing. Both follow the same
+question §39 and §41 already answered the same way for their own corners of this design —
+wait for the capability that owns the write before deciding what it writes.
