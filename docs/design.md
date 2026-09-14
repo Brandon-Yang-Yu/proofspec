@@ -2101,3 +2101,75 @@ looks.
   itself does not need a `specs/` directory to exist either, when there is no TASK in flight to
   need its vocabulary — it was found late, by an acceptance run against a genuinely bare repo,
   that the command read `specs/` before ever checking the queue was empty.
+
+## 41. `schedule` — the orchestrator §37 sketched and §40 deferred, built
+
+§40 named exactly where the line would fall: `dispatch` reports; "deciding what to do with
+the answer belongs to something else." `schedule` is that something else — the one
+capability with permission to write into the queue directory. It reads `dispatch`'s graph
+the same way `cli` reads a TASK's own MANIFEST: as something to act on, not something to
+recompute. `specs/dispatch.md` and `src/dispatch/` are untouched by it.
+
+**No daemon, no message queue, no PID checks — all three were live options, all three were
+rejected in conversation before anything was built.** A resident scheduler is one more
+process to keep alive, restart, and trust; `schedule` instead runs as one pass, triggered by
+an event (a TASK enqueued, merged, or a session starting up) and computing everything fresh
+from git and the queue on every call, the same discipline `dispatch` already keeps. A
+message-queue architecture was considered and dropped for the same reason `dispatch` never
+kept one: a queued message is state to keep consistent that a fresh recompute makes
+unnecessary. Checking whether a claimant process is still alive was rejected hardest of all
+— a PID means something only on the machine that started it, and every other judgement this
+tool makes already reads state from files, never from what happens to still be running.
+
+**LEASE, not a lock: the two scheduling passes finding the same ready TASK are the expected
+case, not a race to defend against.** The design conversation that produced this spent real
+effort on one question — what happens when two passes trigger close together — and rejected
+a global lock over the whole queue as the answer, because it would hold every other TASK's
+dispatch hostage to the one TASK one pass happened to be looking at. A LEASE is scoped to
+one TASK: taking it is a plain `writeFile` with the `wx` flag, so the operating system's own
+`EEXIST` on a second attempt *is* the collision detection — no read-then-decide-then-write
+window for two passes to both fall through. **This shipped once wrong before it shipped
+right.** The first cut decided staleness by reading the LEASE, then unconditionally clearing
+it and re-taking it in two separate calls; a fresh-context guideline review found that a
+second pass could clear a LEASE a first pass had *just* retaken, in the gap between the
+first pass's own clear and create, and both would go on to start a session. The fix nests
+the clear-and-recreate behind its own `mkdir`-based exclusive lock (the same primitive
+`takeLease` itself uses, just guarding a different critical section) and, inside that lock,
+re-reads the LEASE and refuses to proceed unless it still holds exactly the stale value that
+justified reclaiming it in the first place — a real compare-and-swap, not just a narrower
+window. A LEASE is never renewed and carries no liveness signal of its own: it goes stale,
+and becomes reclaimable, once a grace period passes with the TASK's state never advancing to
+the literal word `building` — the one state change a real session makes almost immediately,
+whether it died, never started, or is running on a machine nobody is watching.
+
+**A relationship is judged by a fresh agent before any human sees it, and the human is the
+one thing this design refuses to let anything else impersonate.** `dispatch` finds a
+relationship by reading files, never intent; `schedule` hands every relationship a fresh
+agent — one that authored neither TASK — along with both TASKs' intent (read from each
+MANIFEST's `intentRef`, on the TASK's own branch), and asks whether it is a real conflict.
+Most shared ground between two TASK is coincidence, not conflict, and re-judging is cheap
+enough to run on every pass. Only what the fresh agent could not resolve reaches a human, and
+the `RaisedEntry` type this capability's ledger stores makes the one rule design.md's own
+review-LEDGER precedent already set structurally unavoidable rather than merely documented:
+its `ruled` variant's `ruling` field has no path back to a `JudgeVerdict` — nothing the fresh
+agent computes can ever end up written there. A verdict may be relayed to a human; it may
+never be synthesized on a human's behalf.
+
+**The one thing this capability remembers across runs, on purpose.** Everything else here —
+holds, pruning, readiness — is answerable fresh from git and the queue every time, the same
+habit `dispatch` keeps. Asking a human about the same unresolved relationship on every single
+pass would not respect that a human already saw it, so a small durable ledger
+(`.proofspec/schedule/raised.jsonl`, the same shape as the review LEDGER: one line per event,
+appended, never edited) records that a relationship was raised, and a `ruled` line records
+what the human actually wrote when they resolved it. This is the first thing `schedule` needs
+to remember, and the only thing — a deliberate, narrow exception to computing fresh and
+storing nothing, not a precedent for storing more later without the same justification.
+
+**Where the design stopped short, honestly.** Starting a real work-agent session has to be
+headed and interactive — an explicit requirement, since a human may need to be seated at it
+— and no convention for spawning one exists anywhere in this codebase yet. `schedule` takes
+`startSession`/`judge`/`notifyHuman` as actions an embedder supplies; the bare CLI command
+supplies none of them, and says so plainly (`cannot-run`, naming exactly which action is
+missing) rather than pretending a fabricated default would be real. Building that default
+before anything needs it would have been exactly the kind of speculative plumbing this
+codebase's own YAGNI rule warns against.
