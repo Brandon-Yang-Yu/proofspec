@@ -2019,3 +2019,85 @@ branch back onto `origin/main` before shipping restored the scattered terms this
 written for, which is what let the acceptance script's second step — cut `LEDGER` out of
 the glossary, watch the guard name it — prove something a clean repository never would
 have exercised for real.
+
+## 39. A queue entry outlives its TASK, and nobody yet prunes it
+
+Walking through dispatch's own design with the human turned up a gap `dispatch.md` and
+`cli.md` do not cover, and were never meant to: once a TASK merges, its queue subdirectory
+cannot simply be deleted, because the graph tells "based on a TASK that merged" apart from
+"based on a TASK the queue holds no record of" purely by whether that subdirectory still
+exists (§dispatch's basedOn requirement). Delete a merged entry and every dependent TASK's
+claim silently flips from the graceful merged-fallback to an unresolved problem report,
+naming a TASK that in fact finished cleanly. So a merged entry has to keep standing —
+state rewritten to `merged`, never removed — for as long as anything might still ask about
+it, and nothing in either capability prunes it. Left alone, the queue directory only grows.
+
+**This is not dispatch's gap to close.** Its own charter says it plainly: dispatch "holds
+no queue and dispatches nothing." Pruning is a write to the queue, and deciding when a
+write is safe needs to watch the whole queue over time — exactly the job §37 already hands
+to the not-yet-built hand-off tooling, not to a capability that answers one question about
+the state of things right now. Adding a pruning requirement to `dispatch.md` or `cli.md`
+today would be speculative: nothing yet consumes it, and YAGNI says wait for the capability
+that owns writing to the queue at all.
+
+**The criterion, for whenever that capability gets designed.** A merged entry is safe to
+remove once no in-flight TASK's `base.task` still names it — once nobody is left to ask
+"is this merged or missing" about it. That question is answerable from the same graph
+`dispatch` already computes (every in-flight TASK's `base`), so the future capability does
+not need its own bookkeeping to decide when a name has gone quiet; it only needs to act on
+what dispatch already reports.
+
+## 40. Dispatch shipped narrower than §37, on purpose, twice
+
+§37 sketched a dispatch agent with its own CLI verbs — `add`, `list`, `status`, `hold` — and
+a manifest declaring its own footprint: `specTouches`, `fileTouches`, `deps`,
+`conflictSurface`. What shipped is neither. Both narrowings were deliberate, and both are
+worth recording here because §37 still reads as the live design and would otherwise
+contradict what actually exists.
+
+**The capability reports; it does not hold a queue.** `dispatch` reads a queue directory
+and answers how the TASK in it relate — writes, reopened, and basedOn edges, and the
+relationships those edges raise. It has no `add`, no `list`, no `hold`: ordering,
+dependency-tracking, and conflict avoidance all needed a TASK's *intent*, which this
+capability never reads. The MANIFEST names where that intent is written (`intentRef`) but
+does not carry it. That judgement is an orchestrator's, in a later round; §37's more
+ambitious verbs wait for it.
+
+**The MANIFEST carries a branch, not a declared footprint.** §37's manifest asked a TASK to
+describe its own footprint — which files, which terms, which capabilities it deps on. The
+shipped MANIFEST carries three fields: `intentRef`, `branch`, and `base`. Everything §37
+wanted declared is instead read from git, on every run, relative to each TASK's own
+merge-base — because a description of an edit can disagree with the edit, and the branch is
+the record. This is the same argument `readChangedFiles` already makes for `touched`,
+applied one level up: the graph does not trust a TASK to say what it touched; it goes and
+looks.
+
+**Design decisions made while shipping, not visible in the spec text alone:**
+
+- **A TASK that cannot be read still shows what could be read.** The first draft of "carries
+  a problem" left open *where* the problem was reported and what a TASK whose own claim
+  failed verification (but whose branch read fine) should show. Both questions resolved the
+  same way: every TASK entry always carries `writes`, `reopened`, `basedOn`, and `problem` —
+  never a shape where a problem replaces the edges instead of riding beside them. A TASK
+  whose branch cannot be read at all just happens to have empty edges; a TASK whose basedOn
+  claim didn't verify keeps its real ones. One shape, not two.
+- **A `base` naming a TASK absent from the queue is a claim, not a default.** Neither
+  `main` nor a merged TASK — a base can also name a TASK the queue holds no record of at
+  all (a typo, withdrawn work, a name from before a rename). Silently falling back to `main`
+  would have hidden exactly the kind of stale hand-off this capability exists to surface, so
+  it is carried as an unresolved claim and reported as a problem, the same family as a
+  basedOn claim whose ancestry doesn't hold.
+- **The glossary file is excluded from forming a relationship on its own.** Every TERM
+  lives in one file (§38), so any two TASK that touch any vocabulary at all would otherwise
+  relate through it, however unrelated the words. The TERM nodes already carry the real
+  signal precisely — two TASK sharing a relationship because they touched the *same* word —
+  so the file-level edge would only add noise. The writes edge to the glossary file itself
+  still stands; it just never raises a relationship by itself.
+- **A missing queue directory answers an empty graph, not a refusal.** No TASK has been
+  handed off yet is the ordinary state of a repo between rounds, not a fault — indistinguishable,
+  from the graph's point of view, from a queue directory that exists and holds nothing. Only a
+  queue directory that exists and genuinely cannot be listed (permissions, a file where a
+  directory belongs) is refused. The same reasoning turned out to reach one level up: `dispatch`
+  itself does not need a `specs/` directory to exist either, when there is no TASK in flight to
+  need its vocabulary — it was found late, by an acceptance run against a genuinely bare repo,
+  that the command read `specs/` before ever checking the queue was empty.
