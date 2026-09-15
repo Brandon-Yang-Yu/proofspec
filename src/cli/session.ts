@@ -47,6 +47,21 @@ async function pathExists(path: string): Promise<boolean> {
  * session actually starts can be checked without ever spawning a process. */
 export type TmuxCommand = { readonly command: string; readonly args: readonly string[] }
 
+const DEFAULT_TMUX_SOCKET = 'proofspec'
+
+/**
+ * Which tmux server every command here targets — a dedicated one via `-L`, never the user's
+ * default server or any other named one. tmux sessions are global to the whole machine, not
+ * scoped to any directory or project: `kill-session -t <name>` on the default server kills
+ * whatever real session already has that name, whoever it belongs to. Overridable the same way
+ * `PROOFSPEC_JUDGE_BIN` is, so a test (or a future acceptance check) can point at a throwaway,
+ * per-run socket instead of ever touching the real `proofspec` production one, let alone the
+ * user's own.
+ */
+function tmuxSocket(): string {
+  return process.env.PROOFSPEC_TMUX_SOCKET ?? DEFAULT_TMUX_SOCKET
+}
+
 /**
  * The tmux commands that (re)start a TASK's pi work-agent: killing whatever tmux session
  * already carries the TASK's name before creating a fresh one, so retrying a TASK whose LEASE
@@ -55,9 +70,10 @@ export type TmuxCommand = { readonly command: string; readonly args: readonly st
  * which is why it is a command of its own rather than folded into one call.
  */
 export function tmuxSessionCommands(task: string, worktree: string): readonly [kill: TmuxCommand, start: TmuxCommand] {
+  const socket = tmuxSocket()
   return [
-    { command: 'tmux', args: ['kill-session', '-t', task] },
-    { command: 'tmux', args: ['new-session', '-d', '-s', task, '-c', worktree, 'pi'] },
+    { command: 'tmux', args: ['-L', socket, 'kill-session', '-t', task] },
+    { command: 'tmux', args: ['-L', socket, 'new-session', '-d', '-s', task, '-c', worktree, 'pi'] },
   ]
 }
 

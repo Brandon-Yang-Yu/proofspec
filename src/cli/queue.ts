@@ -145,3 +145,34 @@ export async function reclaimLease(cwd: string, task: string, staleAt: string, t
 export async function removeQueueEntry(cwd: string, task: string): Promise<void> {
   await rm(join(cwd, ...QUEUE_DIR, task), { recursive: true, force: true })
 }
+
+/** Overwrites a TASK's state with a new word. No knowledge of which words exist or what order
+ * they follow — a caller choosing a word already has to know that; validating a transition
+ * (only `building` may become `merged`, say) belongs to whichever specific caller writes that
+ * rule, not to this primitive. */
+export async function writeState(cwd: string, task: string, word: string): Promise<void> {
+  await writeFile(join(cwd, ...QUEUE_DIR, task, STATE_FILE), word)
+}
+
+/** Whether `enqueue` created a new entry, or refused because one already stood. */
+export type EnqueueResult = { readonly ok: true } | { readonly ok: false; readonly reason: string }
+
+/**
+ * Creates a new queue entry for a TASK not seen before: its MANIFEST, and an initial state of
+ * `queued`. Refuses, touching nothing, when a TASK of that name is already in the queue — the
+ * same `wx`-flag idiom `takeLease` above already uses, so the check-then-create step two
+ * callers racing to enqueue the same name could otherwise land inside of is collapsed to the
+ * one filesystem call the OS already makes atomic.
+ */
+export async function enqueue(cwd: string, task: string, manifest: Manifest): Promise<EnqueueResult> {
+  const dir = join(cwd, ...QUEUE_DIR, task)
+  await mkdir(dir, { recursive: true })
+  try {
+    await writeFile(join(dir, MANIFEST_FILE), JSON.stringify(manifest), { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return { ok: false, reason: `a TASK named ${task} is already in the queue` }
+    throw error
+  }
+  await writeState(cwd, task, 'queued')
+  return { ok: true }
+}

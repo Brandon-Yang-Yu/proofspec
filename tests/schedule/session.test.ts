@@ -7,6 +7,13 @@ import { resolveSessionWorktree, tmuxSessionCommands } from '../../src/cli/sessi
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
+// Unconditional, not a manual delete at the end of the test body it belongs to — a thrown
+// assertion earlier in that body would otherwise skip the delete and leak the override into
+// every later test, exactly the kind of leaked ambient state this requirement exists to guard
+// against. The same pattern `judge-cli.test.ts` already uses for its own env overrides.
+afterEach(() => {
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+})
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 // Scenario: A ready TASK whose worktree has never been checked out gets one created at its conventional path
@@ -52,7 +59,33 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
   const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
 
   expect(commands).toEqual([
-    { command: 'tmux', args: ['kill-session', '-t', 'a'] },
-    { command: 'tmux', args: ['new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a', 'pi'] },
+    { command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] },
+    { command: 'tmux', args: ['-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a', 'pi'] },
   ])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: The tmux commands run against a dedicated server, never the user's default or any other named one
+// GIVEN the default socket name has not been overridden
+// WHEN the tmux commands to start a TASK's session are built
+// THEN both commands target the dedicated proofspec socket, not the user's default tmux server
+it('runs against a dedicated tmux server, never the default one, unless overridden', () => {
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+
+  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
+
+  for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target
+// GIVEN PROOFSPEC_TMUX_SOCKET names a different socket
+// WHEN the tmux commands to start a TASK's session are built
+// THEN both commands target that socket instead of the default proofspec one
+it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () => {
+  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
+
+  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
+
+  for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec-test-run-42'])
 })

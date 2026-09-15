@@ -2419,3 +2419,89 @@ a fixture that was never complete. `/ship`'s own rule held: the check does not e
 that asked the wrong thing, it returns to the human, and the fix — restoring the `specs/`
 layout the very first drafted version of the script had named and a later transcription
 dropped — was confirmed before the check ran again, clean, seven steps in a row.
+
+## 46. `judge` and `notifyHuman` join `startSession` as bare-CLI defaults; `enqueue` gets its primitive
+
+§41 designed `ScheduleActions` around an embedder supplying all three real actions; §44 and §45
+shipped real implementations of `judge` and `startSession` without wiring either into the bare
+CLI, on the reasoning that a default was speculative until something needed it. Something did:
+running the bare `schedule` command against a real queue reached a relationship or a ready TASK
+constantly, and `judge` sat built and unused behind that gap the whole time. Wiring it in next
+to `startSession` — `schedule: { startSession: ..., judge: piJudge() }` — was the small, obvious
+follow-through §41 had already earned, not a new design question.
+
+**`notifyHuman` ships as the minimum that respects `main.ts`'s own contract, nothing more.** Its
+one hard constraint already existed before this: `--pretty`'s own comment says stdout carries
+"the one line a program parses," so any human-facing text has exactly one channel left, stderr.
+`stderrNotifyHuman` writes one message there naming the shared node, both TASKs, and the
+relationship's own key — enough for a human already watching the process (a `pi` session
+someone is sitting at, say) to answer directly with `--ruling`. Paging or otherwise reaching a
+human who is *not* currently watching is named and set aside on purpose, the same way §41 named
+and set aside a resident scheduler: a real capability, with a real design of its own, that
+nothing here yet needs built.
+
+**With all three real, `ScheduleActions`'s independent-optional fields (already loosened for
+`startSession` alone in §45) pay off for real.** An embedder now exists only for someone who
+wants to *override* one of the three — swap `notifyHuman` for a real paging integration, say —
+never merely to *supply* one, since the bare CLI already does. §41's original worry, that a
+fabricated default would be built before anything needed it, is answered the same way §45
+answered it for `startSession`: nothing here is fabricated, each of the three is the same real
+implementation an embedder would otherwise have had to write itself.
+
+**`writeState` and `enqueue`: the write primitives the queue directory was still missing.**
+Every in-flight TASK's `state` file could be read (`readQueue`) and a LEASE could be taken or
+reclaimed, but nothing could ever advance a TASK's own word forward, and nothing could create a
+queue entry outside a test fixture poking files directly. `writeState(cwd, task, word)` is a
+total, unjudging overwrite — the write-side mirror of `inflight`'s own "a TASK's state is read
+literally" requirement, which already defaults an unrecognized word to still-in-flight rather
+than refusing it. Validating a transition (only `building` may become `merged`) is deliberately
+not built here: that question belongs to whichever future caller writes a specific verb like
+`markMerged`, and none of those verbs have a caller yet. `enqueue` is a heavier function built
+on top of `writeState`, not a second mode of the same primitive (Rule 4: no implicit branching
+on filesystem state standing in for an explicit parameter) — it lays down a TASK's directory and
+MANIFEST, then calls `writeState` for the initial `queued` word, and refuses rather than
+overwrites a name already in the queue using the exact `wx`-flag idiom `takeLease` already uses
+a few lines above it, so two callers racing to enqueue the same name collapse to the one
+filesystem call the OS already makes atomic — a claim the review gate initially let stand
+unraced (see §47's sibling gap on the same page: a reviewer is only as good as the test it
+reads, and neither `enqueue`'s race nor `judge`'s timeout precision passed the first review
+round clean). There is deliberately no `proofspec enqueue` CLI verb: nothing calls this
+function yet, an "investigator" capability that would is not built, and giving it a command
+line before it has a caller would be exactly the speculative plumbing Rule 3 warns against.
+
+## 47. A real tmux collision, and why every session `startSession` opens now runs on its own server
+
+§45 shipped `startSession` calling the bare `tmux` binary directly, and nothing about that
+seemed unsafe until running the real bare CLI against a real queue — for this ship round's own
+acceptance check — actually did the damage: two TASKs named `a` and `b` in a scratch repo caused
+real `tmux kill-session -t a` / `-t b` calls against the human's own, single, machine-wide tmux
+server, and a real tmux session the human had open and named `audan` was gone afterward.
+
+**The mechanism was worse than "two things happened to share a name."** tmux does not require
+an exact match for `-t`: given no session named exactly `a`, it falls back to treating the
+target as a prefix, and resolves it unambiguously to whichever session's name starts with `a` —
+which `audan` was, and nothing else was at the moment `kill-session -t a` ran, since no session
+named exactly `a` existed yet (that came a moment later, from the paired `new-session`). A task
+name never has to collide *exactly* with anything real for this to happen; it only has to be a
+prefix of something real, which is a far larger hazard surface than "don't reuse a name."
+
+**The fix is the same shape every other real hazard in this document gets: stop sharing the
+resource, not detect the collision.** `tmux -L <socket>` opens a genuinely separate server, so
+`tmuxSessionCommands` now issues every command through one — `proofspec` by default, so a real
+work-agent session lives somewhere nothing else, human or tool, is ever running anything, and
+`PROOFSPEC_TMUX_SOCKET` overridable the same way `PROOFSPEC_JUDGE_BIN` already is, so a test (or
+an acceptance check running the real binary, as this one now does) points at a throwaway,
+per-run socket instead of touching even the dedicated production one. This is not a narrower
+version of collision detection; a dedicated server has no default-server sessions on it to
+collide with at all, the same reason a LEASE never has to ask whether a claimant process is
+still alive (§41) and `dispatch` never asks git anything a queue entry's own convention already
+answers (§42) — remove the shared thing, not the symptom of sharing it.
+
+**A fresh reviewer caught the fix's own first version being too loose to prove itself,** twice.
+The socket-override test's first cleanup used a manual `delete` at the tail of its own test
+body rather than an unconditional `afterEach` — exactly the shape of leaked ambient state this
+whole section exists to guard against, missed by the same hand that wrote the fix, caught by
+the fresh eyes reviewing it. The one thing this ship round did not need a second look to get
+right the first time: asking the human before touching anything more on the real tmux server,
+including the two leftover sessions this incident's own testing left behind, rather than
+assuming cleanup was implied.

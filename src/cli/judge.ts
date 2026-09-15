@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process'
 import { judgeWith } from '../schedule/index.ts'
 import type { JudgeAgent, JudgeOutcome, JudgeProcess, ScheduleActions } from '../schedule/index.ts'
 
-// A hung agent must not hang a whole scheduling pass, which awaits one judge call at a time.
-const JUDGE_TIMEOUT_MS = 60_000
+// Exported so a test can assert a fallback against this value instead of a duplicated literal.
+export const DEFAULT_JUDGE_TIMEOUT_MS = 60_000
 // A reasoning reply is short; this only avoids ever truncating a real one.
 const MAX_JUDGE_OUTPUT = 1024 * 1024
 
@@ -16,17 +16,33 @@ const DEFAULT_JUDGE_AGENT: JudgeAgent = { model: 'zai/glm-5.3:low' }
  * pure rules of asking and reading live in `schedule/judge.ts`; this is the one thing that
  * actually spawns a process, the same boundary `graph.ts` keeps for the codebase-memory CLI.
  */
-export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): ScheduleActions['judge'] {
+export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<ScheduleActions['judge']> {
   return judgeWith(runJudgeProcess, agent)
+}
+
+/**
+ * A hung agent must not hang a whole scheduling pass, which awaits one judge call at a time —
+ * `raw` is `PROOFSPEC_JUDGE_TIMEOUT_MS`, read fresh by the caller on every call the same as
+ * `PROOFSPEC_JUDGE_BIN` below, since a module-level constant would freeze whatever the env
+ * held at first import, before a test ever gets to set it. Anything short of a positive number
+ * falls back to the default rather than silently disabling the timeout: `execFile`'s own
+ * `timeout` option only arms when it is greater than zero, so a malformed override would
+ * otherwise reintroduce the exact hang this exists to prevent.
+ */
+export function judgeTimeoutMs(raw: string | undefined): number {
+  if (raw === undefined) return DEFAULT_JUDGE_TIMEOUT_MS
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_JUDGE_TIMEOUT_MS
 }
 
 async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome> {
   const binary = process.env.PROOFSPEC_JUDGE_BIN ?? 'pi'
+  const timeoutMs = judgeTimeoutMs(process.env.PROOFSPEC_JUDGE_TIMEOUT_MS)
   try {
-    const stdout = await execFileWithClosedStdin(binary, judgeProcess.args)
+    const stdout = await execFileWithClosedStdin(binary, judgeProcess.args, timeoutMs)
     return { kind: 'ran', code: 0, stdout }
   } catch (error) {
-    return outcomeFor(error)
+    return outcomeFor(error, timeoutMs)
   }
 }
 
@@ -37,9 +53,9 @@ async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome
  * timeout before ever answering. Ending stdin the instant the process starts gives it an
  * immediate EOF, the same as if nothing were piped into it on a real terminal.
  */
-function execFileWithClosedStdin(binary: string, args: readonly string[]): Promise<string> {
+function execFileWithClosedStdin(binary: string, args: readonly string[], timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = execFile(binary, args, { timeout: JUDGE_TIMEOUT_MS, maxBuffer: MAX_JUDGE_OUTPUT }, (error, stdout) => {
+    const child = execFile(binary, args, { timeout: timeoutMs, maxBuffer: MAX_JUDGE_OUTPUT }, (error, stdout) => {
       if (error) reject(error)
       else resolve(stdout)
     })
@@ -64,10 +80,10 @@ function execFileWithClosedStdin(binary: string, args: readonly string[]): Promi
  * anyone watching the process, even though every outcome still safely reads as
  * unresolved.
  */
-function outcomeFor(error: unknown): JudgeOutcome {
+function outcomeFor(error: unknown, timeoutMs: number): JudgeOutcome {
   const code = exitCodeOf(error)
   if (code === undefined) {
-    const reason = wasKilledByTimeout(error) ? `pi did not answer within ${JUDGE_TIMEOUT_MS}ms` : messageOf(error)
+    const reason = wasKilledByTimeout(error) ? `pi did not answer within ${timeoutMs}ms` : messageOf(error)
     process.stderr.write(`judge: could not run pi: ${reason}\n`)
     return { kind: 'cannot-run', reason }
   }

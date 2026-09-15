@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
 import { check, impact, inflight, render, review, schedule, touched, write } from './run.ts'
+import { piJudge } from './judge.ts'
+import { stderrNotifyHuman } from './notify.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
 import { tmuxStartSession } from './session.ts'
 import type { Format, Layout } from './render.ts'
@@ -39,11 +41,11 @@ Commands:
   schedule Run one scheduling pass over the queue: prune a merged TASK nothing still names,
            dispatch every ready TASK, and raise an unresolved relationship at most once. Given
            --ruling, records a human's ruling on an already-raised relationship instead.
-           Dispatching a ready TASK starts a real, headed pi work-agent session for it in a
-           detached tmux session named for the TASK — the bare command line supplies this
-           itself. Judging a relationship still needs a judge/notifyHuman action only an
-           embedder passing RunOptions can supply; a relationship with neither wired up
-           reports cannot-run.
+           The bare command line supplies real startSession, judge, and notifyHuman actions
+           itself: a ready TASK starts a headed pi work-agent session in a detached tmux
+           session named for the TASK, a relationship is judged by a fresh one-shot pi
+           process, and one it cannot resolve is reported to stderr naming both TASKs and how
+           to rule on it. An embedder passing RunOptions may still override any of the three.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -139,10 +141,12 @@ const options: RunOptions = {
   ask,
   review: values.verdict === undefined ? undefined : reviewOf(values.verdict, positionals[1]),
   ruling: values.ruling === undefined ? undefined : rulingOf(values.ruling, positionals[1]),
-  // The one action the bare command line does supply: a real, headed pi work-agent session,
-  // started with tmux. `judge` and `notifyHuman` stay unsupplied — see the `schedule` usage
-  // text above for what that still leaves the bare command line unable to do.
-  schedule: { startSession: task => tmuxStartSession(process.cwd(), task) },
+  // The bare command line's own real actions — see the `schedule` usage text above.
+  schedule: {
+    startSession: task => tmuxStartSession(process.cwd(), task),
+    judge: piJudge(),
+    notifyHuman: stderrNotifyHuman(),
+  },
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,

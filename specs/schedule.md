@@ -125,7 +125,9 @@ default one.
 <!-- scenarios: generated -->
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
+- "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
+- "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
