@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import { readRaisedLedger } from '../../src/cli/raised.ts'
 import { schedule, renderAnswer } from '../../src/cli/index.ts'
+import { judgeWith } from '../../src/schedule/index.ts'
 import type { Outcome, RaisedEntry, RelationshipJudgeInput, ScheduleActions, SchedulePlan } from '../../src/cli/index.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 import type { GitRepo } from '../cli/support.ts'
@@ -258,6 +259,24 @@ it("hands the judge both TASKs' real intent", async () => {
 
   expect(seen).toHaveLength(1)
   expect(seen[0]?.intents).toEqual({ a: 'renames a helper function', b: 'fixes an unrelated typo' })
+})
+
+// Requirement: A relationship is judged by a fresh agent before a human is asked
+// Scenario: A scheduling pass built from the composed judge factory raises what it judges unresolved
+// GIVEN two TASK sharing a capability file, and a judge built from the composed judge factory
+//       over a stand-in runner that answers unresolved
+// WHEN a scheduling pass runs
+// THEN that relationship is raised
+it('raises what the composed judge factory judges unresolved', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md' })
+  const judge = judgeWith(async () => ({ kind: 'ran' as const, code: 0, stdout: 'UNRESOLVED' }), { model: 'zai/glm-5.3:low' })
+  const actions = fakeActions({ judge })
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(plan.raised).toHaveLength(1)
 })
 
 // Requirement: A judgement the fresh agent cannot resolve reaches a human, traceably

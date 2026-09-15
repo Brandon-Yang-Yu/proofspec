@@ -2272,3 +2272,89 @@ after another so the append-only ledger never saw two writers at once. All 93 la
 every `gone` scenario's claim was found proven, byte for byte, under its `inflight`
 successor; every `touched` scenario's THEN still cited a real assertion. No `gap`, no
 `drift` — the rename changed no behavior, and the gate confirmed it changed none.
+
+## 44. `judge` — the first of `schedule`'s three deferred actions, built
+
+§41 named three actions an embedder still has to supply before `schedule` does anything but
+prune and record a ruling: `startSession`, `judge`, `notifyHuman`. `judge` shipped first,
+deliberately — a fresh, one-shot, stateless process is the smallest of the three by a wide
+margin (no terminal, no tmux, no session file to hand a human later), so it carries none of
+`startSession`'s open risk (§41 never resolved how a headed session gets started, or how a
+human takes one over) and none of `notifyHuman`'s open design question (what channel actually
+puts a finding in front of a human). Building the easy one first is not a claim that the other
+two are easy — it is choosing the one slice small enough to finish end to end, including a
+real invocation against a real agent, before spending real design effort on the harder two.
+
+**The agent is `pi`, not `claude` or a bespoke SDK call.** `pi` (`@earendil-works/pi-coding-agent`)
+already ships every primitive this needed: `-p`/`--print` for a one-shot, non-interactive turn;
+`--no-session` so nothing about one relationship's judgement leaks into the next; `--no-tools`
+so the judge can only answer from the prompt, never read a file or run a command; `--no-context-files`
+so `AGENTS.md`/`CLAUDE.md` never shape a narrow yes/no call. Reusing a tool that already has
+these flags, rather than writing a minimal wrapper around a raw model API, is what makes "an
+agent that authored neither TASK's work" a fact the process itself enforces — no tools and no
+memory means it cannot have touched either TASK's branch even in principle, not merely that it
+didn't in this run.
+
+**No `--mode json`.** `pi` can answer structured JSON, and the model tier's own convention
+elsewhere in this repo's tooling (`~/.pi/agent/agents/explorer.md`) already uses one. It was
+rejected here for a reason specific to this prompt: the system prompt necessarily contains both
+`RESOLVED` and `UNRESOLVED`, because it has to say what each one means, so a parser that read
+the whole reply — JSON-wrapped or not — could never tell the agent's own explanation of the
+contract from its actual answer. The contract instead lives entirely in what the last line of
+the reply says: exactly `RESOLVED`, case-folded and stripped of surrounding punctuation, or
+anything else at all. This is `verdictFrom` (`src/schedule/judge.ts`), and it is total by
+construction — a process that never ran, exited non-zero, said nothing, or answered in prose
+that never commits to either word all collapse onto `unresolved`, the same value a judgement
+the agent frankly could not decide already reads as. There is no third case for `JudgeVerdict`
+to grow, and the file's own header says why: `unresolved` already costs exactly one human
+glance, which the raised-relationships ledger (§41) already ensures happens at most once;
+inventing a third value would only require every caller to collapse it back to one of the two
+that already exist.
+
+**Pure rules in `schedule`, the one real spawn in `cli`.** This is the same cut `raised.ts`
+already draws twice over (§39, §41) — `src/schedule/judge.ts` builds the process's argument
+list and reads its answer with no I/O of its own, injected-runner style, so every hazard
+(a substring trap, a non-zero exit, a reply that discusses both words while reasoning) is a
+unit test against a fake runner, never a real `pi` spawn. `src/cli/judge.ts` is the one file
+that actually calls `node:child_process`, mirroring `graph.ts`'s existing boundary for the
+codebase-memory CLI down to the same shape: an env-var binary override
+(`PROOFSPEC_JUDGE_BIN`, next to `graph.ts`'s `CODEBASE_MEMORY_BIN`), a timeout so one hung
+agent can't hang a whole scheduling pass, and a catch that converts whatever `execFile` throws
+into the domain's own `JudgeOutcome` value at the boundary. The live model choice
+(`DEFAULT_JUDGE_AGENT`) sits in this file too, not in the pure one — an early draft put it
+beside `JudgeAgent`'s own type, and a guideline-review pass moved it: which vendor judges a
+relationship is an operational knob of the same kind as the binary path, and belongs where
+that knob already lives, not in the file that is supposed to hold domain rules only.
+
+**Found only by actually running it: a real invocation hung for the full timeout, every
+time.** Every unit test here uses a fake runner by design (the same discipline §41 keeps for
+`startSession`'s real session), so nothing in the automated suite could have caught this —
+the acceptance check's step 6 exists exactly to run the real thing once, and it did: `pi`
+reads its own stdin when it is not attached to a TTY, and `promisify(execFile)`'s Promise-based
+wrapper hides the `ChildProcess` handle a caller would need to close it. With stdin never
+closed, `pi` sat blocked waiting for an EOF that was never coming, and every real call spent
+the full 60 seconds arriving at `cannot-run`, never once reaching `verdictFrom`'s `ran`
+branch — the parser this whole design is built around was, in practice, unreachable. The fix
+drops the promisified wrapper for the plain callback form specifically so the handle stays
+available, and closes `child.stdin` the instant the process starts. Re-run for real afterward:
+a coincidental pair of intents resolved in under 5 seconds, a genuinely conflicting pair came
+back unresolved in under 9 — both directions, through the real model, not just through the
+fake runner the unit tests use.
+
+**A second, smaller finding from the same fix, caught by a review of the fix itself.** The
+first version wrote `child.stdin?.end()` — correct today (nothing here configures a custom
+`stdio`, so the handle is never actually null), but a silent no-op the day some future change
+adds one, reintroducing the exact hang this function exists to prevent with no error, no type
+failure, nothing in a diff to point at. Changed to an explicit check that throws on a null
+handle instead: the same "make illegal states unrepresentable" reasoning §2 applies everywhere
+else, applied to an invariant that happens to be true only by the current code's own shape
+rather than by the type system. The same pass also found that Node reports the `timeout`
+option firing as `code: null` — indistinguishable from a spawn failure by `.code` alone — so a
+genuine timeout was being logged as "could not run pi," the exact wrong diagnosis for a
+process that did run and simply never answered in time. Told apart by `.killed`, which Node
+only ever sets true when this module's own timeout did the killing.
+
+**Left for `startSession` and `notifyHuman`, not decided here.** This section settles how one
+relationship gets one honest yes/no answer from one disposable process. It settles nothing
+about how a human ever sees that answer's downstream effect, or how a real headed work-agent
+session gets started — both are exactly the open questions §41 already named, still open.

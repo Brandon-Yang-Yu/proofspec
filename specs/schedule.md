@@ -124,15 +124,16 @@ either TASK's branch, and it remembers nothing from one relationship to the next
 same two TASKs get the same question wherever in the queue's pass order they happen to fall.
 
 <!-- scenarios: generated -->
+- "A TASK whose intent could not be read is named as missing in the question, not silently dropped" → tests/schedule/judge.test.ts
+- "A fresh agent is asked in one tool-less, session-less process, naming the model it runs as" → tests/schedule/judge.test.ts
 - "A relationship the fresh agent resolved is never raised" → tests/schedule/relationships.test.ts
 - "A relationship the fresh agent resolves is never raised" → tests/schedule/end-to-end.test.ts
 - "A relationship's key names the same node and TASK regardless of the order they arrive in" → tests/schedule/relationships.test.ts
-- "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
-- "A fresh agent is asked in one tool-less, session-less process, naming the model it runs as" → tests/schedule/judge.test.ts
-- "A TASK whose intent could not be read is named as missing in the question, not silently dropped" → tests/schedule/judge.test.ts
-- "The same relationship asks the same question regardless of which TASK's intent arrived first" → tests/schedule/judge.test.ts
-- "An intent past the length cap is truncated rather than left to overflow the process's argument list" → tests/schedule/judge.test.ts
 - "A scheduling pass built from the composed judge factory raises what it judges unresolved" → tests/schedule/end-to-end.test.ts
+- "An intent past the length cap is truncated rather than left to overflow the process's argument list" → tests/schedule/judge.test.ts
+- "The composed judge factory hands its runner the real process and reads its answer through the real parser" → tests/schedule/judge.test.ts
+- "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
+- "The same relationship asks the same question regardless of which TASK's intent arrived first" → tests/schedule/judge.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A judgement that is not a clean RESOLVED reads as unresolved, never a third case
@@ -154,14 +155,14 @@ last line only is what keeps a reply that reasons its way past `UNRESOLVED` on t
 `RESOLVED` — or the reverse — from being misread by a substring.
 
 <!-- scenarios: generated -->
+- "A non-zero exit is never read as an answer, whatever stdout says" → tests/schedule/judge.test.ts
 - "A plain RESOLVED last line resolves the judgement" → tests/schedule/judge.test.ts
 - "A plain UNRESOLVED last line leaves the judgement unresolved" → tests/schedule/judge.test.ts
-- "Prose ending in neither word leaves the judgement unresolved" → tests/schedule/judge.test.ts
-- "Empty output leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "A process that never ran leaves the judgement unresolved" → tests/schedule/judge.test.ts
 - "A reply that discusses both words but ends in RESOLVED still resolves the judgement" → tests/schedule/judge.test.ts
 - "Casing and punctuation around the last line do not change the verdict" → tests/schedule/judge.test.ts
-- "A non-zero exit is never read as an answer, whatever stdout says" → tests/schedule/judge.test.ts
-- "A process that never ran leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "Empty output leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "Prose ending in neither word leaves the judgement unresolved" → tests/schedule/judge.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A judgement the fresh agent cannot resolve reaches a human, traceably
