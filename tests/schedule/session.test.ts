@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { resolveSessionWorktree, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { promptBodyFrom, resolveSessionWorktree, tmuxSessionCommands } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
@@ -56,11 +56,17 @@ it('reuses a TASK\'s worktree once it already exists, rather than recreating it'
 // WHEN the tmux commands to start its session are built
 // THEN the first kills that stale session, and the second starts a fresh one running pi under the same name
 it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', () => {
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
+  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', 'you are the executor')
 
   expect(commands).toEqual([
     { command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] },
-    { command: 'tmux', args: ['-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a', 'pi'] },
+    {
+      command: 'tmux',
+      args: [
+        '-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a', 'pi',
+        '--append-system-prompt', 'you are the executor',
+      ],
+    },
   ])
 })
 
@@ -72,7 +78,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 it('runs against a dedicated tmux server, never the default one, unless overridden', () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
+  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', '')
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
 })
@@ -85,7 +91,29 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
 it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () => {
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a')
+  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', '')
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec-test-run-42'])
+})
+
+// Requirement: startSession seeds the executor session with the executor's own system prompt
+// Scenario: The executor persona's YAML frontmatter is stripped before it is used as a system prompt
+// GIVEN the executor persona file's raw contents, frontmatter included
+// WHEN its prompt body is extracted
+// THEN the frontmatter is gone and only the prose body remains
+it('strips the executor persona\'s YAML frontmatter before using it as a system prompt', () => {
+  const raw = '---\nname: executor\ntools: read, write\n---\n\nYou are the **executor**.\n'
+
+  expect(promptBodyFrom(raw)).toBe('You are the **executor**.')
+})
+
+// Requirement: startSession seeds the executor session with the executor's own system prompt
+// Scenario: A persona file with no frontmatter passes through unchanged
+// GIVEN a persona file with no YAML frontmatter at all
+// WHEN its prompt body is extracted
+// THEN the whole file, trimmed, is returned unchanged
+it('passes a persona file with no frontmatter through unchanged, trimmed', () => {
+  const raw = '\nYou are the **executor**.\n\n'
+
+  expect(promptBodyFrom(raw)).toBe('You are the **executor**.')
 })

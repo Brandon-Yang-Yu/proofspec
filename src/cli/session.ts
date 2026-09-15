@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { git } from './git.ts'
@@ -49,6 +49,31 @@ export type TmuxCommand = { readonly command: string; readonly args: readonly st
 
 const DEFAULT_TMUX_SOCKET = 'proofspec'
 
+const EXECUTOR_PERSONA_PATH = ['.pi', 'agents', 'executor.md'] as const
+
+/**
+ * Strips a `.pi/agents/*.md` persona file's YAML frontmatter, leaving the prompt body a
+ * `--append-system-prompt` argument actually wants. The frontmatter's `name:`/`tools:` lines
+ * are metadata for the `subagent` dispatch mechanism — meaningless, and misleading, as literal
+ * prompt text for a session nothing dispatched. A file with no frontmatter delimiter at all
+ * passes through unchanged rather than throwing: still a usable system prompt, and a missing
+ * delimiter is not ambiguous the way a malformed value would be.
+ */
+export function promptBodyFrom(fileContents: string): string {
+  return fileContents.replace(/^---\n[\s\S]*?\n---\n/, '').trim()
+}
+
+/**
+ * Reads the executor's own persona from this tool's own checkout (`cwd`), never from the
+ * TASK's own worktree or branch — the executor's instructions are an operational convention
+ * this repo's tooling keeps, the same as `DEFAULT_JUDGE_AGENT` or `PROOFSPEC_JUDGE_BIN`
+ * (`cli/judge.ts`), not something a TASK's own branch gets to redefine for itself.
+ */
+async function executorSystemPrompt(cwd: string): Promise<string> {
+  const raw = await readFile(join(cwd, ...EXECUTOR_PERSONA_PATH), 'utf8')
+  return promptBodyFrom(raw)
+}
+
 /**
  * Which tmux server every command here targets — a dedicated one via `-L`, never the user's
  * default server or any other named one. tmux sessions are global to the whole machine, not
@@ -63,17 +88,19 @@ function tmuxSocket(): string {
 }
 
 /**
- * The tmux commands that (re)start a TASK's pi work-agent: killing whatever tmux session
+ * The tmux commands that (re)start a TASK's pi executor: killing whatever tmux session
  * already carries the TASK's name before creating a fresh one, so retrying a TASK whose LEASE
  * went stale (schedule's own reclaim requirement) replaces a dead session rather than
  * colliding with its name. The kill is expected to fail the ordinary way — no such session —
- * which is why it is a command of its own rather than folded into one call.
+ * which is why it is a command of its own rather than folded into one call. `systemPrompt` is
+ * appended to `pi`'s own default coding-assistant prompt (`--append-system-prompt`), not a
+ * replacement for it — the executor still needs everything that default already grants.
  */
-export function tmuxSessionCommands(task: string, worktree: string): readonly [kill: TmuxCommand, start: TmuxCommand] {
+export function tmuxSessionCommands(task: string, worktree: string, systemPrompt: string): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
   return [
     { command: 'tmux', args: ['-L', socket, 'kill-session', '-t', task] },
-    { command: 'tmux', args: ['-L', socket, 'new-session', '-d', '-s', task, '-c', worktree, 'pi'] },
+    { command: 'tmux', args: ['-L', socket, 'new-session', '-d', '-s', task, '-c', worktree, 'pi', '--append-system-prompt', systemPrompt] },
   ]
 }
 
@@ -92,11 +119,12 @@ export async function resolveSessionWorktree(cwd: string, task: string): Promise
 
 /**
  * The real `startSession`: resolves the TASK's own worktree, then starts `pi` there in a
- * detached tmux session named for the TASK.
+ * detached tmux session named for the TASK, seeded with the executor's own system prompt.
  */
 export async function tmuxStartSession(cwd: string, task: string): Promise<void> {
   const worktree = await resolveSessionWorktree(cwd, task)
-  const [kill, start] = tmuxSessionCommands(task, worktree)
+  const systemPrompt = await executorSystemPrompt(cwd)
+  const [kill, start] = tmuxSessionCommands(task, worktree, systemPrompt)
   await runIgnoringFailure(kill)
   await runOrThrow(start)
 }

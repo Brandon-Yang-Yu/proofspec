@@ -130,6 +130,34 @@ default one.
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
+### Requirement: startSession seeds the executor session with the executor's own system prompt
+
+The bare CLI's `startSession` action SHALL read `.pi/agents/executor.md` from this tool's own
+checkout — never from the TASK's own worktree or branch — strip its YAML frontmatter, and
+pass the remaining prose to `pi` as `--append-system-prompt`, alongside the worktree and
+tmux-socket handling above.
+
+`pi` without a seeded prompt is just the generic coding-assistant default; nothing tells the
+session it is the executor, that its scope starts only after the disposition review, or that
+a wrong judged standard — never a wrong implementation — is the one thing it should park on
+and ask about (docs/design.md §37, §49). `.pi/agents/executor.md` already carries that persona
+in the same shape as this tool's other agent files, written for the `subagent` dispatch
+mechanism's own frontmatter convention; a session `startSession` opens is never dispatched
+that way; it is the top-level `pi` process tmux starts directly. Stripping the frontmatter
+before handing the body to `--append-system-prompt` keeps `name:`/`tools:` — metadata for a
+dispatcher that never runs here — out of the literal prompt text a model would otherwise have
+to read as prose.
+
+Reading the persona from `cwd`, not from the worktree, is the same choice `DEFAULT_JUDGE_AGENT`
+and `PROOFSPEC_JUDGE_BIN` already make for `judge`: the executor's own instructions are an
+operational convention this tool's checkout keeps, not something a TASK's own branch — cut
+from `main` at some earlier, possibly stale, point — gets to redefine for itself.
+
+<!-- scenarios: generated -->
+- "A persona file with no frontmatter passes through unchanged" → tests/schedule/session.test.ts
+- "The executor persona's YAML frontmatter is stripped before it is used as a system prompt" → tests/schedule/session.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
 
 The bare CLI's `judge` action SHALL run a fresh, one-shot `pi` process for every relationship
