@@ -413,9 +413,9 @@ either.
 - "Only the scenarios a run executed are named" → tests/cli/impact.test.ts
 <!-- /scenarios -->
 
-### Requirement: A command answers the dispatch graph as JSON
+### Requirement: A command answers the inflight graph as JSON
 
-The CLI SHALL provide a `dispatch` command that reads the queue directory and answers the
+The CLI SHALL provide an `inflight` command that reads the queue directory and answers the
 graph this capability computes, as JSON by default, and SHALL exit its ok code whatever it
 finds.
 
@@ -426,11 +426,11 @@ relationship the graph found is not a build the graph is entitled to fail, and r
 relationship over another is exactly the judgement this capability refuses to make.
 
 The command carries no sub-verb: add, list, and hold belong to a more ambitious design this
-round deliberately narrowed away, and `dispatch` answers the one question this capability
+round deliberately narrowed away, and `inflight` answers the one question this capability
 asks. A sub-verb parser would be built for choices the capability does not make.
 
 <!-- scenarios: generated -->
-- "The `dispatch` command answers JSON by default" → tests/cli/dispatch.test.ts
+- "The `inflight` command answers JSON by default" → tests/cli/dispatch.test.ts
 - "The command exits its ok code even when the graph carries problems" → tests/cli/dispatch.test.ts
 <!-- /scenarios -->
 
@@ -440,7 +440,7 @@ The CLI SHALL provide a way to compare two named git revisions without checking 
 out: where their histories last agreed, which paths under a pathspec differ between them,
 every path either one holds, and whether one is an ancestor of the other.
 
-`touched` already reads one revision's diff against a working tree; the dispatch graph needs
+`touched` already reads one revision's diff against a working tree; the inflight graph needs
 the same kind of answer about two revisions neither of which is checked out — a task's own
 branch against another task's, or against `main` — so it is this capability's job to answer
 without disturbing whatever the caller has checked out, the same way `touched` never

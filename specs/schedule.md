@@ -1,6 +1,6 @@
 # schedule
 
-Reads the graph `dispatch` computes and acts on it. `dispatch`'s own charter says plainly
+Reads the graph `inflight` computes and acts on it. `inflight`'s own charter says plainly
 that it "holds no queue and dispatches nothing" — it answers a question about work already
 in flight, and "deciding what to do with the answer belongs to something else." This is that
 something else: the one capability with permission to write into the queue directory —
@@ -8,8 +8,8 @@ releasing a TASK held on one that is no longer live, pruning a queue entry nothi
 any more, judging a relationship before a human ever sees it, and starting the one work-agent
 session a ready TASK is owed.
 
-It reads `dispatch`'s answer the way `cli` reads a TASK's own MANIFEST and state file: as
-something to act on, not something to recompute. `specs/dispatch.md` is not touched by this
+It reads `inflight`'s answer the way `cli` reads a TASK's own MANIFEST and state file: as
+something to act on, not something to recompute. `specs/inflight.md` is not touched by this
 capability — the graph still only reports, and this is the orchestrator its own text names
 but declines to build.
 
@@ -19,13 +19,13 @@ A TASK whose MANIFEST's `base` names another TASK of kind `task` SHALL be held u
 named TASK is no longer live, and released the moment it is not — whether because the named
 TASK's own state has reached merged, or because the queue holds no record of it at all.
 
-`dispatch` already draws exactly this line for its own basedOn edges: a `base` naming a
+`inflight` already draws exactly this line for its own basedOn edges: a `base` naming a
 merged TASK is read from `main` instead of the old branch, and a `base` naming a TASK the
 queue holds no record of at all is a claim, not a default — both mean the work behind that
 name is settled. A hold with its own separate notion of "still live" could disagree with
-`dispatch`'s: held past the moment the graph would already call the block gone, or released
+`inflight`'s: held past the moment the graph would already call the block gone, or released
 while the graph still reports it live. There is exactly one graph of what is in flight, and
-both this capability and `dispatch` read it the same way.
+both this capability and `inflight` read it the same way.
 
 <!-- scenarios: generated -->
 - "A TASK based on main carries no hold status at all" → tests/schedule/holds.test.ts
@@ -47,7 +47,7 @@ still ask about it: deleting it early is exactly what would flip a graceful "bas
 that merged" into a false "based on a TASK the queue holds no record of at all," naming a
 TASK that in fact finished cleanly. Once no in-flight TASK names it any more, that risk is
 gone and nothing is served by keeping it. The criterion is answerable from the same graph
-`dispatch` already computes — every in-flight TASK's `base` — so pruning needs no bookkeeping
+`inflight` already computes — every in-flight TASK's `base` — so pruning needs no bookkeeping
 of its own to decide when a name has gone quiet.
 
 <!-- scenarios: generated -->
@@ -111,7 +111,7 @@ that authored neither TASK's work — both TASKs' intent, read from each MANIFES
 `intentRef`, and ask it whether the relationship is a real conflict, before any human is
 asked anything about it.
 
-`dispatch` reports a relationship without judging it by design — it never reads intent, only
+`inflight` reports a relationship without judging it by design — it never reads intent, only
 edges over files a graph can see. Most shared ground between two TASKs is coincidence, not
 conflict, and reading both intents is cheap enough to run on every relationship the graph
 finds, which is what keeps a human's attention for the ones that actually need it.

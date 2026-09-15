@@ -1,4 +1,4 @@
-# dispatch
+# inflight
 
 Reads a MANIFEST left behind by an investigation agent's hand-off, and computes how the
 in-flight TASK working this repository right now relate to one another through the
