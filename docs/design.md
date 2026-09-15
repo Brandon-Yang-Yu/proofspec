@@ -2505,3 +2505,82 @@ the fresh eyes reviewing it. The one thing this ship round did not need a second
 right the first time: asking the human before touching anything more on the real tmux server,
 including the two leftover sessions this incident's own testing left behind, rather than
 assuming cleanup was implied.
+
+## 48. `handoff` — the "investigator" §46 named as not yet built, built as a `pi` extension
+
+§46 closed on `enqueue`'s primitive shipping with no caller: "an 'investigator' capability that
+would is not built." `handoff` is that capability — one `pi` extension registering one tool,
+`enqueue_task`, so a human can talk a TASK's intent through with an agent inside `pi` and have
+it hand off to the real queue, instead of hand-writing a MANIFEST by hand. §37's own v1 target
+named the shape directly: "a pi extension, so the investigation agent hands off by tool call."
+
+**One tool, not several, because the domain turned out smaller than §37 imagined.** §37
+pictured the investigation agent declaring `deps` when it enqueues; §40 already recorded that
+this never shipped — `inflight` computes every relationship from git, nothing is hand-declared.
+What `enqueue_task` actually accepts is `{task, intentRef, branch, base?}`, a flattening of the
+exact `Manifest`/`ManifestBase` shape `readManifest` already parses, one `kind` tag inferred
+from whether `base` was given at all. `enqueue()` itself is a single atomic `wx`-flag write
+(§46); splitting the tool into a "draft" call and a "commit" call would have needed somewhere
+to hold a half-formed queue entry between them, for a `deps`-shaped complexity that no longer
+exists.
+
+**`enqueue_task` is the first caller that hands `enqueue()` a `task` it did not already trust.**
+`enqueue(cwd, task, manifest)` builds its path as `join(cwd, '.proofspec', 'dispatch', task)`
+with no check on `task` at all — safe only because every caller so far was a human typing a
+name, or a test fixture. A tool argument shaped by a model's own text is a different kind of
+input, and the same discipline this project keeps everywhere else (never trust a description of
+what happened over going and looking, §40) applies here to the value itself: `checkTaskName`
+gates a plain kebab-case slug — letter-initial, lowercase, hyphen-joined, no trailing hyphen —
+before `enqueue()`'s own `join` ever sees it, refusing `../../etc` or `foo/bar` as the path they
+are rather than the TASK name they are not.
+
+**The gate's own first regex was wrong, and stayed wrong past the build, past guideline review,
+into completion check.** `/^[a-z][a-z0-9-]*$/` accepts a trailing hyphen — `foo-` matches it —
+while both the SHALL sentence and the code's own refusal message already said "no trailing
+hyphen." Nothing in the confirmed scenario list exercised that specific case, so nothing forced
+the mismatch into view until a completion-check subagent read the regex against its own claim
+literally rather than trusting the comment next to it. The fix
+(`/^[a-z]([a-z0-9-]*[a-z0-9])?$/`) and a new scenario proving it landed together, the same
+"promised versus tested" gap `enqueue`'s own race condition and `judge`'s timeout precision fell
+into on their first review pass (§46, §47's sibling note) — a SHALL sentence this specific earns
+no more trust than any other claim in this codebase: it gets checked against the code, not read
+and believed.
+
+**No `typebox` dependency, because `TSchema` turned out to be an empty interface.**
+`ToolDefinition.parameters` (`@earendil-works/pi-coding-agent`) is typed as `TParams extends
+TSchema`, and `typebox`'s own `TSchema` is `export interface TSchema {}` — structurally
+satisfied by any object at all. `enqueue_task`'s `parameters` is a plain JSON-Schema object
+literal, confirmed against `pi`'s own tool-argument validation (`packages/ai/src/utils/
+validation.ts`), which explicitly branches to a plain-JSON-Schema coercion path whenever a
+schema carries no TypeBox marker. `@earendil-works/pi-coding-agent` is still a real
+`devDependency` — `import type` only, erased at build — because a hand-rolled local shim for
+`ExtensionAPI`/`AgentToolResult` would have had nothing checking it against what `pi` actually
+calls at runtime; a real, versioned type catches drift, a fictional one only hides it.
+
+**The `Static<TParams>` payoff a guideline review found, that this round almost gave away.**
+The first draft of `execute` read `params as EnqueueTaskInput` — defensive-looking, and wrong:
+TypeBox 1.3.7 infers `Static<typeof ENQUEUE_TASK_PARAMETERS>` from the literal JSON-Schema shape
+precisely enough that it already equals `EnqueueTaskInput` structurally, with no cast needed. A
+fresh reviewer verified this empirically (probing that `params.task` type-checks as `string` and
+an invented field does not) and named the real cost of the cast: if `ENQUEUE_TASK_PARAMETERS`
+and `EnqueueTaskInput` ever drift apart, the bare parameter passthrough `runEnqueueTask(ctx.cwd,
+params)` fails to compile and catches it for free — the cast would have silently thrown that
+safety net away for a boundary that was never actually untyped to begin with.
+
+**The acceptance script's own first draft made a claim the environment didn't back up, twice —
+not a code defect either time.** Its first version expected `pnpm test`'s summary to name
+`tests/handoff/extension.test.ts` directly; the default non-TTY vitest reporter prints only the
+aggregate, no per-file lines, so the literal claim failed while the suite itself was fine. The
+same round's `pnpm typecheck` step expected no output at all, missing that `pnpm` echoes its own
+`$ tsc -p tsconfig.json` command line before `tsc` runs. Both were corrected in the acceptance
+script itself, confirmed with the human again before the second acceptance run — the same
+"a step that asks the wrong thing is a step-1 question" discipline `ship` already names, not a
+gate quietly quieted.
+
+**Shipped alongside the tool, not deferred:** `.pi/agents/investigator.md`, a persona in the
+same shape as this repo's existing `planner`/`worker`/`test-reviewer`/`guideline-reviewer`/
+`completion-reviewer` personas — it reads the current `inflight` graph and `specs/*.md` before
+proposing a TASK name or `base`, and calls `enqueue_task` only once the human has confirmed all
+four fields, never speculatively. Left open, matching how §37 and §42 both left the same
+question unanswered for their own corners of this design: whether an `investigator` capability
+grows further verbs of its own, or `enqueue_task` stays its only surface.
