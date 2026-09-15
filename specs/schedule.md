@@ -106,21 +106,62 @@ never started, or is running on a machine nobody watching has ever heard of.
 
 ### Requirement: A relationship is judged by a fresh agent before a human is asked
 
-For every relationship the graph reports, a scheduling pass SHALL hand a fresh agent —  one
-that authored neither TASK's work — both TASKs' intent, read from each MANIFEST's
-`intentRef`, and ask it whether the relationship is a real conflict, before any human is
-asked anything about it.
+For every relationship the graph reports, a scheduling pass SHALL hand a fresh agent — one
+that authored neither TASK's work, and that runs as a single tool-less, session-less process
+naming the model it answers as — both TASKs' intent, read from each MANIFEST's `intentRef`,
+and ask it whether the relationship is a real conflict, before any human is asked anything
+about it. A TASK whose intent could not be read SHALL be named as missing in that ask, not
+silently dropped, and the same relationship SHALL ask the same question however its two
+TASKs arrive.
 
 `inflight` reports a relationship without judging it by design — it never reads intent, only
 edges over files a graph can see. Most shared ground between two TASKs is coincidence, not
 conflict, and reading both intents is cheap enough to run on every relationship the graph
-finds, which is what keeps a human's attention for the ones that actually need it.
+finds, which is what keeps a human's attention for the ones that actually need it. A process
+with no tools and no saved session is what makes "authored neither TASK's work" a fact about
+the call, not an assumption about who happens to be running it — it cannot have touched
+either TASK's branch, and it remembers nothing from one relationship to the next, so the
+same two TASKs get the same question wherever in the queue's pass order they happen to fall.
 
 <!-- scenarios: generated -->
 - "A relationship the fresh agent resolved is never raised" → tests/schedule/relationships.test.ts
 - "A relationship the fresh agent resolves is never raised" → tests/schedule/end-to-end.test.ts
 - "A relationship's key names the same node and TASK regardless of the order they arrive in" → tests/schedule/relationships.test.ts
 - "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
+- "A fresh agent is asked in one tool-less, session-less process, naming the model it runs as" → tests/schedule/judge.test.ts
+- "A TASK whose intent could not be read is named as missing in the question, not silently dropped" → tests/schedule/judge.test.ts
+- "The same relationship asks the same question regardless of which TASK's intent arrived first" → tests/schedule/judge.test.ts
+- "An intent past the length cap is truncated rather than left to overflow the process's argument list" → tests/schedule/judge.test.ts
+- "A scheduling pass built from the composed judge factory raises what it judges unresolved" → tests/schedule/end-to-end.test.ts
+<!-- /scenarios -->
+
+### Requirement: A judgement that is not a clean RESOLVED reads as unresolved, never a third case
+
+A fresh agent's answer SHALL be read as `resolved` only when its reply's last line, trimmed
+and case-folded, is exactly `RESOLVED`. A process that never ran, exited with a non-zero
+code, produced no answer, or answered anything else at all — including a reply that
+discusses both words but ends in neither, or ends in `UNRESOLVED` — SHALL be read as
+`unresolved`.
+
+There is no third value for a judgement to reach, and there should not be one: `unresolved`
+is already this domain's safe default — a relationship read as unresolved still reaches a
+human, the same as one the fresh agent frankly could not decide — so every hazard this ask
+can produce collapses onto the value that costs a human one glance, never onto the one that
+would bury a real conflict. The prompt that puts this to the agent necessarily contains both
+words, since it has to say what each one means, so a parser that scanned the whole reply for
+either word could never tell the discussion from the verdict; requiring an exact match on the
+last line only is what keeps a reply that reasons its way past `UNRESOLVED` on the way to
+`RESOLVED` — or the reverse — from being misread by a substring.
+
+<!-- scenarios: generated -->
+- "A plain RESOLVED last line resolves the judgement" → tests/schedule/judge.test.ts
+- "A plain UNRESOLVED last line leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "Prose ending in neither word leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "Empty output leaves the judgement unresolved" → tests/schedule/judge.test.ts
+- "A reply that discusses both words but ends in RESOLVED still resolves the judgement" → tests/schedule/judge.test.ts
+- "Casing and punctuation around the last line do not change the verdict" → tests/schedule/judge.test.ts
+- "A non-zero exit is never read as an answer, whatever stdout says" → tests/schedule/judge.test.ts
+- "A process that never ran leaves the judgement unresolved" → tests/schedule/judge.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A judgement the fresh agent cannot resolve reaches a human, traceably
