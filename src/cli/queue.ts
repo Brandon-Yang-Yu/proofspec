@@ -1,5 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { readManifest } from '../inflight/index.ts'
+import type { Manifest } from '../inflight/index.ts'
 import { compareStrings } from '../order.ts'
 
 /**
@@ -69,6 +71,15 @@ async function readOptional(path: string): Promise<string | undefined> {
   } catch {
     return undefined
   }
+}
+
+/** A TASK's own MANIFEST, parsed — or nothing when its queue entry has none, or the one it has
+ * does not read. `session` needs a TASK's `branch` before it can start anything for it. */
+export async function manifestFor(cwd: string, task: string): Promise<Manifest | undefined> {
+  const raw = await readOptional(join(cwd, ...QUEUE_DIR, task, MANIFEST_FILE))
+  if (raw === undefined) return undefined
+  const parsed = readManifest(raw)
+  return parsed.ok ? parsed.manifest : undefined
 }
 
 /** A TASK's LEASE, as raw text (the instant it was taken), or nothing when it carries none. */

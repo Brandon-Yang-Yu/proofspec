@@ -202,7 +202,9 @@ function linesOf(output: string): string[] {
   return output.split('\n').filter(line => line.length > 0)
 }
 
-async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {
+/** Runs git and returns its stdout, or nothing when it could not answer — a session's own
+ * `git worktree add` reuses this rather than a second copy of the same primitive. */
+export async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {
   try {
     const { stdout } = await run('git', [...args], { cwd, maxBuffer: MAX_OUTPUT })
     return stdout

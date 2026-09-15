@@ -45,12 +45,14 @@ export type RaisedEntry =
   | { readonly kind: 'ruled'; readonly key: string; readonly at: string; readonly ruling: string }
 
 /** The external actions a scheduling pass cannot perform itself: starting a real session, asking
- * a real fresh agent, and putting a finding in front of a real human. Each is required only when
- * a pass actually needs it — a pass with nothing ready and no relationship never calls any of them. */
+ * a real fresh agent, and putting a finding in front of a real human. Each is optional and
+ * required only when a pass actually needs it — supplying one is independent of supplying the
+ * others, which is why an embedder that only has a real `startSession` can still call `schedule`
+ * rather than being forced to fabricate a `judge` it would rather not pretend is real. */
 export type ScheduleActions = {
-  readonly startSession: (task: string) => Promise<void>
-  readonly judge: (input: RelationshipJudgeInput) => Promise<JudgeVerdict>
-  readonly notifyHuman: (relationship: Relationship) => Promise<void>
+  readonly startSession?: (task: string) => Promise<void>
+  readonly judge?: (input: RelationshipJudgeInput) => Promise<JudgeVerdict>
+  readonly notifyHuman?: (relationship: Relationship) => Promise<void>
 }
 
 /** What one scheduling pass did. */

@@ -104,6 +104,9 @@ first session attempt died or never came up get a working session on retry inste
 colliding with a dead one of the same name.
 
 <!-- scenarios: generated -->
+- "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
+- "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
+- "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process
