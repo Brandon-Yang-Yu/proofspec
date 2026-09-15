@@ -68,6 +68,39 @@ with an empty answer, it is not asked.
 - "A TASK whose own state has reached merged is not read into the graph at all" → tests/inflight/bases.test.ts
 <!-- /scenarios -->
 
+### Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+
+Computing the census SHALL name, for each in-flight TASK and relative to the same base its
+edges are measured from, every requirement and every TERM its branch rewrote: reworded when
+both ends define it but not the same way, carrying the prose before and after; new when only
+its branch defines it, carrying only the prose after; gone when only its base defined it,
+carrying only the prose before. A requirement or TERM whose prose reads the same at both ends
+SHALL be absent from the census entirely. A TASK whose MANIFEST or branch cannot be read
+SHALL instead carry a named problem for that TASK alone, and every other TASK's census SHALL
+still be answered.
+
+The graph's own writes edge already says a TASK touched a CAPABILITY_FILE or a TERM; the
+census answers the question a same-branch overlap actually turns on — what changed there —
+at the grain two rewrites collide at, one requirement's own heading and description, one
+TERM's own definition, never the whole file two unrelated rewrites might both sit in.
+Carrying the prose as it stands, not only the fact that a row moved, is what a TASK's own
+census of its working tree cannot give a reader by itself: that census only ever sees `main`
+as of when its worktree was cut, so a requirement another in-flight TASK is rewriting right
+now, on a branch not yet merged, is invisible to it until this capability reads that branch
+directly.
+
+There is no arm for a row that did not move, the same reason `changedTerms`
+(`src/glossary/change.ts`) — which this reuses for the TERM half — carries none: a row
+nobody has rewritten is not part of what a TASK's branch has to answer for. A TASK whose
+branch or MANIFEST cannot be read is a problem for its own census alone, never a reason to
+refuse every other TASK's — the same asymmetry "A conventional queue directory is read one
+task at a time" in `specs/cli.md` draws between a directory that cannot be listed and one
+task inside it that cannot be read, and the one "A TASK that cannot be read carries a
+problem, and the rest of the graph still answers" already keeps for the graph itself.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
 ### Requirement: The graph reports a writes edge for every CAPABILITY_FILE and TERM a TASK's branch changed
 
 Relative to its base, the graph SHALL report a writes edge from a TASK to every

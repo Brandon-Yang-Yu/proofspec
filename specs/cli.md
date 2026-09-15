@@ -454,6 +454,23 @@ requires the base revision to be the one in the working directory.
 - "Which paths under a pathspec differ between two revisions is answered" → tests/cli/revisions.test.ts
 <!-- /scenarios -->
 
+### Requirement: A path's content at a named revision is read without checking it out
+
+The CLI SHALL provide a way to read one path's content exactly as a named git revision holds
+it, without checking that revision out, answering nothing — not a refusal — when the given
+revision does not hold that path, including when the revision itself is not one the
+repository has.
+
+`touched` already reads a capability file's own before-text this way to find a reworded TERM
+or a reworded description; the census `inflight` computes reads a whole capability file's
+text at a TASK's own base and at its branch the same way, to find every requirement and TERM
+the branch rewrote. All three need the same primitive — a path's content as one revision held
+it — without disturbing whatever the caller has checked out, the same way the revisions above
+are compared without either one being checked out.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
 ### Requirement: A conventional queue directory is read one task at a time
 
 The CLI SHALL provide a way to read a conventional queue directory — one task per

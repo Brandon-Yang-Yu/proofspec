@@ -85,3 +85,26 @@ an exception it has to catch — the same reason every other refusal in this too
 - "A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued" → tests/handoff/extension.test.ts
 - "A TASK not already in the queue is enqueued with the given base recorded exactly" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
+
+### Requirement: census_in_flight answers the queue's census for the repo it runs in, writing nothing
+
+`census_in_flight` (`src/handoff/extension.ts`) SHALL read the calling repo's own queue
+directory and committed specs and answer the census `inflight` computes — every requirement
+and TERM each in-flight TASK's branch has rewritten, relative to its own base — without
+creating, deleting, or overwriting anything on disk. A queue directory that exists but cannot
+be listed SHALL be reported as a value naming why, never thrown as an error; a TASK the census
+itself could not read carries its own named problem exactly as `inflight` already reports it,
+and every other TASK's census still answers.
+
+`enqueue_task` is the one hop in front of a write the investigation agent cannot make by
+hand-writing files; `census_in_flight` is the one hop in front of a read it cannot make by
+walking every in-flight TASK's own worktree itself. The investigator's own census only ever
+sees the working tree it is standing in — whatever `main` looked like when that worktree was
+cut — so a requirement another in-flight TASK is rewriting on a branch not yet merged stays
+invisible to it until this tool asks git on the agent's behalf. Answering rather than
+throwing is the same reason every one of `enqueue_task`'s own refusals is a value: a model
+driving this tool through a conversation needs an unreadable repo back as something it can
+read and relay to the human, not an exception it has to catch.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
