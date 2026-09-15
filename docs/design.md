@@ -2584,3 +2584,68 @@ proposing a TASK name or `base`, and calls `enqueue_task` only once the human ha
 four fields, never speculatively. Left open, matching how §37 and §42 both left the same
 question unanswered for their own corners of this design: whether an `investigator` capability
 grows further verbs of its own, or `enqueue_task` stays its only surface.
+
+## 49. `investigator` absorbs disposition review; `worker` splits into `implementer` and `executor`
+
+§48's `investigator.md` shipped narrower than §37 ever meant it to: it talked a TASK's intent
+through and called `enqueue_task`, but never touched `specs/*.md` at all — the disposition
+review §37 names as the investigation agent's own defining act ("owns everything up to and
+including the disposition review... where the human judges every rewritten and new
+requirement's prose") had nowhere to happen. This session closed that gap: `investigator.md`
+now drafts the real die/rewrite/keep census, commits the settled prose onto the TASK's own
+branch, and only then confirms the four `enqueue_task` fields — the same shape
+`audan-workspace`'s `spec-steward` persona already proves out for a sibling project, adapted
+down to what this tool's own queue needs (no UI/impeccable machinery, no separate
+disposable-branch-then-squash step — drafting directly onto the TASK's own freshly-created
+branch is sufficient here, since nothing else is competing for that branch yet).
+
+**`worker` was one name asked to mean two different things.** §37's own vocabulary calls the
+unattended, headed session `startSession` opens the "work agent" — but the file already sitting
+at `.pi/agents/worker.md` was never that: it is a narrow, synchronously-dispatched persona for
+one step of `/ship`'s own pipeline (`tests-red` or `build-green`, told which, no autonomy over
+what happens next), the same role `audan-workspace`'s own `worker.md` plays in its pipeline.
+Once the real top-level persona for `startSession`'s session needed a file of its own, keeping
+both named after the same root word would have been exactly the ambiguity §38 already fights
+for spec vocabulary, moved into agent personas instead. The fix is the same shape as that
+section's: give each thing sitting under one name its own. `.pi/agents/worker.md` is renamed
+`.pi/agents/implementer.md` — its own frontmatter already said what it does ("Implements code
+for one step"), so the new name is not invented, only read off what was already there.
+
+**The new top-level persona is named `executor`, not `worker` reused.** §37's own repeated verb
+— "work agent owns everything after the disposition review" — pointed at "owner" as a literal
+match, and "worker" was floated too once `implementer` vacated it, but neither names what
+actually sets this role apart from every other agent in this design: it is the only one that
+does not judge anything — `investigator` judges intent, `guideline`/`completion`/`test`-reviewers
+judge correctness — it only carries out a disposition already judged, all the way to merge,
+stopping only when a build proves the judged standard itself wrong. That is precisely what an
+*executor* is in the sense this design's own vocabulary already uses "disposition" in: the one
+who carries out a settled disposition, not a new word chosen for its own sake.
+
+**`executor.md` is real prose with nowhere automatic to run — `--append-system-prompt` is what
+gets it there.** `.pi/agents/*.md` is a convention for the `subagent` dispatch tool: a
+dispatcher reads a file's frontmatter and body to configure a spawned sub-process. Nothing
+dispatches the session `tmuxStartSession` opens — it is the top-level `pi` process tmux starts
+directly, so `.pi/agents/executor.md` sitting on disk did nothing on its own. `pi --help`
+names the exact mechanism a bare top-level process does have: `--append-system-prompt <text>`,
+added to (not replacing) `pi`'s own default coding-assistant prompt. `promptBodyFrom`
+(`src/cli/session.ts`) strips the file's YAML frontmatter — metadata for a dispatcher that
+never runs here, and confusing as literal prompt text otherwise — before the body is handed to
+that flag. The persona is read from `cwd`, this tool's own checkout, never from the TASK's own
+worktree or branch: the same choice `judge.ts`'s `DEFAULT_JUDGE_AGENT` and
+`PROOFSPEC_JUDGE_BIN` already make, because the executor's own instructions are an operational
+convention this tool's own tooling keeps, not something a TASK's branch — cut from `main` at
+some earlier, possibly stale, point — gets to redefine for itself.
+
+**Left open, honestly, rather than built speculatively this round.** `executor.md`'s own prose
+names it directly: there is currently no way for a running executor session to report its own
+state (`building`, `mergeable`, `blocked-on-question`) back into `.proofspec/dispatch/<task>/`
+— that directory lives in the main checkout, the executor runs inside the TASK's own worktree,
+and nothing bridges the two yet. This matters for real: `schedule/lease.ts`'s own reclaim logic
+already depends on state advancing to the literal word `building` as "the one state change a
+real session makes almost immediately" (§41) — a signal nothing currently produces. This is the
+same shape of gap §46 named and closed for `enqueue`: a primitive-less capability with no
+caller. The fix is not built here on purpose — it needs its own design (how does a session
+inside a worktree address the main checkout's queue directory; is this a new `pi` extension
+tool in the same shape as `handoff`'s `enqueue_task`, or something else) — the same discipline
+this document has kept since §39: wait for the round that actually needs it, rather than
+fabricate a default now.
