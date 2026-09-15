@@ -56,6 +56,7 @@
     "oxc-parser": "^0.141.0"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "^26.1.1",
     "@vitest/coverage-istanbul": "^4.1.10",
     "typescript": "^7.0.2",
