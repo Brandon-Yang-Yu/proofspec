@@ -87,7 +87,11 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 `branch`, ensure a worktree for that branch exists at the conventional path
 `.proofspec/worktrees/<task>` — creating one with `git worktree add` if none is checked
 out, reusing it unchanged if one already is — and start `pi` there in a detached tmux
-session named for the TASK, first killing any tmux session already carrying that name.
+session named for the TASK, first killing any same-named session already there. Every tmux
+command this action runs SHALL reach tmux through a dedicated, isolated server, named by
+tmux's own `-L <socket>` flag rather than the default server — never the user's own default
+tmux server, and never any other named server — with a default socket name of `proofspec`,
+overridable through the `PROOFSPEC_TMUX_SOCKET` environment variable.
 
 `.proofspec/` is already this tool's own root for exactly this kind of on-disk convention —
 `.proofspec/dispatch/` for the queue, `.proofspec/reviews.jsonl` for the review LEDGER — and
@@ -103,10 +107,54 @@ alive; killing a same-named session before creating a fresh one is what lets a T
 first session attempt died or never came up get a working session on retry instead of
 colliding with a dead one of the same name.
 
+A tmux session name is global to the whole machine, not scoped to any directory or project —
+`kill-session -t <name>` and `new-session -d -s <name>` on tmux's default server name and act
+on any session with that name, whatever created it. A TASK happening to share a name with a
+session the human already had open, entirely unrelated to this tool, would be silently killed
+and replaced with no warning at all — this is not a hypothetical the way probing a LEASE's
+process is; it is the same shape of real failure this document already declines to risk
+elsewhere. Reaching tmux only through a dedicated server, `-L proofspec` by default, is what
+keeps every session `startSession` ever starts on a server nothing else — not the human's own
+terminal, not any other tool — is using, so a TASK's name can never collide with a session it
+did not create. `PROOFSPEC_TMUX_SOCKET` overrides that socket the same way `PROOFSPEC_JUDGE_BIN`
+already overrides `judge`'s own process (below): so a test, or a future acceptance check that
+runs the real bare CLI against a real tmux binary, can point at a throwaway, per-run socket
+instead of ever touching the real `proofspec` production socket, let alone the user's own
+default one.
+
 <!-- scenarios: generated -->
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
+<!-- /scenarios -->
+
+### Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
+
+The bare CLI's `judge` action SHALL run a fresh, one-shot `pi` process for every relationship
+it is handed — never a saved session, never reused across relationships — closing that
+process's stdin the instant it starts, and SHALL bound its wait for an answer with a
+timeout, so that one relationship's process can never hang the scheduling pass that awaits
+it.
+
+`piJudge()` (`src/cli/judge.ts`) is the real action `startSession` already has a twin of: it
+was written complete but left unwired, so a real run of the bare CLI reached every
+relationship the graph found with no `judge` action at all, refused as cannot-run before a
+fresh agent was ever asked anything. Wiring it into the same object literal that already
+supplies `startSession` — `schedule: { startSession: ..., judge: piJudge() }` — closes that
+gap without touching the domain rules a relationship is judged by: what the fresh agent is
+asked, and how its last line is read, are exactly what the requirements above already say,
+and this one is only about the bare CLI's own choice of process. `pi` reads its stdin when it
+is not a TTY, so a process left connected to nothing blocks waiting for input that will never
+arrive; closing it the instant the process starts is what lets a real run answer instead of
+burning its whole timeout every single time. The timeout itself exists for the same reason a
+LEASE's grace period does — nothing else stops one bad run from hanging everything behind it
+— and `judge` is awaited one relationship at a time, so one hang is enough to hang the whole
+pass without it.
+
+<!-- scenarios: generated -->
+- "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
+- "A process that never answers is not waited on past the configured timeout" → tests/schedule/judge-cli.test.ts
+- "A process that never closes its own stdin still returns instead of hanging, because judge closes it first" → tests/schedule/judge-cli.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process
@@ -235,6 +283,34 @@ allowed to.
 - "A relationship already ruled on still counts as already raised" → tests/schedule/raised.test.ts
 <!-- /scenarios -->
 
+### Requirement: The bare CLI's notifyHuman writes the finding to stderr, and nothing more
+
+The bare CLI's `notifyHuman` action SHALL write one line to stderr — never stdout — for every
+relationship it is given, naming the shared CAPABILITY_FILE or TERM the relationship reports,
+both TASKs it names, and the relationship's own key exactly as `relationshipKey()`
+(`src/schedule/relationships.ts`) computes it — the same key `schedule --ruling "<ruling>"
+"<key>"` takes to answer it. It SHALL do nothing else: no paging, no proactive alert reaching
+anyone who is not already watching the process a scheduling pass is running in.
+
+`main.ts`'s own comment on `--pretty` already draws the line this has to respect: stdout
+carries "the one line a program parses," unchanged by anything else a command might want to
+say, so a finding written there would corrupt the one answer whatever invoked `schedule` is
+trying to read. stderr is the only channel left that can carry a human-facing message without
+touching that contract, and it reaches exactly one kind of human: whoever is already watching
+the process that ran the scheduling pass — a human sitting at the interactive `pi` session
+that triggered it, say. Actually paging, or proactively alerting a human who is not currently
+watching, is an explicit non-goal of this change, left for later — the same honest limit this
+document already keeps around what it declines to build, like refusing to probe whether a
+LEASE's process is still alive rather than trusting elapsed time instead. This is deliberately
+the minimal version: a finding nobody is watching for goes unheard until the next time someone
+looks, and that is the plain cost of building only as much of `notifyHuman` as this change
+needs.
+
+<!-- scenarios: generated -->
+- "An unresolved relationship's finding is written to stderr, not stdout" → tests/schedule/notify.test.ts
+- "The stderr message names both TASKs, the shared node, and the relationship's own key" → tests/schedule/notify.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A scheduling pass is triggered by events, not a resident process or a timer
 
 A scheduling pass SHALL run in response to an event — a TASK enqueued, a TASK merged, a
@@ -251,4 +327,47 @@ keeps two triggered-together passes from acting twice.
 <!-- scenarios: generated -->
 - "A later pass does not repeat work an earlier pass already did" → tests/schedule/end-to-end.test.ts
 - "A pass over an empty queue answers with nothing to do, needing no actions at all" → tests/schedule/end-to-end.test.ts
+<!-- /scenarios -->
+
+### Requirement: writeState overwrites a TASK's state file with exactly the word it is given
+
+`writeState(cwd, task, word)` (`src/cli/queue.ts`) SHALL overwrite a TASK's `state` file with
+exactly the `word` given, replacing whatever word the file held before. It SHALL NOT read the
+file's previous word first, and SHALL NOT judge whether `word` is one any caller has ever used
+before, or a valid step from wherever the state currently stands.
+
+This is the write-side mirror of the same literalism `inflight`'s own requirement already
+keeps on the read side: "A TASK's state is read literally" reads whatever word sits in the
+file without judging it, defaulting an unrecognized one to still in flight rather than
+refusing it — `writeState` writes whatever word it is given without judging that either.
+Validating a transition — that only a TASK already `building` may be marked `merged`, say — is
+a question about what the words mean and which orders make sense, and that question belongs
+entirely to whatever future caller writes a specific verb like `markMerged`. None of those
+verbs are built in this change; only the dumb primitive underneath them is, because nothing
+yet needs more than that.
+
+<!-- scenarios: generated -->
+- "writeState overwrites an existing state file with the word it is given, whatever it is" → tests/schedule/queue.test.ts
+<!-- /scenarios -->
+
+### Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
+
+`enqueue(cwd, task, manifest)` (`src/cli/queue.ts`) SHALL create a TASK's queue entry — its
+directory, its `MANIFEST`, and an initial state of `queued` written through `writeState` —
+only when no queue entry of that TASK's name already exists, and SHALL refuse, touching
+nothing, when one does, answering `{ok: false, reason}` rather than overwriting it.
+
+Two callers racing to enqueue the same TASK name is the same shape of problem two scheduling
+passes racing to take the same LEASE already is, and `enqueue` is built on the same answer:
+the same `wx`-flag atomic-write idiom `takeLease` already uses elsewhere in this file, so the
+check-then-create step two racing calls could otherwise land inside of is collapsed to the one
+filesystem call the OS already makes atomic. There is deliberately no new CLI verb for this —
+nothing calls `proofspec enqueue` from a command line, and none is being added here — `enqueue`
+ships as a plain exported function for a future caller, an "investigator" capability not yet
+built, to use.
+
+<!-- scenarios: generated -->
+- "Two racing enqueue calls on the same TASK name still create exactly one entry" → tests/schedule/queue.test.ts
+- "enqueue creates a new TASK's MANIFEST and initial queued state" → tests/schedule/queue.test.ts
+- "enqueue refuses a TASK name already in the queue, without touching its existing entry" → tests/schedule/queue.test.ts
 <!-- /scenarios -->
