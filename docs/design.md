@@ -2358,3 +2358,64 @@ only ever sets true when this module's own timeout did the killing.
 relationship gets one honest yes/no answer from one disposable process. It settles nothing
 about how a human ever sees that answer's downstream effect, or how a real headed work-agent
 session gets started — both are exactly the open questions §41 already named, still open.
+## 45. `startSession` — §41 stopped short, tmux fills it in
+
+§41 named exactly what it was leaving out: "no convention for spawning a headed, interactive
+work-agent session exists anywhere in this codebase yet," and the bare CLI supplied none of
+`startSession`/`judge`/`notifyHuman` on purpose, rather than fabricate a default before
+anything needed one. Something needed one: the bare CLI's `startSession` now actually starts
+`pi` — the coding-agent CLI already installed everywhere this tool runs — headed and
+interactive, in the TASK's own worktree.
+
+**tmux, because a headed process needs a real pty and the scheduling pass has none of its
+own.** `pi` without `--print` is already exactly the interactive session `schedule`'s spec
+asks for; the gap was never `pi`'s CLI, it was that `startSession` runs from a scheduling
+pass with no terminal to hand it. A live spike (this session, before any of this was built
+through `/ship`) tried tmux against a real `pi` process and confirmed it directly: a detached
+`tmux new-session -d` genuinely brings the TUI up, a human reaches it later with `tmux
+attach`, and a positional message argument seeds the first prompt without breaking
+interactivity. Two alternatives were named and set aside without being tried: a headless
+`pi --print` run that only escalates to an interactive, resumed session on demand (rejected
+as solving a dependency that was already fine, in exchange for a real unknown — whether a
+killed headless run's session file is flushed incrementally, never verified), and spawning a
+GUI terminal via `osascript` (rejected for the same reason `schedule` itself favors reading
+files over probing processes: unverifiable from a session with no eyes on a screen, and
+platform-locked besides).
+
+**`.proofspec/worktrees/<task>`, not `.claude/worktrees/<task>`.** The first drafted
+requirement named the latter — the layout `/createworktree` itself happens to use — and was
+corrected before confirmation: `.claude/` is Claude Code's own convention, not this tool's,
+and `startSession`'s worktree is state this tool's own tooling keeps, the same kind of thing
+`.proofspec/dispatch/` and `.proofspec/reviews.jsonl` already are. Coupling a capability's own
+on-disk convention to the editor that happened to be running when it was drafted was a
+drafting mistake, not a real trade-off ever weighed — worth naming here once, and worth a
+standing rule the `ship` skill now carries: a requirement's rationale states the current
+design and why it is correct, never the drafting history of how an earlier round said
+something else before being corrected.
+
+**Ensuring a worktree, not assuming one.** §42 already established that a worktree is not
+guaranteed to sit behind a live queue entry — never opened, or opened and torn down
+independently of the queue. `startSession`'s real implementation checks the conventional path
+first and creates one on demand (`git worktree add`) rather than asking `git worktree list` a
+question the path convention already answers; a second call reuses the existing worktree
+unchanged, which matters because `resolveSessionWorktree` — the MANIFEST-reading half of
+`startSession`, factored out so it is provable without ever touching tmux — is exactly what a
+LEASE reclaim (§41) calls again on retry.
+
+**Two fresh-subagent gates caught two real gaps, neither in the implementation itself.** The
+completion check found the "reused, not recreated" test proved only end-state — a
+destroy-and-rebuild implementation would have passed it too — fixed by planting an untracked
+marker file between calls that only survives a genuine no-op reuse. The review gate then
+found something sharper: two of the three scenarios' tests called the internal
+`ensureWorktree` helper directly with a hand-typed branch string, never the real
+`startSession` action — MANIFEST-reading and the action's own composition were simply
+untested. Fixing it meant extracting `resolveSessionWorktree(cwd, task)` as its own unit,
+exercised through a real queued TASK fixture, so the tests prove what "startSession runs"
+actually claims rather than a helper's behavior in isolation. The acceptance check then found
+a third gap, this time in the acceptance script itself, not the code or the tests: its fixture
+setup never created a `specs/` directory, which `schedule` requires the moment any TASK is
+queued — every one of the script's later steps failed as a direct consequence, correctly, of
+a fixture that was never complete. `/ship`'s own rule held: the check does not edit the script
+that asked the wrong thing, it returns to the human, and the fix — restoring the `specs/`
+layout the very first drafted version of the script had named and a later transcription
+dropped — was confirmed before the check ran again, clean, seven steps in a row.

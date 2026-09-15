@@ -2,6 +2,7 @@
 import { parseArgs } from 'node:util'
 import { check, impact, inflight, render, review, schedule, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
+import { tmuxStartSession } from './session.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
 
@@ -38,10 +39,11 @@ Commands:
   schedule Run one scheduling pass over the queue: prune a merged TASK nothing still names,
            dispatch every ready TASK, and raise an unresolved relationship at most once. Given
            --ruling, records a human's ruling on an already-raised relationship instead.
-           Dispatching a ready TASK or judging a relationship needs a startSession/judge/
-           notifyHuman action, which only an embedder passing RunOptions can supply — there is
-           no flag for one, so the bare command line can only prune and record a ruling; given
-           a ready TASK or a relationship with none of these wired up, it reports cannot-run.
+           Dispatching a ready TASK starts a real, headed pi work-agent session for it in a
+           detached tmux session named for the TASK — the bare command line supplies this
+           itself. Judging a relationship still needs a judge/notifyHuman action only an
+           embedder passing RunOptions can supply; a relationship with neither wired up
+           reports cannot-run.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -137,6 +139,10 @@ const options: RunOptions = {
   ask,
   review: values.verdict === undefined ? undefined : reviewOf(values.verdict, positionals[1]),
   ruling: values.ruling === undefined ? undefined : rulingOf(values.ruling, positionals[1]),
+  // The one action the bare command line does supply: a real, headed pi work-agent session,
+  // started with tmux. `judge` and `notifyHuman` stay unsupplied — see the `schedule` usage
+  // text above for what that still leaves the bare command line unable to do.
+  schedule: { startSession: task => tmuxStartSession(process.cwd(), task) },
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,

@@ -81,6 +81,34 @@ TASK's dispatch hostage to the LEASE on one.
 - "Two passes racing at the same instant still start exactly one session" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
+### Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+
+The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its
+`branch`, ensure a worktree for that branch exists at the conventional path
+`.proofspec/worktrees/<task>` — creating one with `git worktree add` if none is checked
+out, reusing it unchanged if one already is — and start `pi` there in a detached tmux
+session named for the TASK, first killing any tmux session already carrying that name.
+
+`.proofspec/` is already this tool's own root for exactly this kind of on-disk convention —
+`.proofspec/dispatch/` for the queue, `.proofspec/reviews.jsonl` for the review LEDGER — and
+a worktree `startSession` opens is the same kind of thing: state this repo's own tooling
+keeps, so it belongs there too. A ready TASK can reach this action having had no worktree
+ever opened for it at all, or having had one opened and since torn down independently of
+its queue entry — nothing about a queue entry standing guarantees a worktree still sits
+behind it. Checking the conventional path first and creating on demand covers both without
+needing to ask `git worktree list` a question the path convention already answers. tmux,
+not a bare spawn, is what lets the session stay headed and interactive — something a human
+may need to sit at — without the scheduling pass itself holding a terminal open to keep it
+alive; killing a same-named session before creating a fresh one is what lets a TASK whose
+first session attempt died or never came up get a working session on retry instead of
+colliding with a dead one of the same name.
+
+<!-- scenarios: generated -->
+- "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
+- "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
+- "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process
 
 A LEASE on a TASK SHALL be treated as stale, and reclaimed, once a short grace period has

@@ -1,6 +1,6 @@
 import { assertNever } from '../assert-never.ts'
 import { compareStrings } from '../order.ts'
-import type { JudgeVerdict, RelationshipJudgeInput, ScheduleActions } from './types.ts'
+import type { JudgeVerdict, RelationshipJudgeInput } from './types.ts'
 
 /**
  * Requirements: A relationship is judged by a fresh agent before a human is asked /
@@ -106,6 +106,6 @@ function lastLineOf(stdout: string): string {
  * compose this same factory with a fake runner, proving the wiring without ever crossing into
  * the one file allowed to actually spawn a process.
  */
-export function judgeWith(run: JudgeRunner, agent: JudgeAgent): ScheduleActions['judge'] {
+export function judgeWith(run: JudgeRunner, agent: JudgeAgent): (input: RelationshipJudgeInput) => Promise<JudgeVerdict> {
   return async input => verdictFrom(await run(judgeProcessFor(input, agent)))
 }
