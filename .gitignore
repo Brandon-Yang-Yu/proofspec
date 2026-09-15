@@ -12,3 +12,8 @@ build/
 
 # The per-test recording `impact --coverage` reads, rewritten by every coverage run.
 .proofspec-coverage.jsonl
+
+# `dispatch`/`schedule`'s own queue: local runtime state (MANIFEST, state, LEASE) for
+# in-flight TASKs, recomputed and rewritten on every schedule pass — never committed, and
+# deliberately not addressable from a TASK's own branch (see docs/design.md §49).
+.proofspec/dispatch/
