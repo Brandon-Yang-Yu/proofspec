@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-# The same integration branch proofspec measures from (src/cli/diff.ts).
+# The same integration branch proofspec measures from (src/cli/git.ts).
 [ "$(git branch --show-current)" = "main" ] || exit 0
 
 ROOT="$(git rev-parse --show-toplevel)"

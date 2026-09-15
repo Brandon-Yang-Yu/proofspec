@@ -1063,7 +1063,7 @@ change with no promise behind it. Dropping them would read as "this change touch
 when it touched plenty.
 
 **No seventh capability.** The git process is a boundary, and `cli` already owns the
-boundaries (§20): `cli/diff.ts` runs git and turns a `--unified=0` diff into line ranges,
+boundaries (§20): `cli/git.ts` runs git and turns a `--unified=0` diff into line ranges,
 the way `cli/discover.ts` turns a directory into strings. Matching those ranges against
 sites is the inverse of locating a scenario, so it lands in `locate` beside `locate` itself.
 The count stays six.

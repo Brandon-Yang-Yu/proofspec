@@ -1,7 +1,7 @@
 // Capability: cli
 
 import { afterEach, expect, it } from 'vitest'
-import { changedPathsBetween, isAncestor, mergeBase, pathsAtEither } from '../../src/cli/diff.ts'
+import { changedPathsBetween, isAncestor, mergeBase, pathsAtEither } from '../../src/cli/git.ts'
 import { cleanupRepos, makeGitRepo } from './support.ts'
 
 afterEach(cleanupRepos)
