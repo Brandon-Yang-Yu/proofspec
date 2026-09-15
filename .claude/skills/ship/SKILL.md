@@ -55,6 +55,16 @@ files, not centralized in one glossary) — classifies every row **die / rewrite
 new** against the intent, and drafts real prose for every non-keep row, in the register the
 surrounding spec already uses.
 
+**A requirement's rationale states the current, correct design and why it is correct — never
+the history of how the draft got there.** Comparing against an alternative is only worth the
+words when that alternative is a standing design principle this capability (or the wider
+tool) keeps re-asserting elsewhere — "never probe whether a process is still alive" is that
+kind of contrast, worth repeating wherever it applies. A one-off drafting mistake an earlier
+round happened to write down, later corrected, is not: mentioning it teaches a reader nothing
+about why today's design is right, only that an earlier draft said something else. When a
+round revises earlier prose, drop what the revision made untrue rather than layering the new
+reasoning on top of the old.
+
 It commits directly onto **this task branch**, never a branch of its own: the worktree was
 already cut for this one change, so nothing a separate branch would protect is not already
 protected by the task branch itself. The first round commits (`git add specs && git commit
