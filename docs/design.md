@@ -2225,3 +2225,50 @@ current wording leaves any trace anywhere (a MANIFEST field, a ledger line) or i
 `dispatch`'s own reads, computed fresh and remembered by nothing. Both follow the same
 question §39 and §41 already answered the same way for their own corners of this design —
 wait for the capability that owns the write before deciding what it writes.
+
+## 43. `dispatch` is renamed `inflight`
+
+The read-only graph capability §41 and §42 both call `dispatch` is renamed `inflight`. No
+behavior changed — only the capability's own name, its file (`specs/dispatch.md` →
+`specs/inflight.md`, `src/dispatch/` → `src/inflight/`, `tests/dispatch/` →
+`tests/inflight/`), the exported function, the CLI command word, and the `Outcome` tag it
+answers under.
+
+**The word was doing two jobs.** `dispatch` names a command that reads the queue and
+answers a graph — it takes no LEASE, starts no session, and its own charter said so in as
+many words: "holds no queue and dispatches nothing" (`specs/dispatch.md`). But "dispatch"
+is also the one English verb for what `schedule` actually does — `specs/schedule.md`'s own
+requirement heading reads "Dispatching a ready TASK starts exactly one work-agent session."
+A reader meeting the `dispatch` command reasonably expects it to start something; it never
+did. Renaming the read-only capability leaves the verb with exactly one referent.
+
+**Why `inflight`, not `relationships`.** The graph's own shape is `{ tasks, relationships }`
+— `relationships` would name half of what the command returns, and it already names a
+different thing: `src/schedule/relationships.ts`, a `schedule`-owned helper
+(`relationshipKey`, `toRaise`) that imports `Relationship` from this very module. `inflight`
+names the subject the charter opens on — every TASK currently in flight, and how they
+relate — collides with nothing, and leaves "relationship" meaning one thing: a finding
+inside the report.
+
+**The on-disk queue directory keeps its name.** `.proofspec/dispatch/` is a stored data
+format, not this capability's identity — `schedule` is the one capability with permission
+to write there, and it is `schedule`, not the renamed capability, that dispatches into it.
+Renaming it would be a breaking migration for an existing queue, in service of a naming
+question the directory was never actually implicated in.
+
+**Historical sections keep saying `dispatch`, on purpose.** §36 set the precedent: a
+same-shaped rename (`PROOF SITE` → `PROOF_SITE`, `CAPABILITY FILE` → `CAPABILITY_FILE`,
+commit `2527daa`) touched every spec, test, and tag across the repo and touched this file
+not at all — the record of a decision is dated to when it was made, not kept in sync with
+what came after it. §37, §40, §41, and §42 above still say `dispatch` because that is what
+it was called when each was written; a reader following any of them to the code today
+finds it at `src/inflight/`.
+
+**The review gate, re-keyed and re-judged.** Ninety-three promises reached across 27
+requirement keys — every `dispatch`-capability scenario `gone`, every `inflight`-capability
+scenario `touched`, plus the `cli` and `schedule` requirements whose prose now names
+`inflight` — judged by three fresh reviewers working disjoint batches of the work list, one
+after another so the append-only ledger never saw two writers at once. All 93 landed `ok`:
+every `gone` scenario's claim was found proven, byte for byte, under its `inflight`
+successor; every `touched` scenario's THEN still cited a real assertion. No `gap`, no
+`drift` — the rename changed no behavior, and the gate confirmed it changed none.

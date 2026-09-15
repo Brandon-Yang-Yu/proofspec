@@ -1,7 +1,7 @@
 // Capability: schedule
 
 import { expect, it } from 'vitest'
-import type { Relationship } from '../../src/dispatch/index.ts'
+import type { Relationship } from '../../src/inflight/index.ts'
 import { relationshipKey, toRaise } from '../../src/schedule/index.ts'
 
 function relationship(name: string, tasks: readonly string[]): Relationship {

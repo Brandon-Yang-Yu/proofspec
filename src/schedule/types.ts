@@ -1,7 +1,7 @@
-import type { Relationship } from '../dispatch/index.ts'
+import type { Relationship } from '../inflight/index.ts'
 
 /**
- * The literal state word every other command reads. `dispatch` collapses this to
+ * The literal state word every other command reads. `inflight` collapses this to
  * merged/in-flight because that is all a graph needs; a LEASE has to tell `building` apart
  * from every other in-flight word, so schedule keeps the word itself.
  */
@@ -18,7 +18,7 @@ export type LeaseRecord = { readonly takenAt: string }
 /** Whether a ready TASK's session should start now, or a live LEASE already covers it. */
 export type LeaseDecision = { readonly kind: 'take' } | { readonly kind: 'blocked' }
 
-/** One TASK as schedule needs it to decide readiness: its own state word, not `dispatch`'s summary. */
+/** One TASK as schedule needs it to decide readiness: its own state word, not `inflight`'s summary. */
 export type ScheduleTask = {
   readonly task: string
   readonly word: string

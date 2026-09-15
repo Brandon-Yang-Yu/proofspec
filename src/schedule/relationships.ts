@@ -1,5 +1,5 @@
 import { compareStrings } from '../order.ts'
-import type { Relationship } from '../dispatch/index.ts'
+import type { Relationship } from '../inflight/index.ts'
 
 /** A relationship's identity for the raised-record: the node it shares plus the TASKs it names. */
 export function relationshipKey(relationship: Relationship): string {

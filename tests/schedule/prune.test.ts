@@ -1,7 +1,7 @@
 // Capability: schedule
 
 import { expect, it } from 'vitest'
-import type { TaskRecord } from '../../src/dispatch/index.ts'
+import type { TaskRecord } from '../../src/inflight/index.ts'
 import { entriesToPrune } from '../../src/schedule/index.ts'
 
 function record(task: string, options: Partial<TaskRecord> = {}): TaskRecord {

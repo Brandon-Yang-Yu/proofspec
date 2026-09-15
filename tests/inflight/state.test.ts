@@ -1,7 +1,7 @@
-// Capability: dispatch
+// Capability: inflight
 
 import { expect, it } from 'vitest'
-import { stateOf } from '../../src/dispatch/index.ts'
+import { stateOf } from '../../src/inflight/index.ts'
 
 // Requirement: A TASK's state is read literally
 // Scenario: The literal word `merged` is read as merged

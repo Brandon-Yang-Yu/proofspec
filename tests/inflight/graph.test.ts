@@ -1,8 +1,8 @@
-// Capability: dispatch
+// Capability: inflight
 
 import { expect, it } from 'vitest'
-import { computeGraph } from '../../src/dispatch/index.ts'
-import type { TaskChange } from '../../src/dispatch/index.ts'
+import { computeGraph } from '../../src/inflight/index.ts'
+import type { TaskChange } from '../../src/inflight/index.ts'
 
 function change(task: string, options: Partial<TaskChange> = {}): TaskChange {
   return {
@@ -60,12 +60,12 @@ it('reaches a CAPABILITY_FILE whose requirement words use a changed TERM', () =>
     failures: [],
     vocabulary: {
       terms: [{ term: 'MANIFEST', definition: 'a hand-off' }],
-      capabilities: [{ capability: 'dispatch', texts: ['A MANIFEST that cannot stand is refused'] }],
+      capabilities: [{ capability: 'inflight', texts: ['A MANIFEST that cannot stand is refused'] }],
     },
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
-  expect(task?.reopened).toEqual([{ kind: 'capability', name: 'dispatch' }])
+  expect(task?.reopened).toEqual([{ kind: 'capability', name: 'inflight' }])
 })
 
 // Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches
@@ -84,12 +84,12 @@ it('reaches a CAPABILITY_FILE whose requirement uses a TERM defined in terms of 
         { term: 'MANIFEST', definition: 'a hand-off' },
         { term: 'TASK', definition: 'a branch and the MANIFEST committed to it' },
       ],
-      capabilities: [{ capability: 'dispatch', texts: ['Every other TASK still answers'] }],
+      capabilities: [{ capability: 'inflight', texts: ['Every other TASK still answers'] }],
     },
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
-  expect(task?.reopened).toEqual([{ kind: 'capability', name: 'dispatch' }])
+  expect(task?.reopened).toEqual([{ kind: 'capability', name: 'inflight' }])
 })
 
 // Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches
@@ -99,16 +99,16 @@ it('reaches a CAPABILITY_FILE whose requirement uses a TERM defined in terms of 
 // THEN that file appears only under writes, never under reopened
 it('reports only the writes edge for a CAPABILITY_FILE both edited and reopened', () => {
   const graph = computeGraph({
-    changes: [change('a', { editedCapabilities: ['dispatch'], changedTerms: ['MANIFEST'] })],
+    changes: [change('a', { editedCapabilities: ['inflight'], changedTerms: ['MANIFEST'] })],
     failures: [],
     vocabulary: {
       terms: [{ term: 'MANIFEST', definition: 'a hand-off' }],
-      capabilities: [{ capability: 'dispatch', texts: ['A MANIFEST that cannot stand is refused'] }],
+      capabilities: [{ capability: 'inflight', texts: ['A MANIFEST that cannot stand is refused'] }],
     },
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
-  expect(task?.writes).toEqual([{ kind: 'capability', name: 'dispatch' }, { kind: 'term', name: 'MANIFEST' }])
+  expect(task?.writes).toEqual([{ kind: 'capability', name: 'inflight' }, { kind: 'term', name: 'MANIFEST' }])
   expect(task?.reopened).toEqual([])
 })
 

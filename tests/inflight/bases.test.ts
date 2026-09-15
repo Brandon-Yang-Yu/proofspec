@@ -1,8 +1,8 @@
-// Capability: dispatch
+// Capability: inflight
 
 import { expect, it } from 'vitest'
-import { basesFor } from '../../src/dispatch/index.ts'
-import type { TaskRecord } from '../../src/dispatch/index.ts'
+import { basesFor } from '../../src/inflight/index.ts'
+import type { TaskRecord } from '../../src/inflight/index.ts'
 
 function record(task: string, options: Partial<TaskRecord> = {}): TaskRecord {
   return {

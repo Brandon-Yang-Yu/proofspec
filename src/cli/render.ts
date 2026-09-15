@@ -1,5 +1,5 @@
 import { assertNever } from '../assert-never.ts'
-import type { Graph, Node, Relationship, TaskEntry } from '../dispatch/index.ts'
+import type { Graph, Node, Relationship, TaskEntry } from '../inflight/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { ReviewEntry } from '../review/index.ts'
@@ -58,7 +58,7 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
       return EXIT_OK
     // A relationship the graph found, or a problem one of its TASK carries, is not a build
     // this command is entitled to fail — the same way `impact`'s tree never fails a build.
-    case 'dispatch':
+    case 'inflight':
     // What a scheduling pass did, or a recorded ruling, are reports of an action taken, not a
     // verdict on the build.
     case 'scheduled':
@@ -129,7 +129,7 @@ function defaultFormatOf(outcome: Outcome): Format {
     case 'touched':
     // Read by another program — an orchestrator, in a later round — far more often than by a
     // person, the same reason `touched` defaults to JSON.
-    case 'dispatch':
+    case 'inflight':
       return 'json'
     case 'checked':
     case 'wrote':
@@ -163,8 +163,8 @@ export function renderText(outcome: Outcome): string {
       return renderReviewed(outcome.entry)
     case 'impact':
       return renderImpact(outcome.report)
-    case 'dispatch':
-      return renderDispatch(outcome.report)
+    case 'inflight':
+      return renderInflight(outcome.report)
     case 'scheduled':
       return renderScheduled(outcome.report)
     case 'ruled':
@@ -189,7 +189,7 @@ export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string
       return stringify({ changed: outcome.files }, layout)
     case 'touched':
     case 'impact':
-    case 'dispatch':
+    case 'inflight':
     case 'scheduled':
       return stringify(outcome.report, layout)
     case 'reviewed':
@@ -398,7 +398,7 @@ function renderImpactNode(node: ImpactNode, depth: number): string[] {
  * TASK carrying a problem still shows its writes and reopened edges — a problem rides beside
  * what could be read, not instead of it.
  */
-function renderDispatch(graph: Graph): string {
+function renderInflight(graph: Graph): string {
   if (graph.tasks.length === 0) return 'no TASK in flight'
   const parts = [graph.tasks.map(renderTask).join('\n')]
   if (graph.relationships.length > 0) {

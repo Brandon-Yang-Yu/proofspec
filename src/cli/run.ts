@@ -26,8 +26,8 @@ import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
-import { basesFor, computeGraph, GLOSSARY_CAPABILITY, readManifest, stateOf } from '../dispatch/index.ts'
-import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../dispatch/index.ts'
+import { basesFor, computeGraph, GLOSSARY_CAPABILITY, readManifest, stateOf } from '../inflight/index.ts'
+import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
 import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedPathsBetween, isAncestor, mergeBase, readChangedFiles, readFileAt } from './diff.ts'
@@ -1060,20 +1060,20 @@ async function gather(options: RunOptions): Promise<Gathered> {
 const EMPTY_VOCABULARY: Vocabulary = { terms: [], capabilities: [] }
 
 /**
- * Reads the queue directory and answers the graph `dispatch` computes: every in-flight TASK's
+ * Reads the queue directory and answers the graph `inflight` computes: every in-flight TASK's
  * edges, and the relationships between them. Once a graph is produced it exits ok whatever it
  * found — a relationship, or a TASK's own problem, is not a build this command is entitled to
  * fail — but reading the queue directory or the spec themselves can still be a cannot-run, the
  * same way every other command's inputs can.
  */
-export async function dispatch(options: RunOptions): Promise<Outcome> {
+export async function inflight(options: RunOptions): Promise<Outcome> {
   const gathered = await gatherQueue(options)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
-  return { kind: 'dispatch', report: computeGraph(gathered) }
+  return { kind: 'inflight', report: computeGraph(gathered) }
 }
 
 /** Every in-flight TASK's own basis and record, alongside the raw state word `schedule` needs and
- * `dispatch`'s own summary does not keep — read once so `dispatch` and `schedule` read the queue
+ * `inflight`'s own summary does not keep — read once so `inflight` and `schedule` read the queue
  * exactly the same way. */
 type QueueGathered =
   | {
@@ -1139,8 +1139,8 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
  * nothing else — a ruling is a human answering a finding this command already raised, not a
  * pass over the queue.
  *
- * `dispatch`'s own graph is read exactly as `cli` reads a TASK's own MANIFEST and state file:
- * as something to act on, not something to recompute — `specs/dispatch.md` stays untouched by
+ * `inflight`'s own graph is read exactly as `cli` reads a TASK's own MANIFEST and state file:
+ * as something to act on, not something to recompute — `specs/inflight.md` stays untouched by
  * everything here.
  */
 export async function schedule(options: RunOptions): Promise<Outcome> {

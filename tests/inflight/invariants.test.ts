@@ -1,7 +1,7 @@
-// Capability: dispatch
+// Capability: inflight
 
 import { expect, it } from 'vitest'
-import { computeGraph } from '../../src/dispatch/index.ts'
+import { computeGraph } from '../../src/inflight/index.ts'
 
 // Requirement: The graph only reports
 // Scenario: The answer carries no order, no hold, no rank, and no recommendation

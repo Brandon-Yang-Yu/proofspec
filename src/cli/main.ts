@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, dispatch, impact, render, review, schedule, touched, write } from './run.ts'
+import { check, impact, inflight, render, review, schedule, touched, write } from './run.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
@@ -33,7 +33,7 @@ Commands:
            .proofspec/reviews.jsonl. A pass has to cite the line that proves the claim.
   impact   Walk from the source this branch changed, up the call graph, to the tests that
            reach it and the requirements they prove. Needs a codebase-memory index.
-  dispatch Read the conventional queue directory and answer how the in-flight TASK found there
+  inflight Read the conventional queue directory and answer how the in-flight TASK found there
            relate to one another. Reports only, and always exits ok.
   schedule Run one scheduling pass over the queue: prune a merged TASK nothing still names,
            dispatch every ready TASK, and raise an unresolved relationship at most once. Given
@@ -199,12 +199,12 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'touched') return touched(options)
   if (command === 'review') return review(options)
   if (command === 'impact') return impact(options)
-  if (command === 'dispatch') return dispatch(options)
+  if (command === 'inflight') return inflight(options)
   if (command === 'schedule') return schedule(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", "dispatch", or "schedule".`,
+    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", "inflight", or "schedule".`,
   })
 }
 

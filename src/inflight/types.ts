@@ -1,5 +1,5 @@
 /**
- * What `dispatch` reads and answers. It reads no files and shells no git itself — `cli` hands
+ * What `inflight` reads and answers. It reads no files and shells no git itself — `cli` hands
  * it strings for a MANIFEST and a state word, and the revisions git already resolved; this is
  * everything past that: what a TASK's own state means, and how in-flight TASK relate.
  */
@@ -49,7 +49,7 @@ export type TaskEntry = {
 /** A CAPABILITY_FILE or TERM two or more in-flight TASK are attached to, naming each once. */
 export type Relationship = { readonly node: Node; readonly tasks: readonly string[] }
 
-/** What `dispatch` answers: every TASK's edges, and the relationships between them. */
+/** What `inflight` answers: every TASK's edges, and the relationships between them. */
 export type Graph = {
   readonly tasks: readonly TaskEntry[]
   readonly relationships: readonly Relationship[]

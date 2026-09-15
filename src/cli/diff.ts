@@ -119,7 +119,7 @@ export type PathsRead = { readonly ok: true; readonly paths: readonly string[] }
 export type AncestorRead = { readonly ok: true; readonly isAncestor: boolean } | { readonly ok: false; readonly reason: string }
 
 /**
- * Where two named revisions last agreed, without checking either one out. `dispatch` measures
+ * Where two named revisions last agreed, without checking either one out. `inflight` measures
  * a task's branch against another task's, or against `main`, and neither is the working tree.
  */
 export async function mergeBase(options: { readonly cwd: string; readonly a: string; readonly b: string }): Promise<MergeBaseRead> {

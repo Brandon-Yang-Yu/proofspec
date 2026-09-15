@@ -23,10 +23,10 @@ a problem naming its own cause, rather than a graph quietly wrong in a way nobod
 to explain.
 
 <!-- scenarios: generated -->
-- "A MANIFEST missing a required field is refused, naming the field" → tests/dispatch/manifest.test.ts
-- "A MANIFEST whose JSON does not parse is refused, naming why" → tests/dispatch/manifest.test.ts
-- "A `base` of a kind that is neither `main` nor `task` is refused" → tests/dispatch/manifest.test.ts
-- "A `base` of kind `task` missing its `task` or its `reason` is refused" → tests/dispatch/manifest.test.ts
+- "A MANIFEST missing a required field is refused, naming the field" → tests/inflight/manifest.test.ts
+- "A MANIFEST whose JSON does not parse is refused, naming why" → tests/inflight/manifest.test.ts
+- "A `base` of a kind that is neither `main` nor `task` is refused" → tests/inflight/manifest.test.ts
+- "A `base` of kind `task` missing its `task` or its `reason` is refused" → tests/inflight/manifest.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TASK's state is read literally
@@ -41,8 +41,8 @@ as in flight is the direction that fails safe: a TASK wrongly kept in view costs
 moment's confusion, a TASK wrongly dropped costs the graph its whole purpose.
 
 <!-- scenarios: generated -->
-- "A state word never seen before is read as still in flight" → tests/dispatch/state.test.ts
-- "The literal word `merged` is read as merged" → tests/dispatch/state.test.ts
+- "A state word never seen before is read as still in flight" → tests/inflight/state.test.ts
+- "The literal word `merged` is read as merged" → tests/inflight/state.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph reads each in-flight TASK from its own base
@@ -60,12 +60,12 @@ merged has nothing left to place on a graph of what is still in flight; it is no
 with an empty answer, it is not asked.
 
 <!-- scenarios: generated -->
-- "A TASK based on a merged TASK measures against main even though its own branch was" → tests/dispatch/end-to-end.test.ts
-- "A TASK whose `base` is `main` is read from its merge-base with `main`" → tests/dispatch/bases.test.ts
-- "A TASK whose `base` names a TASK not present in the queue at all carries an" → tests/dispatch/bases.test.ts
-- "A TASK whose `base` names a TASK that has merged is read from `main` instead" → tests/dispatch/bases.test.ts
-- "A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch" → tests/dispatch/bases.test.ts
-- "A TASK whose own state has reached merged is not read into the graph at all" → tests/dispatch/bases.test.ts
+- "A TASK based on a merged TASK measures against main even though its own branch was" → tests/inflight/end-to-end.test.ts
+- "A TASK whose `base` is `main` is read from its merge-base with `main`" → tests/inflight/bases.test.ts
+- "A TASK whose `base` names a TASK not present in the queue at all carries an" → tests/inflight/bases.test.ts
+- "A TASK whose `base` names a TASK that has merged is read from `main` instead" → tests/inflight/bases.test.ts
+- "A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch" → tests/inflight/bases.test.ts
+- "A TASK whose own state has reached merged is not read into the graph at all" → tests/inflight/bases.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph reports a writes edge for every CAPABILITY_FILE and TERM a TASK's branch changed
@@ -78,8 +78,8 @@ the reopened edges the next requirement computes, and the shared nodes a relatio
 built from, both start from what a TASK actually wrote.
 
 <!-- scenarios: generated -->
-- "A writes edge is reported for every CAPABILITY_FILE the branch edited" → tests/dispatch/graph.test.ts
-- "A writes edge is reported for every TERM whose definition the branch changed" → tests/dispatch/graph.test.ts
+- "A writes edge is reported for every CAPABILITY_FILE the branch edited" → tests/inflight/graph.test.ts
+- "A writes edge is reported for every TERM whose definition the branch changed" → tests/inflight/graph.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches
@@ -105,10 +105,10 @@ a writes edge before a reopened edge could ever be asked for. Writing that claus
 would put a promise in the spec no scenario could prove.
 
 <!-- scenarios: generated -->
-- "A CAPABILITY_FILE both edited and reopened carries only the writes edge" → tests/dispatch/graph.test.ts
-- "A changed TERM in a real glossary file reopens a real CAPABILITY_FILE that uses it" → tests/dispatch/end-to-end.test.ts
-- "A reopened edge reaches a CAPABILITY_FILE whose requirement words use a TERM that is" → tests/dispatch/graph.test.ts
-- "A reopened edge reaches a CAPABILITY_FILE whose requirement words use a changed TERM" → tests/dispatch/graph.test.ts
+- "A CAPABILITY_FILE both edited and reopened carries only the writes edge" → tests/inflight/graph.test.ts
+- "A changed TERM in a real glossary file reopens a real CAPABILITY_FILE that uses it" → tests/inflight/end-to-end.test.ts
+- "A reopened edge reaches a CAPABILITY_FILE whose requirement words use a TERM that is" → tests/inflight/graph.test.ts
+- "A reopened edge reaches a CAPABILITY_FILE whose requirement words use a changed TERM" → tests/inflight/graph.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A basedOn edge holds only when the ancestry it claims is real
@@ -126,11 +126,11 @@ neither TASK back from anything, so accepting a real one costs nothing, but beli
 false one would.
 
 <!-- scenarios: generated -->
-- "A basedOn claim naming a TASK absent from the queue is reported as unresolved end to end" → tests/dispatch/end-to-end.test.ts
-- "A basedOn claim verified false through real git reports the problem, not the edge" → tests/dispatch/end-to-end.test.ts
-- "A basedOn claim verified true through real git draws the edge" → tests/dispatch/end-to-end.test.ts
-- "A basedOn edge carrying its reason is drawn when the claimed ancestry is real" → tests/dispatch/graph.test.ts
-- "A claimed ancestry that does not hold draws no edge and reports a problem naming the claim" → tests/dispatch/graph.test.ts
+- "A basedOn claim naming a TASK absent from the queue is reported as unresolved end to end" → tests/inflight/end-to-end.test.ts
+- "A basedOn claim verified false through real git reports the problem, not the edge" → tests/inflight/end-to-end.test.ts
+- "A basedOn claim verified true through real git draws the edge" → tests/inflight/end-to-end.test.ts
+- "A basedOn edge carrying its reason is drawn when the claimed ancestry is real" → tests/inflight/graph.test.ts
+- "A claimed ancestry that does not hold draws no edge and reports a problem naming the claim" → tests/inflight/graph.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
@@ -154,10 +154,10 @@ signal, exactly when the same TERM is touched — the exception reaches the file
 houses every TERM, never the word itself.
 
 <!-- scenarios: generated -->
-- "A node a verified basedOn edge already explains is not reported" → tests/dispatch/graph.test.ts
-- "A node three TASK share is named once, not as three pairs" → tests/dispatch/graph.test.ts
-- "A node two in-flight TASK are attached to is one relationship naming both" → tests/dispatch/graph.test.ts
-- "Two TASK that both changed only unrelated TERM do not relate on the glossary file alone" → tests/dispatch/graph.test.ts
+- "A node a verified basedOn edge already explains is not reported" → tests/inflight/graph.test.ts
+- "A node three TASK share is named once, not as three pairs" → tests/inflight/graph.test.ts
+- "A node two in-flight TASK are attached to is one relationship naming both" → tests/inflight/graph.test.ts
+- "Two TASK that both changed only unrelated TERM do not relate on the glossary file alone" → tests/inflight/graph.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph only reports
@@ -171,8 +171,8 @@ carry it. That judgement belongs to whatever later reads this graph with the int
 hand, an orchestrator this round does not build.
 
 <!-- scenarios: generated -->
-- "Computing the graph writes nothing to the queue directory" → tests/dispatch/end-to-end.test.ts
-- "The answer carries no order, no hold, no rank, and no recommendation" → tests/dispatch/invariants.test.ts
+- "Computing the graph writes nothing to the queue directory" → tests/inflight/end-to-end.test.ts
+- "The answer carries no order, no hold, no rank, and no recommendation" → tests/inflight/invariants.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TASK that cannot be read carries a problem, and the rest of the graph still answers
@@ -194,9 +194,9 @@ capability exists to avoid, and the one a reader has no way to catch from outsid
 answer says it: this TASK could not be read, and here is why.
 
 <!-- scenarios: generated -->
-- "A TASK that cannot be read is not reported as a TASK that relates to nothing" → tests/dispatch/invariants.test.ts
-- "A TASK whose branch cannot be read carries a problem, on the answer, naming the TASK and why" → tests/dispatch/invariants.test.ts
-- "Every other TASK's edges are still reported when one TASK cannot be read" → tests/dispatch/invariants.test.ts
+- "A TASK that cannot be read is not reported as a TASK that relates to nothing" → tests/inflight/invariants.test.ts
+- "A TASK whose branch cannot be read carries a problem, on the answer, naming the TASK and why" → tests/inflight/invariants.test.ts
+- "Every other TASK's edges are still reported when one TASK cannot be read" → tests/inflight/invariants.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph is computed fresh from git on every run
@@ -211,5 +211,5 @@ than written down. Nothing here changes fast enough to need caching, and a store
 would be one more file a run could disagree with the moment a task's branch moved.
 
 <!-- scenarios: generated -->
-- "Two runs over an unmoved repository answer identically, in the same order" → tests/dispatch/end-to-end.test.ts
+- "Two runs over an unmoved repository answer identically, in the same order" → tests/inflight/end-to-end.test.ts
 <!-- /scenarios -->

@@ -430,8 +430,8 @@ round deliberately narrowed away, and `inflight` answers the one question this c
 asks. A sub-verb parser would be built for choices the capability does not make.
 
 <!-- scenarios: generated -->
-- "The `inflight` command answers JSON by default" → tests/cli/dispatch.test.ts
-- "The command exits its ok code even when the graph carries problems" → tests/cli/dispatch.test.ts
+- "The `inflight` command answers JSON by default" → tests/cli/inflight.test.ts
+- "The command exits its ok code even when the graph carries problems" → tests/cli/inflight.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out
@@ -477,7 +477,7 @@ would be the very defeat the graph's own resilience exists to avoid.
 - "A queue directory is read into one entry per task subdirectory" → tests/cli/queue.test.ts
 - "A queue directory that does not exist answers an empty list of tasks" → tests/cli/queue.test.ts
 - "A queue directory that exists but cannot be listed is a refusal naming the path" → tests/cli/queue.test.ts
-- "A real in-flight TASK still needs the specs directory even when the queue is not empty" → tests/cli/dispatch.test.ts
+- "A real in-flight TASK still needs the specs directory even when the queue is not empty" → tests/cli/inflight.test.ts
 - "One unreadable task answers a problem for that task alone, the rest still read" → tests/cli/queue.test.ts
-- "The command answers an empty graph in a bare repository with no specs directory at all" → tests/cli/dispatch.test.ts
+- "The command answers an empty graph in a bare repository with no specs directory at all" → tests/cli/inflight.test.ts
 <!-- /scenarios -->

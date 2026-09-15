@@ -5,7 +5,7 @@ import { compareStrings } from '../order.ts'
 /**
  * The conventional queue directory: one task per subdirectory, each holding a MANIFEST and a
  * state file. This reads them as strings, one task at a time, so one unreadable task never
- * stops the rest — `dispatch` decides what the bytes mean; this only fetches them.
+ * stops the rest — `inflight` decides what the bytes mean; this only fetches them.
  *
  * `schedule` is the one capability with permission to write here — pruning a merged entry and
  * taking a LEASE on a ready one — so the write-side helpers live beside the read-side ones that

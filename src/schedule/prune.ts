@@ -1,4 +1,4 @@
-import type { TaskRecord } from '../dispatch/index.ts'
+import type { TaskRecord } from '../inflight/index.ts'
 
 /**
  * Requirement: A merged TASK's queue entry is pruned once nothing still names it
@@ -6,7 +6,7 @@ import type { TaskRecord } from '../dispatch/index.ts'
  * The criterion recorded in docs/design.md §39: a merged entry stays as long as some in-flight
  * TASK's `base.task` might still name it — removing it early is what would turn a graceful
  * "based on a TASK that merged" into a false "based on a TASK the queue holds no record of at
- * all." Answerable from the same records `dispatch` already reads; pruning keeps no ledger of
+ * all." Answerable from the same records `inflight` already reads; pruning keeps no ledger of
  * its own.
  */
 export function entriesToPrune(records: readonly TaskRecord[]): readonly string[] {

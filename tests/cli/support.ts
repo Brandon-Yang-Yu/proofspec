@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { compareStrings } from '../../src/order.ts'
-import type { ManifestBase } from '../../src/dispatch/index.ts'
+import type { ManifestBase } from '../../src/inflight/index.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -163,7 +163,7 @@ export async function makeGitRepo(files: Readonly<Record<string, string>>): Prom
 
 /**
  * Enters a task into the conventional queue directory, on its own branch — off `main` unless
- * `onto` names another branch to build it from instead. Shared by `cli` and `dispatch`'s own
+ * `onto` names another branch to build it from instead. Shared by `cli` and `inflight`'s own
  * end-to-end tests, since both prove behaviour of the same command against the same fixture
  * shape.
  */

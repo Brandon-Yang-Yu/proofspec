@@ -1,7 +1,7 @@
-// Capability: dispatch
+// Capability: inflight
 
 import { expect, it } from 'vitest'
-import { readManifest } from '../../src/dispatch/index.ts'
+import { readManifest } from '../../src/inflight/index.ts'
 
 // Requirement: A MANIFEST that cannot stand is refused, naming why
 // Scenario: A MANIFEST whose JSON does not parse is refused, naming why
