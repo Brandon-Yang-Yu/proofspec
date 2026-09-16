@@ -5,7 +5,7 @@ import { leaseDecision, LEASE_GRACE_MS, readyToDispatch } from '../../src/schedu
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A ready TASK with no LEASE decides to take one
 // GIVEN a ready TASK carrying no LEASE
 // WHEN a scheduling pass decides whether to dispatch it
@@ -16,7 +16,7 @@ it('decides to take the LEASE when a ready TASK carries none', () => {
   expect(decision).toEqual({ kind: 'take' })
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A second pass finding an unexpired LEASE decides to block
 // GIVEN a ready TASK a first pass already took the LEASE on, moments ago
 // WHEN a second pass finds the same ready TASK before the grace period elapses
@@ -68,7 +68,7 @@ it('excludes a held TASK from readiness even while queued', () => {
   expect(ready).toEqual([])
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A queued, unheld TASK is ready
 // GIVEN a queued TASK that is not held on any other TASK
 // WHEN a scheduling pass decides which TASK are ready
@@ -79,7 +79,7 @@ it('includes a queued, unheld TASK as ready', () => {
   expect(ready).toEqual(['a'])
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A TASK already building is not ready to dispatch again
 // GIVEN a TASK whose state word is building
 // WHEN a scheduling pass decides which TASK are ready

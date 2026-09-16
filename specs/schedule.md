@@ -5,7 +5,7 @@ that it "holds no queue and dispatches nothing" — it answers a question about 
 in flight, and "deciding what to do with the answer belongs to something else." This is that
 something else: the one capability with permission to write into the queue directory —
 releasing a TASK held on one that is no longer live, pruning a queue entry nothing points at
-any more, judging a relationship before a human ever sees it, and starting the one work-agent
+any more, judging a relationship before a human ever sees it, and starting the one executor
 session a ready TASK is owed.
 
 It reads `inflight`'s answer the way `cli` reads a TASK's own MANIFEST and state file: as
@@ -58,9 +58,9 @@ of its own to decide when a name has gone quiet.
 - "An in-flight TASK is never pruned" → tests/schedule/prune.test.ts
 <!-- /scenarios -->
 
-### Requirement: Dispatching a ready TASK starts exactly one work-agent session
+### Requirement: Dispatching a ready TASK starts exactly one executor session
 
-Dispatching a TASK ready to build SHALL start exactly one headed, interactive work-agent
+Dispatching a TASK ready to build SHALL start exactly one headed, interactive executor
 session for it — never zero, never two — by first taking a LEASE scoped to that TASK alone,
 and starting the session only once the LEASE is held.
 
@@ -167,12 +167,11 @@ tmux-socket handling above.
 session it is the executor, that its scope starts only after the disposition review, or that
 a wrong judged standard — never a wrong implementation — is the one thing it should park on
 and ask about (docs/design.md §37, §49). `.pi/agents/executor.md` already carries that persona
-in the same shape as this tool's other agent files, written for the `subagent` dispatch
-mechanism's own frontmatter convention; a session `startSession` opens is never dispatched
-that way; it is the top-level `pi` process tmux starts directly. Stripping the frontmatter
-before handing the body to `--append-system-prompt` keeps `name:`/`tools:` — metadata for a
-dispatcher that never runs here — out of the literal prompt text a model would otherwise have
-to read as prose.
+in the same shape as this tool's other agent files, written for the `subagent` spawn tool's
+own frontmatter convention; a session `startSession` opens is never spawned that way; it is
+the top-level `pi` process tmux starts directly. Stripping the frontmatter before handing the
+body to `--append-system-prompt` keeps `name:`/`tools:` — metadata for a spawner that never
+runs here — out of the literal prompt text a model would otherwise have to read as prose.
 
 Reading the persona from `cwd`, not from the worktree, is the same choice `DEFAULT_JUDGE_AGENT`
 and `PROOFSPEC_JUDGE_BIN` already make for `judge`: the executor's own instructions are an
@@ -220,7 +219,7 @@ passed since it was taken without the TASK's state having advanced to the litera
 `building`. Before that grace period elapses, an existing LEASE SHALL block a second session
 from starting.
 
-Nothing clears a LEASE on its own if the work-agent session it started never comes up, or
+Nothing clears a LEASE on its own if the executor session it started never comes up, or
 dies before it can write `building` — something has to reclaim it, or one dead session's
 LEASE holds its TASK forever. Checking whether the process behind a LEASE is still alive is
 exactly the check this design keeps refusing to build: a PID means something only on the
@@ -303,7 +302,7 @@ A relationship the fresh agent could not resolve SHALL be put in front of a huma
 ruling recorded for it SHALL trace to what the human actually wrote — never synthesized or
 paraphrased as if the human had said it.
 
-A dispatcher able to generate its own authority is the single most dangerous component a
+An orchestrator able to generate its own authority is the single most dangerous component a
 design like this one can have. "The human has ruled" has to trace to a record a later reader
 can go and check, the same way a review's verdict traces to a line in the LEDGER — a
 notification may be relayed on the human's behalf, but a verdict may not.

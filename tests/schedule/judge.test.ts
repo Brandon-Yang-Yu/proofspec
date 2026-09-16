@@ -1,7 +1,7 @@
 // Capability: schedule
 //
 // No test here ever spawns `pi` — every scenario supplies a fake `JudgeRunner`, the same
-// discipline `end-to-end.test.ts` keeps for a real work-agent session.
+// discipline `end-to-end.test.ts` keeps for a real executor session.
 
 import { expect, it } from 'vitest'
 import type { Relationship } from '../../src/inflight/index.ts'

@@ -50,10 +50,10 @@ to write. Spawn a fresh subagent, the **spec steward**, to draft them.
 poor judge of their own fresh wording the same way step 4-6's reviewers exist because you
 are a poor judge of your own fresh code. Hand it the change intent in the human's own words
 and the worktree root. It runs the real census — `rg -n '^### Requirement:' specs/*.md` and
-`rg -n '^### Term:' specs/*.md` (this repo's vocabulary is distributed across capability
-files, not centralized in one glossary) — classifies every row **die / rewrite / keep /
-new** against the intent, and drafts real prose for every non-keep row, in the register the
-surrounding spec already uses.
+`rg -n '^### Term:' specs/*.md` — classifies every row **gone / reworded / kept / new**
+against the intent (the same `gone`/`reworded`/`new` vocabulary `inflight`'s own queue-facing
+census uses, per docs/design.md §42/§50), and drafts real prose for every non-`kept` row, in
+the register the surrounding spec already uses.
 
 **A requirement's rationale states the current, correct design and why it is correct — never
 the history of how the draft got there.** Comparing against an alternative is only worth the

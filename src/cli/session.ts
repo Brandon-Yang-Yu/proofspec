@@ -6,7 +6,7 @@ import { manifestFor } from './queue.ts'
 
 /**
  * The real `startSession` action design.md left for an embedder to supply: a headed,
- * interactive `pi` work-agent, started in the TASK's own worktree. `schedule`'s own core
+ * interactive `pi` executor, started in the TASK's own worktree. `schedule`'s own core
  * never starts one itself (see its tests) — this is the one place that actually does, using
  * tmux as the one thing on this machine that can hand a real pty to a human without taking
  * over the terminal the scheduling pass itself is running in.
@@ -54,8 +54,8 @@ const EXECUTOR_PERSONA_PATH = ['.pi', 'agents', 'executor.md'] as const
 /**
  * Strips a `.pi/agents/*.md` persona file's YAML frontmatter, leaving the prompt body a
  * `--append-system-prompt` argument actually wants. The frontmatter's `name:`/`tools:` lines
- * are metadata for the `subagent` dispatch mechanism — meaningless, and misleading, as literal
- * prompt text for a session nothing dispatched. A file with no frontmatter delimiter at all
+ * are metadata for the `subagent` spawn mechanism — meaningless, and misleading, as literal
+ * prompt text for a session nothing spawned that way. A file with no frontmatter delimiter at all
  * passes through unchanged rather than throwing: still a usable system prompt, and a missing
  * delimiter is not ambiguous the way a malformed value would be.
  */

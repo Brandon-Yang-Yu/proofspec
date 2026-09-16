@@ -1154,7 +1154,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   // not have already pruned an entry or started a session nothing in its outcome reports.
   const startSession = options.schedule?.startSession
   if (ready.length > 0 && startSession === undefined) {
-    return { kind: 'cannot-run', reason: `cannot schedule: ${ready[0]} is ready, but no startSession action was given to start its work-agent session` }
+    return { kind: 'cannot-run', reason: `cannot schedule: ${ready[0]} is ready, but no startSession action was given to start its executor session` }
   }
   if (graph.relationships.length > 0 && options.schedule?.judge === undefined) {
     return { kind: 'cannot-run', reason: 'cannot schedule: a relationship was found, but no judge action was given to have a fresh agent read it' }
