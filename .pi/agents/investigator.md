@@ -79,7 +79,10 @@ skips this entirely — say so plainly, and go straight to confirming the four f
 - **`intentRef`**: a file path readable on the branch you just drafted (`enqueue_task`'s
   caller resolves it as `git show <branch>:<intentRef>`) — normally the capability spec file
   the disposition table just settled, or a short dedicated doc when the intent spans several
-  files. Not free text restating the conversation.
+  files. Not free text restating the conversation. A dedicated intent doc is written at the
+  spec writer's own readability bar (`.pi/agents/spec-writer.md`, "The prose discipline you
+  write under"): the executor reads it cold, on a branch, with none of the conversation
+  behind it.
 - **`branch`**: the branch you drafted the disposition onto — confirm the name back rather
   than assuming it is still what was first proposed if the conversation moved since.
 - **`base`** (only when this TASK is built on another in-flight TASK's work, not `main`):

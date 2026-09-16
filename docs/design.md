@@ -1259,6 +1259,18 @@ The house prose discipline — a rationale states the current, correct design, n
 history of how the draft got there — has its single home in the persona that writes under it,
 no longer living only in the legacy `ship` skill the investigator was never pointed at.
 
+**The register all new spec prose writes at is plain first-read English, and it is stated,
+not inherited.** The first cut of `spec-writer.md` told its reader to write "in the register
+the surrounding spec already uses" — and the surrounding spec is dense: sentences that carry
+three ideas between two em-dashes, words chosen for precision inside long clauses. The people
+who read that prose easily are the people who wrote it; a reader coming cold pays for every
+nested clause. A register copied from the page carries the density forward onto every new and
+rewritten row, so the persona now writes at a stated bar instead: a reader who is not a
+programmer and was not in the conversation can follow every sentence on first reading. The
+older dense prose is history to read past, not a target to match. `investigator.md` names the
+same bar for intent docs: the executor reads those cold too, on a branch, with none of the
+conversation behind it.
+
 ## 50. `census_in_flight` closes §42's gap
 
 `investigator.md`'s own "census, then draft for real" step leaned on `inflight` for a graph
