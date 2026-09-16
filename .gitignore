@@ -10,6 +10,9 @@ build/
 # Claude Code worktrees live here; the skills beside them are committed.
 .claude/worktrees/
 
+# ProofSpec's own TASK worktrees (docs/design.md §"startSession"), one per task.
+.proofspec/worktrees/
+
 # The per-test recording `impact --coverage` reads, rewritten by every coverage run.
 .proofspec-coverage.jsonl
 
