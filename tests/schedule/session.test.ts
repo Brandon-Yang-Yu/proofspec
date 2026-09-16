@@ -1,6 +1,6 @@
 // Capability: schedule
 
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { promptBodyFrom, resolveSessionWorktree, sessionStartFor, tmuxSessionCommands } from '../../src/cli/session.ts'
@@ -48,6 +48,43 @@ it('reuses a TASK\'s worktree once it already exists, rather than recreating it'
 
   expect(worktree).toBe(firstCall)
   await expect(readFile(join(worktree, 'untracked-marker.txt'), 'utf8')).resolves.toBe('still here')
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead
+// GIVEN a TASK whose conventional path holds an empty directory with no .git file at its root
+// WHEN startSession runs
+// THEN a worktree for that TASK's branch is created at that path, not the empty directory reused
+it('treats a directory merely sitting at the conventional path as no worktree, creating one there instead', async () => {
+  const repo = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  // The residue a failed `git worktree add` can leave behind: a directory at the path, but
+  // no repository behind it — reusing it would start the session where no work can happen,
+  // on every retry, with no failure to report.
+  await mkdir(join(repo.root, '.proofspec', 'worktrees', 'a'), { recursive: true })
+
+  const worktree = await resolveSessionWorktree(repo.root, 'a')
+
+  expect(worktree).toBe(`${repo.root}/.proofspec/worktrees/a`)
+  expect(await repo.git(['-C', worktree, 'branch', '--show-current'])).toBe('work/a')
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: A worktree creation that fails throws an error carrying git's own stderr
+// GIVEN a TASK whose branch is already checked out in another worktree, so git worktree add refuses
+// WHEN startSession runs
+// THEN it throws an error carrying git's own stderr in its message, not a bare could-not-create summary
+it('throws an error carrying git\'s own stderr when creating the worktree fails', async () => {
+  const repo = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  // The one real way creation fails: the branch already checked out in another worktree.
+  await repo.git(['worktree', 'add', join(repo.root, 'elsewhere'), 'work/a'])
+
+  // git's fatal line is its own stderr, wording only git writes — matching it proves the
+  // message carries stderr itself, which a bare summary naming no cause never could.
+  await expect(resolveSessionWorktree(repo.root, 'a')).rejects.toThrow(
+    /fatal: 'work\/a' is already (used by worktree|checked out at)/,
+  )
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

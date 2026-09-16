@@ -227,15 +227,29 @@ function linesOf(output: string): string[] {
   return output.split('\n').filter(line => line.length > 0)
 }
 
-/** Runs git and returns its stdout, or nothing when it could not answer — a session's own
- * `git worktree add` reuses this rather than a second copy of the same primitive. */
-export async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {
+/** git's own answer: its stdout when it answered, or its own stderr — git's own words for
+ * why it refused — when it could not. A caller that must report a failure to a human (a
+ * session's `git worktree add`) carries that stderr into its error; a caller that only
+ * needed an answer keeps reading through `git()` below. */
+export type GitAnswer =
+  | { readonly ok: true; readonly stdout: string }
+  | { readonly ok: false; readonly stderr: string }
+
+/** Runs git and answers stdout-or-stderr, keeping the failure as a value rather than
+ * swallowing it — the boundary conversion `git()` below folds away. */
+export async function runGit(cwd: string, args: readonly string[]): Promise<GitAnswer> {
   try {
     const { stdout } = await run('git', [...args], { cwd, maxBuffer: MAX_OUTPUT })
-    return stdout
-  } catch {
-    return undefined
+    return { ok: true, stdout }
+  } catch (error) {
+    return { ok: false, stderr: String((error as { readonly stderr?: string }).stderr ?? '') }
   }
+}
+
+/** Runs git and returns its stdout, or nothing when it could not answer. */
+export async function git(cwd: string, args: readonly string[]): Promise<string | undefined> {
+  const answer = await runGit(cwd, args)
+  return answer.ok ? answer.stdout : undefined
 }
 
 // A whole repository's diff has to fit: the default 1MB is small enough that a large branch
