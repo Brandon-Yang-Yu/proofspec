@@ -91,8 +91,10 @@ a detached tmux session named for the TASK, first killing any same-named session
 there. A creation that fails SHALL throw an error carrying git's own stderr in its
 message, never a bare "could not create" summary in stderr's place. That `pi`
 invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
-environment variables on the tmux `new-session` command, and SHALL be run with `--approve`,
-`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`. Every tmux command this action runs
+environment variables on the tmux `new-session` command, SHALL be run with `--approve`,
+`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`, and SHALL be handed
+one initial user message as `pi`'s positional prompt argument — a message telling the
+session to begin working its TASK, whose exact words are the implementation's to choose. Every tmux command this action runs
 SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L <socket>` flag
 rather than the default server — never the user's own default tmux server, and never any
 other named server — with a default socket name of `proofspec`, overridable through the
@@ -164,6 +166,14 @@ happened to cut from, which can predate this capability entirely; pinning `--ext
 this tool's own checkout guarantees the tool loaded is always the current one, the same way
 `startSession` already reads the executor's system prompt from this checkout rather than the
 worktree's own copy of `.pi/agents/executor.md`.
+
+The positional prompt argument is what makes an unattended session ever begin at all:
+`--append-system-prompt` changes who the model is, never that it should act, and an
+interactive `pi` given no first message sits at its input box indefinitely — loaded,
+healthy, doing nothing. The first fully unattended dispatch sat exactly there, its queue
+state never leaving `queued`, until a human attached and noticed; the kickoff message is
+the one argument that turns a watchable session into a self-starting one, without taking
+the headed TUI a human may still attach to away.
 
 <!-- scenarios: generated -->
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
