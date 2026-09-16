@@ -87,11 +87,14 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 `branch`, ensure a worktree for that branch exists at the conventional path
 `.proofspec/worktrees/<task>` — creating one with `git worktree add` if none is checked
 out, reusing it unchanged if one already is — and start `pi` there in a detached tmux
-session named for the TASK, first killing any same-named session already there. Every tmux
-command this action runs SHALL reach tmux through a dedicated, isolated server, named by
-tmux's own `-L <socket>` flag rather than the default server — never the user's own default
-tmux server, and never any other named server — with a default socket name of `proofspec`,
-overridable through the `PROOFSPEC_TMUX_SOCKET` environment variable.
+session named for the TASK, first killing any same-named session already there. That `pi`
+invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
+environment variables on the tmux `new-session` command, and SHALL be run with `--approve`
+and `--extension <cwd>/.pi/extensions/progress.ts`. Every tmux command this action runs
+SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L <socket>` flag
+rather than the default server — never the user's own default tmux server, and never any
+other named server — with a default socket name of `proofspec`, overridable through the
+`PROOFSPEC_TMUX_SOCKET` environment variable.
 
 `.proofspec/` is already this tool's own root for exactly this kind of on-disk convention —
 `.proofspec/dispatch/` for the queue, `.proofspec/reviews.jsonl` for the review LEDGER — and
@@ -122,12 +125,35 @@ runs the real bare CLI against a real tmux binary, can point at a throwaway, per
 instead of ever touching the real `proofspec` production socket, let alone the user's own
 default one.
 
+`PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` are how the session `startSession` starts learns
+where the queue lives and which TASK it is: `report_task_state` (`specs/progress.md`) runs
+inside that session with only `ExtensionContext.cwd` available to it, and `cwd` there is the
+TASK's own worktree — a different directory from the main checkout `.proofspec/dispatch/`
+lives under, by construction, not by an oversight `ExtensionContext` happens to have.
+`startSession` already holds both facts at the moment it starts the session — the main
+checkout is its own `cwd`, and the TASK is the one it was asked to dispatch — so it hands them
+down as environment variables the same way it already hands down `PROOFSPEC_TMUX_SOCKET`'s
+counterpart, `PROOFSPEC_JUDGE_BIN`, rather than leaving the worktree to infer either fact for
+itself. `--approve` and the pinned `--extension` exist because a session with no way to load
+the tool that reports its state is no better off than one with no tool at all: pi's project
+trust is keyed per directory, and a freshly created worktree is always an unknown path to it,
+defaulting to a startup prompt nobody answers in a detached tmux session — `--approve` sets
+pi's trust override so that prompt never blocks the tool from loading. `.pi/` is tracked in
+git, so a worktree's own copy of `.pi/extensions/progress.ts` is whatever commit its branch
+happened to cut from, which can predate this capability entirely; pinning `--extension` to
+this tool's own checkout guarantees the tool loaded is always the current one, the same way
+`startSession` already reads the executor's system prompt from this checkout rather than the
+worktree's own copy of `.pi/agents/executor.md`.
+
 <!-- scenarios: generated -->
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
+- "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
+- "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK" → tests/schedule/session.test.ts
+- "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
 ### Requirement: startSession seeds the executor session with the executor's own system prompt
