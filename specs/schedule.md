@@ -85,9 +85,11 @@ TASK's dispatch hostage to the LEASE on one.
 
 The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its
 `branch`, ensure a worktree for that branch exists at the conventional path
-`.proofspec/worktrees/<task>` — creating one with `git worktree add` if none is checked
-out, reusing it unchanged if one already is — and start `pi` there in a detached tmux
-session named for the TASK, first killing any same-named session already there. That `pi`
+`.proofspec/worktrees/<task>` — creating one with `git worktree add` whenever that path
+is not itself a worktree, reusing it unchanged only when it is — and start `pi` there in
+a detached tmux session named for the TASK, first killing any same-named session already
+there. A creation that fails SHALL throw an error carrying git's own stderr in its
+message, never a bare "could not create" summary in stderr's place. That `pi`
 invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
 environment variables on the tmux `new-session` command, and SHALL be run with `--approve`,
 `--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`. Every tmux command this action runs
@@ -103,7 +105,16 @@ keeps, so it belongs there too. A ready TASK can reach this action having had no
 ever opened for it at all, or having had one opened and since torn down independently of
 its queue entry — nothing about a queue entry standing guarantees a worktree still sits
 behind it. Checking the conventional path first and creating on demand covers both without
-needing to ask `git worktree list` a question the path convention already answers. tmux,
+needing to ask `git worktree list` a question the path convention already answers. Whether
+the path is a worktree is itself a local fact — the `.git` file a linked worktree keeps at
+its root — so that check stays off `git worktree list` too, while a directory merely
+sitting at the path does not answer it: a `git worktree add` that fails partway can leave
+an empty directory behind, a branch already checked out in another worktree being one real
+way, and reusing whatever merely sits there would start the session in a directory with no
+repository behind it — an executor that can do no work and report no failure, on every
+retry. Carrying git's own stderr into the thrown error exists because a bare "could not
+create" names no cause: the one real failure so far, a branch already in use elsewhere,
+read as nothing anyone could act on. tmux,
 not a bare spawn, is what lets the session stay headed and interactive — something a human
 may need to sit at — without the scheduling pass itself holding a terminal open to keep it
 alive; killing a same-named session before creating a fresh one is what lets a TASK whose
