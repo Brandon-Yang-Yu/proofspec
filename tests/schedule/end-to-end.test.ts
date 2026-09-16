@@ -18,6 +18,12 @@ const execFileAsync = promisify(execFile)
 const MAIN = fileURLToPath(new URL('../../src/cli/main.ts', import.meta.url))
 
 afterEach(cleanupRepos)
+// The bound tests below set PROOFSPEC_MAX_SESSIONS per test; a leaked value would hold every
+// later test to some earlier test's bound, the same ambient leak the socket override keeps
+// its own cleanup for.
+afterEach(() => {
+  delete process.env.PROOFSPEC_MAX_SESSIONS
+})
 
 // A pass settles a mergeable TASK by tearing down its session — killing a tmux session by the
 // TASK's name and removing its worktree. Pointing the whole suite at a throwaway socket keeps
@@ -31,7 +37,8 @@ function planOf(outcome: Outcome): SchedulePlan {
 }
 
 /** Starting sessions in order, on a plain in-memory list — a real session is a headed, interactive
- * process this suite never starts; what a pass decided to start is what these tests check. */
+ * process this suite never starts; what a pass decided to start is what these tests check. The
+ * live count answers zero unless a test overrides it, so a pass is never bound by default. */
 function fakeActions(overrides: Partial<ScheduleActions> = {}): ScheduleActions & { readonly startedSessions: string[] } {
   const startedSessions: string[] = []
   return {
@@ -39,6 +46,7 @@ function fakeActions(overrides: Partial<ScheduleActions> = {}): ScheduleActions 
     startSession: async task => {
       startedSessions.push(task)
     },
+    countSessions: async () => 0,
     judge: async () => ({ kind: 'resolved' }),
     notifyHuman: async () => {},
     ...overrides,
@@ -517,6 +525,109 @@ it('cannot run a pass with a ready TASK and no startSession action', async () =>
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
 
   const outcome = await schedule({ cwd: repo.root })
+
+  expect(outcome.kind).toBe('cannot-run')
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: A scheduling pass starts no session once the live count has reached the bound
+// GIVEN a queued, ready TASK, a bound of one, and one executor session already live
+// WHEN a scheduling pass runs
+// THEN no session starts for it and the pass reports it deferred — never dispatched past the bound
+it('starts no session once the live count has reached the bound', async () => {
+  process.env.PROOFSPEC_MAX_SESSIONS = '1'
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  const actions = fakeActions({ countSessions: async () => 1 })
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(plan.started).toEqual([])
+  expect(plan.deferred).toEqual(['a'])
+  expect(actions.startedSessions).toEqual([])
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: A TASK the bound leaves undispatched keeps its state word queued exactly as it stands
+// GIVEN a queued TASK the bound has left undispatched
+// WHEN the pass that deferred it has finished
+// THEN its state file still reads queued exactly as it stood — only the machine's capacity
+//      changed, and capacity is no state of the TASK's own
+it('keeps a TASK the bound leaves undispatched queued exactly as it stands', async () => {
+  process.env.PROOFSPEC_MAX_SESSIONS = '1'
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  const actions = fakeActions({ countSessions: async () => 1 })
+
+  await schedule({ cwd: repo.root, schedule: actions })
+
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('queued')
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: A later pass dispatches a TASK the bound deferred once a session has gone
+// GIVEN a TASK the bound deferred, and then the session count dropping below the bound
+// WHEN a later scheduling pass runs
+// THEN that pass dispatches it — the deferral took no LEASE, so nothing of the earlier pass
+//      stands in the later one's way
+it('dispatches a TASK the bound deferred once a session has gone', async () => {
+  process.env.PROOFSPEC_MAX_SESSIONS = '1'
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  let live = 1
+  const actions = fakeActions({ countSessions: async () => live })
+
+  const deferred = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+  expect(deferred.deferred).toEqual(['a'])
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'LEASE'), 'utf8')).rejects.toThrow()
+
+  live = 0
+  const later = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(later.started).toEqual(['a'])
+  expect(actions.startedSessions).toEqual(['a'])
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK
+// GIVEN three ready TASKs, a bound of two, and a live count that grows by one each time it is asked
+// WHEN one scheduling pass dispatches them
+// THEN it starts exactly two sessions — asking the count anew before each — and defers the third,
+//      rather than counting once and dispatching all three past the bound
+it('takes the live count fresh at each dispatch decision within one pass', async () => {
+  process.env.PROOFSPEC_MAX_SESSIONS = '2'
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'c', { edit: 'specs/cli.md' })
+  let asked = 0
+  const actions = fakeActions({
+    countSessions: async () => {
+      asked += 1
+      return asked - 1
+    },
+  })
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(plan.started).toEqual(['a', 'b'])
+  expect(plan.deferred).toEqual(['c'])
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: A ready TASK with no countSessions action given cannot run the pass
+// GIVEN a queued, ready TASK
+// WHEN a scheduling pass runs with a startSession action but no countSessions action
+// THEN the pass reports it cannot run — a pass that cannot count live sessions cannot honor
+//      the bound, and dispatching unbounded is not a failure it is allowed to swallow
+it('cannot run a pass with a ready TASK and no countSessions action', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+
+  const outcome = await schedule({
+    cwd: repo.root,
+    schedule: { startSession: async () => {}, judge: async () => ({ kind: 'resolved' }) },
+  })
 
   expect(outcome.kind).toBe('cannot-run')
 })

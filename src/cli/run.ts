@@ -28,7 +28,7 @@ import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
 import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
-import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
+import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, maxSessionsFrom, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
 import type { ChangedFile } from './git.ts'
@@ -1121,8 +1121,9 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
 
 /**
  * Runs one scheduling pass: prunes a merged TASK nothing still names, dispatches every TASK
- * that is ready (queued, not held, and not covered by a live LEASE), and puts an unresolved
- * relationship in front of a human at most once. Given a ruling instead, records it and does
+ * that is ready (queued, not held, and not covered by a live LEASE, and not past the
+ * live-session bound), and puts an unresolved relationship in front of a human at most
+ * once. Given a ruling instead, records it and does
  * nothing else — a ruling is a human answering a finding this command already raised, not a
  * pass over the queue.
  *
@@ -1167,8 +1168,15 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   // Checked before anything below actually touches the queue: a pass that cannot finish must
   // not have already pruned an entry or started a session nothing in its outcome reports.
   const startSession = options.schedule?.startSession
-  if (ready.length > 0 && startSession === undefined) {
-    return { kind: 'cannot-run', reason: `cannot schedule: ${ready[0]} is ready, but no startSession action was given to start its executor session` }
+  const countSessions = options.schedule?.countSessions
+  if (ready.length > 0) {
+    const missing = [
+      ...(startSession === undefined ? ['startSession'] : []),
+      ...(countSessions === undefined ? ['countSessions'] : []),
+    ]
+    if (missing.length > 0) {
+      return { kind: 'cannot-run', reason: `cannot schedule: ${ready[0]} is ready, but no ${missing.join(' or ')} action was given` }
+    }
   }
   if (graph.relationships.length > 0 && options.schedule?.judge === undefined) {
     return { kind: 'cannot-run', reason: 'cannot schedule: a relationship was found, but no judge action was given to have a fresh agent read it' }
@@ -1179,7 +1187,14 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
 
   const started: string[] = []
   const blocked: string[] = []
+  const deferred: string[] = []
+  // The bound is read once per pass; the count it is compared against below is asked of the
+  // server fresh at every dispatch decision, never kept from one decision to the next.
+  const bound = maxSessionsFrom(process.env.PROOFSPEC_MAX_SESSIONS)
   for (const task of ready) {
+    // Unreachable: the guard above already returned when a ready TASK existed without both
+    // actions in hand, so `ready` is only ever non-empty here with both.
+    if (startSession === undefined || countSessions === undefined) continue
     const leaseAt = await readLease(options.cwd, task)
     const decision = leaseDecision({
       existing: leaseAt === undefined ? undefined : { takenAt: leaseAt },
@@ -1190,6 +1205,17 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
       blocked.push(task)
       continue
     }
+    // Requirement: No executor session starts once the live-session bound is reached
+    //
+    // Asked of the server itself, fresh, before the LEASE is taken: a TASK the bound defers
+    // carries no LEASE, so a later pass is free to dispatch it the moment a session has gone,
+    // and the deferred TASK keeps its own state word untouched — capacity is no state of the
+    // TASK's own.
+    const live = await countSessions()
+    if (live >= bound) {
+      deferred.push(task)
+      continue
+    }
     const took =
       leaseAt === undefined
         ? await takeLease(options.cwd, task, now(options))
@@ -1198,9 +1224,6 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
       blocked.push(task)
       continue
     }
-    // Unreachable: the guard above already returned if a ready TASK existed with no
-    // `startSession` given, so `ready` is only ever non-empty here once one is in hand.
-    if (startSession === undefined) continue
     await startSession(task)
     started.push(task)
   }
@@ -1208,7 +1231,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const raised = await raiseRelationships(options, graph.relationships, gathered.records)
   if (!raised.ok) return { kind: 'cannot-run', reason: raised.reason }
 
-  const plan: SchedulePlan = { merged, pruned, started, blocked, raised: raised.raised }
+  const plan: SchedulePlan = { merged, pruned, started, blocked, deferred, raised: raised.raised }
   return { kind: 'scheduled', report: plan }
 }
 

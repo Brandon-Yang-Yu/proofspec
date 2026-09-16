@@ -5,7 +5,7 @@ import { enqueue } from '../cli/queue.ts'
 import { schedule } from '../cli/run.ts'
 import { piJudge } from '../cli/judge.ts'
 import { stderrNotifyHuman } from '../cli/notify.ts'
-import { tmuxStartSession } from '../cli/session.ts'
+import { liveSessionCount, tmuxStartSession } from '../cli/session.ts'
 import type { Outcome } from '../cli/types.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
 import type { ScheduleActions } from '../schedule/index.ts'
@@ -52,11 +52,13 @@ export type EnqueueTaskResult =
   | { readonly ok: false; readonly reason: string }
 
 /** The real actions a scheduling pass uses when nothing else is given: the same
- *  `tmuxStartSession`/`piJudge`/`stderrNotifyHuman` the bare CLI's own `schedule` command
- *  supplies (`src/cli/main.ts`). A test hands `runEnqueueTask` its own fakes instead. */
+ *  `tmuxStartSession`/`liveSessionCount`/`piJudge`/`stderrNotifyHuman` the bare CLI's own
+ *  `schedule` command supplies (`src/cli/main.ts`). A test hands `runEnqueueTask` its own
+ *  fakes instead. */
 function realScheduleActions(cwd: string): ScheduleActions {
   return {
     startSession: task => tmuxStartSession(cwd, task),
+    countSessions: liveSessionCount,
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   }
@@ -116,8 +118,8 @@ function toolResultFrom(result: EnqueueTaskResult): { content: [{ type: 'text'; 
 function scheduleSummary(scheduled: Outcome): string {
   if (scheduled.kind === 'cannot-run') return `The scheduling pass it triggered could not run: ${scheduled.reason}`
   if (scheduled.kind !== 'scheduled') return `The scheduling pass it triggered answered unexpectedly (${scheduled.kind}).`
-  const { pruned, started, blocked, raised } = scheduled.report
-  return `The scheduling pass it triggered: pruned ${pruned.length}, started ${started.length}, blocked ${blocked.length}, raised ${raised.length}.`
+  const { pruned, started, blocked, deferred, raised } = scheduled.report
+  return `The scheduling pass it triggered: pruned ${pruned.length}, started ${started.length}, blocked ${blocked.length}, deferred ${deferred.length}, raised ${raised.length}.`
 }
 
 /** `census_in_flight` takes no arguments: it answers for the whole repo it runs in, the same

@@ -4,7 +4,7 @@ import { check, impact, inflight, render, review, schedule, touched, write } fro
 import { piJudge } from './judge.ts'
 import { stderrNotifyHuman } from './notify.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
-import { tmuxStartSession } from './session.ts'
+import { liveSessionCount, tmuxStartSession } from './session.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
 
@@ -46,7 +46,9 @@ Commands:
            itself: a ready TASK starts a headed pi executor session in a detached tmux
            session named for the TASK, a relationship is judged by a fresh one-shot pi
            process, and one it cannot resolve is reported to stderr naming both TASKs and how
-           to rule on it. An embedder passing RunOptions may still override any of the three.
+           to rule on it. No session starts once the live-session bound is reached (four by
+           default, PROOFSPEC_MAX_SESSIONS). An embedder passing RunOptions may still
+           override any of the actions.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -145,6 +147,7 @@ const options: RunOptions = {
   // The bare command line's own real actions — see the `schedule` usage text above.
   schedule: {
     startSession: task => tmuxStartSession(process.cwd(), task),
+    countSessions: liveSessionCount,
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   },
