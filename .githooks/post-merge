@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Post-merge hook: run a scheduling pass after a merge lands on main.
+#
+# specs/schedule.md names "a TASK merged" as one of the events a scheduling pass reacts to
+# (never a resident process or a timer); specs/handoff.md notes this hook as the ops glue that
+# closes it — the same shape as post-commit refreshing the codebase-memory index, with nothing
+# of its own to test. Runs in the background so the merge itself is never delayed by it.
+#
+# Only a merge landing on main matters here — the same branch pre-merge-commit and pre-push
+# already gate. A fast-forward merge still fires post-merge (unlike pre-merge-commit, which
+# only runs when a real merge commit is made), so a TASK's branch fast-forwarding into main
+# still triggers a pass.
+
+set -euo pipefail
+
+[ "$(git branch --show-current)" = "main" ] || exit 0
+
+# The queue lives under the main checkout only (specs/schedule.md) — a linked worktree has no
+# .proofspec/dispatch/ of its own to act on.
+[ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ] || exit 0
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LOG="$(git rev-parse --absolute-git-dir)/schedule.log"
+
+# Detach so the merge returns immediately; the pass runs on its own.
+nohup pnpm --dir "$REPO_ROOT" proofspec schedule >"$LOG" 2>&1 &
+
+exit 0

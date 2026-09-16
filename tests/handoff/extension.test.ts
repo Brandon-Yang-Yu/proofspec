@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { manifestFrom, runEnqueueTask } from '../../src/handoff/extension.ts'
 import type { EnqueueTaskInput } from '../../src/handoff/extension.ts'
-import { cleanupRepos, makeRepo } from '../cli/support.ts'
+import { cleanupRepos, makeGitRepo, makeRepo } from '../cli/support.ts'
+import type { ScheduleActions } from '../../src/schedule/index.ts'
 
 afterEach(cleanupRepos)
 
@@ -120,9 +121,62 @@ it('refuses a TASK name ending with a hyphen before anything is written', async 
 it('accepts a plain kebab-case slug and passes it through to enqueue', async () => {
   const repo = await makeRepo({})
 
-  const result = await runEnqueueTask(repo.root, VALID_INPUT)
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, {})
 
-  expect(result).toEqual({ ok: true, task: 'a-real-task' })
+  expect(result).toMatchObject({ ok: true, task: 'a-real-task' })
+  expect(await stateOf(repo.root, 'a-real-task')).toBe('queued')
+})
+
+// Requirement: A successful enqueue immediately triggers a scheduling pass
+// Scenario: A successful enqueue immediately triggers a scheduling pass
+// GIVEN a TASK not already in the queue, ready to dispatch as soon as it is queued
+// WHEN enqueue_task is called
+// THEN the scheduling pass it triggers dispatches that TASK before enqueue_task returns
+it('triggers a scheduling pass that dispatches the TASK it just queued', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.git(['branch', 'work/a-real-task'])
+  const started: string[] = []
+  const actions: ScheduleActions = { startSession: async task => { started.push(task) } }
+
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, actions)
+
+  expect(result.ok).toBe(true)
+  expect(started).toEqual(['a-real-task'])
+})
+
+// Requirement: A successful enqueue immediately triggers a scheduling pass
+// Scenario: A refusal to enqueue never triggers a scheduling pass
+// GIVEN a TASK name already in the queue
+// WHEN enqueue_task is called again for it
+// THEN no scheduling pass runs at all
+it('never runs a scheduling pass when the enqueue itself is refused', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.git(['branch', 'work/a-real-task'])
+  await runEnqueueTask(repo.root, VALID_INPUT, {})
+  const refusing: ScheduleActions = {
+    startSession: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    judge: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    notifyHuman: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+  }
+
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, refusing)
+
+  expect(result.ok).toBe(false)
+})
+
+// Requirement: A successful enqueue immediately triggers a scheduling pass
+// Scenario: A TASK stays reported as queued even when the pass that followed it could not run
+// GIVEN a successful enqueue whose triggered pass cannot run (no startSession/judge action wired)
+// WHEN enqueue_task answers
+// THEN the TASK is still reported as queued, alongside the pass's own cannot-run outcome
+it('still reports the TASK as queued even when its triggered pass could not run', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.git(['branch', 'work/a-real-task'])
+
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, {})
+
+  expect(result).toMatchObject({ ok: true, task: 'a-real-task' })
+  expect(result.ok && result.scheduled.kind).toBe('cannot-run')
   expect(await stateOf(repo.root, 'a-real-task')).toBe('queued')
 })
 
@@ -162,9 +216,9 @@ it('maps a call with a base onto a MANIFEST whose base names that TASK and reaso
 it('enqueues a fresh TASK with base {kind: main} and state queued', async () => {
   const repo = await makeRepo({})
 
-  const result = await runEnqueueTask(repo.root, VALID_INPUT)
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, {})
 
-  expect(result).toEqual({ ok: true, task: 'a-real-task' })
+  expect(result).toMatchObject({ ok: true, task: 'a-real-task' })
   expect(await manifestOf(repo.root, 'a-real-task')).toEqual({
     intentRef: 'docs/x.md',
     branch: 'work/a-real-task',
@@ -182,9 +236,9 @@ it('enqueues a fresh TASK with its given base recorded exactly', async () => {
   const repo = await makeRepo({})
   const input: EnqueueTaskInput = { ...VALID_INPUT, base: { task: 'earlier-task', reason: 'built on its branch' } }
 
-  const result = await runEnqueueTask(repo.root, input)
+  const result = await runEnqueueTask(repo.root, input, {})
 
-  expect(result).toEqual({ ok: true, task: 'a-real-task' })
+  expect(result).toMatchObject({ ok: true, task: 'a-real-task' })
   expect(await manifestOf(repo.root, 'a-real-task')).toEqual({
     intentRef: 'docs/x.md',
     branch: 'work/a-real-task',
@@ -199,10 +253,10 @@ it('enqueues a fresh TASK with its given base recorded exactly', async () => {
 // THEN it refuses, naming the collision, and the existing entry is unchanged
 it('refuses a TASK name already in the queue, leaving its entry untouched', async () => {
   const repo = await makeRepo({})
-  await runEnqueueTask(repo.root, VALID_INPUT)
+  await runEnqueueTask(repo.root, VALID_INPUT, {})
   const attempted: EnqueueTaskInput = { ...VALID_INPUT, intentRef: 'docs/y.md', branch: 'work/a-real-task-2' }
 
-  const result = await runEnqueueTask(repo.root, attempted)
+  const result = await runEnqueueTask(repo.root, attempted, {})
 
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('a-real-task') })
   expect(await manifestOf(repo.root, 'a-real-task')).toEqual({

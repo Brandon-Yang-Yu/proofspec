@@ -2,7 +2,13 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
 import { enqueue } from '../cli/queue.ts'
+import { schedule } from '../cli/run.ts'
+import { piJudge } from '../cli/judge.ts'
+import { stderrNotifyHuman } from '../cli/notify.ts'
+import { tmuxStartSession } from '../cli/session.ts'
+import type { Outcome } from '../cli/types.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
+import type { ScheduleActions } from '../schedule/index.ts'
 
 /** The flattened shape `enqueue_task` accepts from a model, before it is mapped onto the
  *  real `Manifest`/`ManifestBase` `readManifest` (`src/inflight/manifest.ts`) already parses. */
@@ -41,21 +47,39 @@ export function manifestFrom(input: EnqueueTaskInput): Manifest {
   return { intentRef: input.intentRef, branch: input.branch, base }
 }
 
-export type EnqueueTaskResult = { readonly ok: true; readonly task: string } | { readonly ok: false; readonly reason: string }
+export type EnqueueTaskResult =
+  | { readonly ok: true; readonly task: string; readonly scheduled: Outcome }
+  | { readonly ok: false; readonly reason: string }
+
+/** The real actions a scheduling pass uses when nothing else is given: the same
+ *  `tmuxStartSession`/`piJudge`/`stderrNotifyHuman` the bare CLI's own `schedule` command
+ *  supplies (`src/cli/main.ts`). A test hands `runEnqueueTask` its own fakes instead. */
+function realScheduleActions(cwd: string): ScheduleActions {
+  return {
+    startSession: task => tmuxStartSession(cwd, task),
+    judge: piJudge(),
+    notifyHuman: stderrNotifyHuman(),
+  }
+}
 
 /**
  * The whole of `enqueue_task`'s own job: validate the TASK name, flatten the input onto a
  * real `Manifest`, then answer exactly what `enqueue()` answers — its own write outcome is
- * `enqueue()`'s to decide, not re-judged here.
+ * `enqueue()`'s to decide, not re-judged here. Once a TASK is genuinely newly queued, a
+ * scheduling pass runs immediately — the event `specs/schedule.md` already names, closed here
+ * (`specs/handoff.md`, "A successful enqueue immediately triggers a scheduling pass"). A
+ * refusal to enqueue returns before that pass ever runs: nothing new entered the queue.
  */
-export async function runEnqueueTask(cwd: string, input: EnqueueTaskInput): Promise<EnqueueTaskResult> {
+export async function runEnqueueTask(cwd: string, input: EnqueueTaskInput, scheduleActions?: ScheduleActions): Promise<EnqueueTaskResult> {
   const nameCheck = checkTaskName(input.task)
   if (!nameCheck.ok) return nameCheck
 
   const manifest = manifestFrom(input)
   const result = await enqueue(cwd, input.task, manifest)
   if (!result.ok) return result
-  return { ok: true, task: input.task }
+
+  const scheduled = await schedule({ cwd, schedule: scheduleActions ?? realScheduleActions(cwd) })
+  return { ok: true, task: input.task, scheduled }
 }
 
 /** The plain JSON Schema `enqueue_task`'s arguments must satisfy — no TypeBox schema needed,
@@ -81,8 +105,19 @@ const ENQUEUE_TASK_PARAMETERS = {
 } as const
 
 function toolResultFrom(result: EnqueueTaskResult): { content: [{ type: 'text'; text: string }]; details: EnqueueTaskResult } {
-  const text = result.ok ? `TASK "${result.task}" is now queued.` : `Could not enqueue: ${result.reason}`
+  const text = result.ok
+    ? `TASK "${result.task}" is now queued. ${scheduleSummary(result.scheduled)}`
+    : `Could not enqueue: ${result.reason}`
   return { content: [{ type: 'text', text }], details: result }
+}
+
+/** How the triggered pass's own outcome reads in `enqueue_task`'s text — never in place of the
+ *  enqueue result above it, only alongside it (`specs/handoff.md`). */
+function scheduleSummary(scheduled: Outcome): string {
+  if (scheduled.kind === 'cannot-run') return `The scheduling pass it triggered could not run: ${scheduled.reason}`
+  if (scheduled.kind !== 'scheduled') return `The scheduling pass it triggered answered unexpectedly (${scheduled.kind}).`
+  const { pruned, started, blocked, raised } = scheduled.report
+  return `The scheduling pass it triggered: pruned ${pruned.length}, started ${started.length}, blocked ${blocked.length}, raised ${raised.length}.`
 }
 
 /** `census_in_flight` takes no arguments: it answers for the whole repo it runs in, the same

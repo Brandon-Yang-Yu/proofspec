@@ -147,4 +147,7 @@ shells out to `pnpm proofspec schedule` on a merge into `main`. It is part of th
 intent but carries no requirement or scenario here, the same reason `post-commit` carries none.
 
 <!-- scenarios: generated -->
+- "A TASK stays reported as queued even when the pass that followed it could not run" → tests/handoff/extension.test.ts
+- "A refusal to enqueue never triggers a scheduling pass" → tests/handoff/extension.test.ts
+- "A successful enqueue immediately triggers a scheduling pass" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
