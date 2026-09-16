@@ -89,8 +89,8 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 out, reusing it unchanged if one already is — and start `pi` there in a detached tmux
 session named for the TASK, first killing any same-named session already there. That `pi`
 invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
-environment variables on the tmux `new-session` command, and SHALL be run with `--approve`
-and `--extension <cwd>/.pi/extensions/progress.ts`. Every tmux command this action runs
+environment variables on the tmux `new-session` command, and SHALL be run with `--approve`,
+`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`. Every tmux command this action runs
 SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L <socket>` flag
 rather than the default server — never the user's own default tmux server, and never any
 other named server — with a default socket name of `proofspec`, overridable through the
@@ -109,6 +109,15 @@ may need to sit at — without the scheduling pass itself holding a terminal ope
 alive; killing a same-named session before creating a fresh one is what lets a TASK whose
 first session attempt died or never came up get a working session on retry instead of
 colliding with a dead one of the same name.
+
+`--no-extensions` exists because `pi` auto-discovers a project's own `.pi/extensions/` unless
+told not to, and the TASK's own worktree carries its own copy of `.pi/extensions/progress.ts`
+— tracked in git, the same file the pinned `--extension` above exists to guard against being
+stale. Without `--no-extensions`, both copies load side by side, and `pi` refuses to start at
+all: two extensions registering the tool `report_task_state` under the same name is a conflict
+it treats as fatal, whether or not the two copies happen to agree. `pi`'s own `-e`/`--extension`
+flags still load an explicit path under `--no-extensions` — only auto-discovery is disabled —
+so the pinned copy is the only one that ever loads.
 
 A tmux session name is global to the whole machine, not scoped to any directory or project —
 `kill-session -t <name>` and `new-session -d -s <name>` on tmux's default server name and act
@@ -150,6 +159,7 @@ worktree's own copy of `.pi/agents/executor.md`.
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
+- "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK" → tests/schedule/session.test.ts

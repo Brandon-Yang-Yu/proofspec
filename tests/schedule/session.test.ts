@@ -65,7 +65,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
       args: [
         '-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a',
         '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
-        'pi', '--approve', '--extension', '/repo/.pi/extensions/progress.ts',
+        'pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts',
         '--append-system-prompt', 'you are the executor',
       ],
     },
@@ -96,9 +96,20 @@ it('carries --approve and --extension pinned to this checkout\'s own progress ex
 
   // A slice starting at 'pi' itself, not arrayContaining — proves --approve immediately
   // follows pi and --extension is immediately followed by exactly this path, not merely that
-  // all four tokens appear somewhere in args.
+  // all five tokens appear somewhere in args.
   const piIndex = start.args.indexOf('pi')
-  expect(start.args.slice(piIndex, piIndex + 4)).toEqual(['pi', '--approve', '--extension', '/repo/.pi/extensions/progress.ts'])
+  expect(start.args.slice(piIndex, piIndex + 5)).toEqual(['pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts'])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one
+// GIVEN a TASK and its worktree
+// WHEN the tmux start command is built
+// THEN the pi invocation carries --no-extensions, so only the pinned --extension path loads
+it('disables extension auto-discovery so the worktree\'s own progress.ts never loads alongside the pinned one', () => {
+  const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+
+  expect(start.args).toContain('--no-extensions')
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

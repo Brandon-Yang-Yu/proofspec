@@ -111,7 +111,12 @@ export type SessionStart = {
  * inside its own worktree (`specs/progress.md`); `--approve` and the pinned `--extension` are
  * what let it actually load the tool that reports there — a freshly created worktree is an
  * unknown path to `pi`'s own project trust, and `.pi/` being tracked in git means the TASK's
- * own branch can carry a stale (or missing) copy of `progress.ts`.
+ * own branch can carry a stale (or missing) copy of `progress.ts`. `--no-extensions` disables
+ * `pi`'s own auto-discovery of the worktree's copy of that same file — without it, `pi` loads
+ * both, and refuses to start at all: two extensions registering the same tool name,
+ * `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not. The pinned
+ * `--extension` path still loads under `--no-extensions`, same as `pi`'s own help text says
+ * an explicit `-e` does.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
@@ -123,7 +128,7 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
-        'pi', '--approve', '--extension', extension, '--append-system-prompt', start.systemPrompt,
+        'pi', '--approve', '--no-extensions', '--extension', extension, '--append-system-prompt', start.systemPrompt,
       ],
     },
   ]
