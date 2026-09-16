@@ -1250,17 +1250,17 @@ describes drafted every die/rewrite/new row's prose itself, inside the same conv
 talked the intent through — a poor judge of its own fresh wording, for the same reason the
 pipeline's reviews go to fresh subagents, and a conversation that remembers the drafting
 tells the reader how the draft got there instead of why today's design is right. A fresh
-**spec writer** persona (`.pi/agents/spec-writer.md`) now drafts, one pass per spawn: the
+**intent writer** persona (`.pi/agents/intent-writer.md`) now drafts, one pass per spawn: the
 investigator hands it the settled disposition rows, the intent in the human's own words, and
-the worktree root, and it writes prose into `specs/*.md` and nothing else — never a
-disposition, never a commit. The conversation holder keeps what only it can hold:
+the worktree root, and it writes prose and nothing else — never a disposition, never a
+commit. The conversation holder keeps what only it can hold:
 orchestrating the intent, owning the branch and the commits, running the disposition review.
 The house prose discipline — a rationale states the current, correct design, never the
 history of how the draft got there — has its single home in the persona that writes under it,
 no longer living only in the legacy `ship` skill the investigator was never pointed at.
 
 **The register all new spec prose writes at is plain first-read English, and it is stated,
-not inherited.** The first cut of `spec-writer.md` told its reader to write "in the register
+not inherited.** The persona file's first cut told its reader to write "in the register
 the surrounding spec already uses" — and the surrounding spec is dense: sentences that carry
 three ideas between two em-dashes, words chosen for precision inside long clauses. The people
 who read that prose easily are the people who wrote it; a reader coming cold pays for every
@@ -1270,6 +1270,21 @@ programmer and was not in the conversation can follow every sentence on first re
 older dense prose is history to read past, not a target to match. `investigator.md` names the
 same bar for intent docs: the executor reads those cold too, on a branch, with none of the
 conversation behind it.
+
+**The persona is renamed the intent writer, because intent docs joined its pen.** The
+investigator first wrote `docs/intent/<task>.md` by hand, from live conversation memory. The
+prose needed repeated amends to reach the bar: the conversation's holder writes history
+narration and defense of choices the reader was never part of. That is the same defect that
+moved spec prose out of the investigator's hands. So the persona (`.pi/agents/intent-writer.md`,
+renamed from `spec-writer.md`) drafts intent docs too, one pass per spawn. It drafts from the
+raw decisions the investigator hands over: bullet points in the human's own words, plus the
+paths involved. That is the same hand-over shape as a settled disposition table, never a
+finished summary.
+The conversation's holder stays its orchestrator, never its pen. A doc the human has accepted
+is final: no rewrites before enqueue, none after; amendments only when the human asks for
+them in review. The name follows the scope. In this design's vocabulary the load-bearing word
+is intent: the MANIFEST carries an `intentRef`, and spec prose is intent settled into
+requirements. The old name, "spec writer," named only half the persona's work.
 
 ## 50. `census_in_flight` closes §42's gap
 
