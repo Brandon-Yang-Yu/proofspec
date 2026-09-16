@@ -1,6 +1,8 @@
 // Capability: docket
 
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer as createNetServer } from 'node:net'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { docket, renderAnswer, serveDocket } from '../../src/cli/index.ts'
@@ -32,14 +34,26 @@ afterEach(async () => {
 })
 afterEach(cleanupRepos)
 
-/** Serves the docket over a fixture queue on a port the caller names (or none, for the
- *  default), with no session server to ask and the clock frozen at `NOW`. */
-async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number } = {}) {
+/** Serves the docket over a fixture queue on a port nothing holds, with no session server
+ *  to ask and the clock frozen at `NOW`. */
+async function serveOver(files: Readonly<Record<string, string>>) {
   const repo = await makeRepo(files)
-  const served = await serveDocket({ cwd: repo.root, port: options.port, docket: { listSessions: async () => [] }, now: () => NOW })
+  const served = await serveDocket({ cwd: repo.root, port: await freePort(), docket: { listSessions: async () => [] }, now: () => NOW })
   if (!served.ok) throw new Error(`serving did not start: ${served.reason}`)
   standing.push(served)
   return { repo, served }
+}
+
+/** A port nothing holds, found by asking the OS for one and giving it back. */
+async function freePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const probe = createNetServer()
+    probe.once('error', reject)
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address() as AddressInfo
+      probe.close(() => resolve(port))
+    })
+  })
 }
 
 /** One request's body, fetched the way the page fetches it. */

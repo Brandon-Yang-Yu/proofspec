@@ -120,7 +120,9 @@ it('shows the attach command and the ruling command as copyable text', async () 
   expect(elements.get('rows')?.innerHTML).toContain('<code>tmux -L proofspec attach-session -t alpha</code>')
   const rulings = elements.get('rulings')?.innerHTML ?? ''
   expect(rulings).toContain('proofspec schedule --ruling')
-  expect(rulings).toContain(`'capability:spec-tree:alpha,beta'`)
+  // The key rides along escaped — the page is HTML, and the browser reads the command back
+  // exactly as the answer held it once the entities are decoded.
+  expect(rulings).toContain('&#39;capability:spec-tree:alpha,beta&#39;')
   expect(rulings).toContain('<code>')
 })
 
