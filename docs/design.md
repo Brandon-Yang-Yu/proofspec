@@ -1272,18 +1272,19 @@ same bar for intent docs: the executor reads those cold too, on a branch, with n
 conversation behind it.
 
 **The persona is renamed the intent writer, because intent docs joined its pen.** The
-investigator first wrote `docs/intent/<task>.md` by hand, from live conversation memory, and
-the prose needed repeated amends to reach the bar: the conversation's holder writes history
+investigator first wrote `docs/intent/<task>.md` by hand, from live conversation memory. The
+prose needed repeated amends to reach the bar: the conversation's holder writes history
 narration and defense of choices the reader was never part of. That is the same defect that
 moved spec prose out of the investigator's hands. So the persona (`.pi/agents/intent-writer.md`,
-renamed from `spec-writer.md`) drafts intent docs too, one pass per spawn, from the raw
-decisions the investigator hands over: bullet points in the human's own words, plus the paths
-involved — the same hand-over shape as a settled disposition table, never a finished summary.
+renamed from `spec-writer.md`) drafts intent docs too, one pass per spawn. It drafts from the
+raw decisions the investigator hands over: bullet points in the human's own words, plus the
+paths involved. That is the same hand-over shape as a settled disposition table, never a
+finished summary.
 The conversation's holder stays its orchestrator, never its pen. A doc the human has accepted
 is final: no rewrites before enqueue, none after; amendments only when the human asks for
 them in review. The name follows the scope. In this design's vocabulary the load-bearing word
-is intent — the MANIFEST carries an `intentRef`, and spec prose is intent settled into
-requirements — while "spec writer" named only half the persona's work.
+is intent: the MANIFEST carries an `intentRef`, and spec prose is intent settled into
+requirements. The old name, "spec writer," named only half the persona's work.
 
 ## 50. `census_in_flight` closes §42's gap
 
@@ -1466,3 +1467,27 @@ The timing principle is stated once, in `executor.md` itself: committing is cont
 executor's own discretion — commit whenever work stands — and merge is the only act that
 waits, waiting for gates rather than permission: merge once every gate the branch touches is
 clean.
+
+## 57. The heartbeat — a fact the session leaves behind
+
+The docket (§55) already read a `heartbeat` file's write time; nothing ever wrote one. The
+extension that reports state words now also subscribes one zero-argument step to the six
+events pi's surface names for the moves a session can be seen making — a turn starting or
+ending, a tool call starting, updating, or ending, each streamed part of a reply — and that
+step leaves the current instant in the entry the same `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK`
+pair already names. A subagent needs no case of its own: it is a tool call on the parent's
+surface, so its work arrives as tool updates and refreshes the heartbeat with everything
+else.
+
+The grain is per move, not per token, because the parent cannot observe inside a child
+process's token stream — a requirement promising more than the process can observe would be
+lying about its own facts. And a failed write is not a refusal: only the ordinary
+pruned-entry `ENOENT` is swallowed, staleness being itself the signal a reader needs; every
+other fault propagates to pi's handler dispatch, which reports it without crashing the
+session — the same ENOENT-only split `report_task_state` keeps on its own side, where a
+caller did ask and is answered as a value instead.
+
+One pinning consequence of §51: executor sessions load the extension from the main
+checkout's own copy, so a session started before this landed never produces a heartbeat —
+and the docket saying "no heartbeat" for it is the honest reading, because nothing that
+session does is observable to the reader as a move.
