@@ -1245,6 +1245,20 @@ for real: `schedule`'s own LEASE-reclaim logic (§41) already depends on state a
 literal word `building` as the one signal a real session produces — a signal nothing yet
 produced.
 
+**Drafting has since left the investigator's own hands.** The investigator this section
+describes drafted every die/rewrite/new row's prose itself, inside the same conversation that
+talked the intent through — a poor judge of its own fresh wording, for the same reason the
+pipeline's reviews go to fresh subagents, and a conversation that remembers the drafting
+tells the reader how the draft got there instead of why today's design is right. A fresh
+**spec writer** persona (`.pi/agents/spec-writer.md`) now drafts, one pass per spawn: the
+investigator hands it the settled disposition rows, the intent in the human's own words, and
+the worktree root, and it writes prose into `specs/*.md` and nothing else — never a
+disposition, never a commit. The conversation holder keeps what only it can hold:
+orchestrating the intent, owning the branch and the commits, running the disposition review.
+The house prose discipline — a rationale states the current, correct design, never the
+history of how the draft got there — has its single home in the persona that writes under it,
+no longer living only in the legacy `ship` skill the investigator was never pointed at.
+
 ## 50. `census_in_flight` closes §42's gap
 
 `investigator.md`'s own "census, then draft for real" step leaned on `inflight` for a graph
