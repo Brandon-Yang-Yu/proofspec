@@ -104,6 +104,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
         '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
         'pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts',
         '--append-system-prompt', 'you are the executor',
+        'Begin: work your TASK a now - read the MANIFEST\'s intentRef on this branch, then run the full pipeline through to merge.',
       ],
     },
   ])
@@ -160,6 +161,25 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
   const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK
+// GIVEN a TASK ready to build
+// WHEN the tmux start command is built
+// THEN the pi invocation ends in a positional prompt argument — a non-empty message naming the TASK and telling the session to begin working it
+it('hands pi one positional kickoff message telling the session to begin working its TASK', () => {
+  const systemPrompt = 'you are the executor'
+  const [, start] = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt })
+
+  // The arg before the kickoff is the --append-system-prompt value itself, so the last arg
+  // cannot be filling any flag's slot — it can only be pi's positional prompt argument, the
+  // one argument that makes an unattended session begin rather than sit at its input box.
+  const kickoff = start.args[start.args.length - 1]
+  expect(start.args[start.args.length - 2]).toBe(systemPrompt)
+  expect(kickoff).not.toMatch(/^-/)
+  expect(kickoff).toMatch(/begin/i)
+  expect(kickoff).toContain('dispatch-me')
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
