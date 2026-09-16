@@ -124,4 +124,5 @@ exactly as it already does, untouched.
 - "A heartbeat file is refreshed in the TASK's queue entry on every observable move the session makes" → tests/progress/extension.test.ts
 - "A heartbeat refresh leaves the entry's state, MANIFEST, and LEASE exactly as they were" → tests/progress/extension.test.ts
 - "No heartbeat is written when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/progress/extension.test.ts
+- "The heartbeat is subscribed to exactly the six observable-move events, and to no others" → tests/progress/extension.test.ts
 <!-- /scenarios -->

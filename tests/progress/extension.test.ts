@@ -286,6 +286,21 @@ it('writes no heartbeat when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is un
 })
 
 // Requirement: The extension refreshes a heartbeat on every move the session makes
+// Scenario: The heartbeat is subscribed to exactly the six observable-move events, and to no others
+// GIVEN the extension registered against a recording fake
+// WHEN its event subscriptions are read back
+// THEN they are exactly the six events the requirement enumerates — no move it names missing, no event it does not name added
+// The enumeration in the requirement's prose is definitional: those six moves and no others
+// are what count as observable, so the subscription list itself is part of the promise. A
+// subscription that silently went missing fails the fireEvent throw above; one that silently
+// grew would pass every other test — only this set equality holds both directions to account.
+it('subscribes the heartbeat to exactly the six observable-move events, and no others', () => {
+  const handlers = registerExtension()
+
+  expect([...handlers.keys()].sort()).toEqual([...OBSERVABLE_MOVES].sort())
+})
+
+// Requirement: The extension refreshes a heartbeat on every move the session makes
 // Scenario: A heartbeat refresh leaves the entry's state, MANIFEST, and LEASE exactly as they were
 // GIVEN a queue entry carrying a state, a MANIFEST, and a LEASE
 // WHEN all six observable-move events fire
