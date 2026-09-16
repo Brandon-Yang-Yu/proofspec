@@ -6,7 +6,7 @@ in flight, and "deciding what to do with the answer belongs to something else." 
 something else: the one capability with permission to write into the queue directory —
 releasing a TASK held on one that is no longer live, pruning a queue entry nothing points at
 any more, judging a relationship before a human ever sees it, and starting the one executor
-session a ready TASK is owed.
+session a ready TASK is owed, within the live-session bound this document sets.
 
 It reads `inflight`'s answer the way `cli` reads a TASK's own MANIFEST and state file: as
 something to act on, not something to recompute. `specs/inflight.md` is not touched by this
@@ -128,6 +128,36 @@ TASK's dispatch hostage to the LEASE on one.
 - "The real command blocks a second pass from starting a second session for a ready TASK" → tests/schedule/end-to-end.test.ts
 - "Two passes racing at the same instant still start exactly one session" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
+
+### Requirement: No executor session starts once the live-session bound is reached
+
+A scheduling pass SHALL count the executor sessions live on the dedicated tmux server — the
+same server `startSession` starts them on, reached through `PROOFSPEC_TMUX_SOCKET` — fresh
+at each dispatch decision, from the server itself and never from bookkeeping of its own,
+and SHALL start no executor session once that count has reached the bound. The bound SHALL
+be four by default, overridable through the `PROOFSPEC_MAX_SESSIONS` environment variable,
+with a malformed override falling back to four rather than silently disabling the bound. A
+TASK the bound leaves undispatched SHALL keep its state word `queued` exactly as it stands;
+a later pass dispatches it once a session has gone.
+
+Counting sessions on that server is counting exactly the executor sessions this tool started
+and has not itself killed: the socket isolation `startSession` already keeps means nothing
+else runs there, and a session that dies — executor finished, machine rebooted, tmux killed
+by hand — shortens the list on its own, so the pass keeps no count of its own to drift. A
+TASK's state word is the wrong measure, for the same reason the LEASE reads elapsed time
+rather than a process: a session is alive through its whole start-to-`building` window and
+past `mergeable` while it still merges, and a pass counting words would overshoot the bound
+in exactly those windows. A TASK left undispatched keeps `queued` because nothing about the
+TASK changed — only the machine's capacity did, and capacity freeing is no state of the
+TASK's own: the settle step of this same pass already kills a merged TASK's session before
+dispatch runs, so a freed slot is there for the next pass to see, with no producer of its
+own to build. The bound is what a single pass can see: two passes triggered at the same
+instant can each see three live sessions and each start one — five, briefly — and closing
+that window would take a lock over the whole queue, the exact thing the LEASE requirement
+above declines to build; the LEASE already prevents the common double-dispatch, two sessions
+for one TASK. `PROOFSPEC_MAX_SESSIONS` follows the pattern `PROOFSPEC_TMUX_SOCKET` and
+`PROOFSPEC_JUDGE_BIN` already set: a test exercising the bound points at a throwaway socket
+and a bound of one, rather than starting four real sessions on the production server.
 
 ### Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 
