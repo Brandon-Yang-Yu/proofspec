@@ -1272,18 +1272,19 @@ same bar for intent docs: the executor reads those cold too, on a branch, with n
 conversation behind it.
 
 **The persona is renamed the intent writer, because intent docs joined its pen.** The
-investigator first wrote `docs/intent/<task>.md` by hand, from live conversation memory, and
-the prose needed repeated amends to reach the bar: the conversation's holder writes history
+investigator first wrote `docs/intent/<task>.md` by hand, from live conversation memory. The
+prose needed repeated amends to reach the bar: the conversation's holder writes history
 narration and defense of choices the reader was never part of. That is the same defect that
 moved spec prose out of the investigator's hands. So the persona (`.pi/agents/intent-writer.md`,
-renamed from `spec-writer.md`) drafts intent docs too, one pass per spawn, from the raw
-decisions the investigator hands over: bullet points in the human's own words, plus the paths
-involved — the same hand-over shape as a settled disposition table, never a finished summary.
+renamed from `spec-writer.md`) drafts intent docs too, one pass per spawn. It drafts from the
+raw decisions the investigator hands over: bullet points in the human's own words, plus the
+paths involved. That is the same hand-over shape as a settled disposition table, never a
+finished summary.
 The conversation's holder stays its orchestrator, never its pen. A doc the human has accepted
 is final: no rewrites before enqueue, none after; amendments only when the human asks for
 them in review. The name follows the scope. In this design's vocabulary the load-bearing word
-is intent — the MANIFEST carries an `intentRef`, and spec prose is intent settled into
-requirements — while "spec writer" named only half the persona's work.
+is intent: the MANIFEST carries an `intentRef`, and spec prose is intent settled into
+requirements. The old name, "spec writer," named only half the persona's work.
 
 ## 50. `census_in_flight` closes §42's gap
 

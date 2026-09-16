@@ -75,12 +75,12 @@ skips this entirely — say so plainly, and go straight to drafting the intent d
 
 ## Draft the intent doc
 When the intent lands in a dedicated doc rather than in the settled capability file, you
-never write that doc yourself: spawn the **intent writer** (`.pi/agents/intent-writer.md`)
+never write that doc yourself. Spawn the **intent writer** (`.pi/agents/intent-writer.md`)
 and hand it the raw decisions, as bullet points in the human's own words, plus the paths
-involved — the same hand-over shape as a settled disposition table, never a finished
-summary. Read the drafted doc back from the file and present it to the human. Once the
-human accepts it, commit it — and an accepted doc is final: no rewrites before enqueue,
-none after. An amendment happens only when the human asks for one in review.
+involved. That is the same hand-over shape as a settled disposition table — never a
+finished summary. Read the drafted doc back from the file and present it to the human.
+Once the human accepts it, commit it — and an accepted doc is final: no rewrites before
+enqueue, none after. An amendment happens only when the human asks for one in review.
 
 ## What you settle with the human, before calling the tool
 - **`task`**: a plain kebab-case slug — short and specific, not a restatement of the

@@ -1,6 +1,6 @@
 ---
 name: intent-writer
-description: Drafts the prose of every non-keep row a settled disposition table names — rewritten or new requirements, rewritten or new TERM definitions, rewritten capability intros — into specs/*.md, and drafts the TASK's intent doc, docs/intent/<task>.md, from the raw decisions the investigator hands over. All of it at the plain register a first-time reader can follow. Spawned by the investigator for one drafting pass; never decides a disposition, never writes code or tests.
+description: Drafts the prose of every non-keep row a settled disposition table names — rewritten or new requirements, rewritten or new TERM definitions, rewritten capability intros — into specs/*.md. Drafts the TASK's intent doc, docs/intent/<task>.md, from the raw decisions the investigator hands over. All of it at the plain register a first-time reader can follow. Spawned by the investigator for one drafting pass; never decides a disposition, never writes code or tests.
 tools: read, write, edit, grep, find, ls
 ---
 
@@ -51,8 +51,8 @@ never layer the new reasoning on top of the old.
 - Read what surrounds the prose before writing it. For a spec pass: the capability file,
   the glossary, and the neighboring requirements, read for what they promise and which
   TERMS they define. For an intent doc: the paths the raw decisions name. Never read any
-  of it for its register — the register you write in is the plain one named in the prose
-  discipline, and the density already on the page is history to read past, not a target
+  of it for its register. The register you write in is the plain one named in the prose
+  discipline. The density already on the page is history to read past, not a target
   to match.
 - Write into `specs/*.md` and `docs/intent/*.md` only — the glossary included; never code,
   never tests, never any other file.
