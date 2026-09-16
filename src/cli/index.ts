@@ -1,4 +1,6 @@
 export { check, docket, impact, inflight, render, review, schedule, touched, write } from './run.ts'
+export { DOCKET_SERVE_PORT, serveDocket } from './serve.ts'
+export type { ServeOptions, StandingServe } from './serve.ts'
 export { exitCodeOf, FORMATS, isFormat, renderAnswer, renderDiagnostics, renderJson, renderQuickfix, renderText } from './render.ts'
 export type { AnswerShape, Format, Layout } from './render.ts'
 // `TouchedScenarioReport` carries both, so a consumer naming it can name what it holds.

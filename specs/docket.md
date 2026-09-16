@@ -153,6 +153,12 @@ those two requests identically — which is the honesty this page is built on: n
 is a cache, a prediction, or the residue of an earlier glance. Serving a page is not a
 second capability beside the view; it is the view, asked more than once.
 
+<!-- scenarios: generated -->
+- "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
+- "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
+- "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does
 
 The page SHALL ask the server for the docket again on its own, on a short interval of its
@@ -165,6 +171,11 @@ for the same reason the view reads them from file write times rather than keepin
 an age is a fact about a moment, and a number the browser inflates on its own clock is a
 performance of the fact rather than the fact. When the next answer arrives the numbers
 move with it — and two people reading the same open page read the same numbers.
+
+<!-- scenarios: generated -->
+- "Every age is shown exactly as the last answer held it, never advanced in the browser" → tests/docket/page.test.ts
+- "The page asks the server for the docket again on its own, on a short interval" → tests/docket/page.test.ts
+<!-- /scenarios -->
 
 ### Requirement: The page shows commands and offers no control that runs them
 
@@ -179,3 +190,8 @@ ruling invites a form. Both would put an actor inside the view — every action 
 knows how to take already has a command that takes it, run in a terminal where its output
 and its failure are readable, and `schedule` keeps every one of those decisions its own.
 The page's requests are its refreshes, nothing else.
+
+<!-- scenarios: generated -->
+- "No control on the page attaches, rules, holds, or starts anything" → tests/docket/page.test.ts
+- "The attach command of a listed session and the ruling command of an outstanding relationship are shown as copyable text" → tests/docket/page.test.ts
+<!-- /scenarios -->

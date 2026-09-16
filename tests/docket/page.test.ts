@@ -1,0 +1,140 @@
+// Capability: docket
+
+import { createContext, runInContext } from 'node:vm'
+import { expect, it } from 'vitest'
+import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
+
+/** An answer worth a second screen: a working TASK with a session, a problem, and a debt. */
+const ANSWER = {
+  rows: [
+    {
+      task: 'alpha',
+      state: 'building',
+      branch: 'work/alpha',
+      base: { kind: 'main' },
+      stateAgeSeconds: 7541,
+      heartbeatAgeSeconds: 41,
+      session: { listed: true, attach: 'tmux -L proofspec attach-session -t alpha' },
+    },
+    {
+      task: 'settled',
+      state: 'merged',
+      branch: 'work/settled',
+      base: { kind: 'main' },
+      stateAgeSeconds: 90,
+      heartbeatAgeSeconds: null,
+      session: { listed: false },
+    },
+  ],
+  problems: [{ task: 'broken', reason: 'task broken has no MANIFEST' }],
+  outstanding: [
+    {
+      node: { kind: 'capability', name: 'spec-tree' },
+      tasks: ['alpha', 'beta'],
+      key: 'capability:spec-tree:alpha,beta',
+      answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
+    },
+  ],
+}
+
+/** One element the page's script renders into, as the script itself sees it. */
+type PageElement = { innerHTML: string; hidden: boolean }
+
+/**
+ * Runs the page's own inline script the way a browser runs it: a document to render into, a
+ * `fetch` that answers the fixture, and a timer list that records what the page asked to
+ * repeat. Asserting against the page's script — not a reimplementation of it — is what keeps
+ * this a proof about the page rather than a claim about a copy of it.
+ */
+async function renderPageWith(answer: unknown) {
+  const elements = new Map<string, PageElement>()
+  const element = (id: string): PageElement => {
+    const found = elements.get(id)
+    if (found !== undefined) return found
+    const made: PageElement = { innerHTML: '', hidden: false }
+    elements.set(id, made)
+    return made
+  }
+  const fetched: string[] = []
+  const timers: number[] = []
+  const context = {
+    document: { getElementById: element },
+    fetch: async (url: string) => {
+      fetched.push(url)
+      return { json: async () => answer }
+    },
+    setInterval: (_renew: () => void, every: number) => {
+      timers.push(every)
+    },
+  }
+  createContext(context)
+  runInContext(pageScript(), context)
+  // The first refresh is asynchronous; let it land before the assertions read the page.
+  await new Promise(resolve => setTimeout(resolve, 0))
+  return { elements, fetched, timers }
+}
+
+/** The page's own script, lifted out of the page unchanged. */
+function pageScript(): string {
+  const match = /<script>([\s\S]*)<\/script>/.exec(docketPage())
+  if (match === null) throw new Error('the docket page holds no inline script')
+  return match[1]!
+}
+
+// Requirement: The page refreshes itself, and its numbers move only when an answer does
+// Scenario: The page asks the server for the docket again on its own, on a short interval
+// GIVEN the docket's page
+// WHEN its script runs, the way a browser runs it
+// THEN it asks the server for /docket at once, and arranges on its own to ask again after a short interval — the refresh is the page's job, not the reader's
+it('asks for the docket again on its own, on a short interval', async () => {
+  const { fetched, timers } = await renderPageWith(ANSWER)
+
+  expect(fetched).toEqual(['/docket'])
+  expect(timers).toEqual([PAGE_REFRESH_MILLISECONDS])
+})
+
+// Requirement: The page refreshes itself, and its numbers move only when an answer does
+// Scenario: Every age is shown exactly as the last answer held it, never advanced in the browser
+// GIVEN an answer whose TASK has stood in its word for 7541 seconds and last moved 41 seconds ago
+// WHEN the page renders it
+// THEN the row shows those two ages spelled from the answered numbers, and the page holds no clock of its own that could advance a number between answers
+it('shows every age exactly as the last answer held it', async () => {
+  const { elements } = await renderPageWith(ANSWER)
+  const rows = elements.get('rows')?.innerHTML ?? ''
+
+  expect(rows).toContain('2h 5m 41s')
+  expect(rows).toContain('41s')
+  expect(rows).toContain('no heartbeat')
+  expect(docketPage()).not.toContain('Date.now')
+  expect(docketPage()).not.toContain('new Date')
+})
+
+// Requirement: The page shows commands and offers no control that runs them
+// Scenario: The attach command of a listed session and the ruling command of an outstanding relationship are shown as copyable text
+// GIVEN an answer holding a TASK whose session is listed and a ruling still outstanding
+// WHEN the page renders it
+// THEN the attach command and the ruling command stand on the page as text a person can copy
+it('shows the attach command and the ruling command as copyable text', async () => {
+  const { elements } = await renderPageWith(ANSWER)
+
+  expect(elements.get('rows')?.innerHTML).toContain('<code>tmux -L proofspec attach-session -t alpha</code>')
+  const rulings = elements.get('rulings')?.innerHTML ?? ''
+  expect(rulings).toContain('proofspec schedule --ruling')
+  expect(rulings).toContain(`'capability:spec-tree:alpha,beta'`)
+  expect(rulings).toContain('<code>')
+})
+
+// Requirement: The page shows commands and offers no control that runs them
+// Scenario: No control on the page attaches, rules, holds, or starts anything
+// GIVEN the docket's page
+// WHEN it is read as the HTML it is
+// THEN it offers no control that runs anything — no button, no form, no input, no handler — and the page's requests are its refreshes: its one request target is /docket
+it('offers no control that runs anything', async () => {
+  const page = docketPage()
+
+  for (const control of ['<button', '<form', '<input', '<select', '<textarea', 'onclick=', 'onsubmit=', 'javascript:']) {
+    expect(page).not.toContain(control)
+  }
+  expect(page.match(/fetch\(/g)).toEqual([`fetch(`])
+  expect(page).toContain(`fetch('/docket')`)
+})
