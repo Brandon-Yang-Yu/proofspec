@@ -1320,18 +1320,57 @@ both of which are now named plainly instead.
 
 ---
 
-## 53. `Docket` — a name for the pipeline, still open
+## 53. `Docket` — the pipeline's own name
 
 `proofspec` names the spec↔test↔code contract (§1–§34); the investigator/schedule/executor
-pipeline that executes it (§37–§52) has so far carried no name of its own, borrowing
-`proofspec`'s. Whether it should keep borrowing it, get its own name with `proofspec`
-demoted to an internal dependency, or something else, is not decided — the pipeline's own
-shape is still moving, and Rule 3
-(YAGNI) argues for holding off any code- or package-level rename until it stops.
+pipeline that executes it (§37–§52) is named **Docket**. It reads on the courtroom
+vocabulary this design already speaks — `judge`, `ruling`, `disposition review`, the
+reviews ledger — rather than introducing a new metaphor: investigator puts a TASK on the
+docket, schedule manages the order cases are heard in, executor carries out the ruling.
+Strictly a docket is the calendar of cases, not the court itself, so the name is a metonymy
+carried with open eyes: the queue of pending TASKs is the artifact that makes this pipeline
+what it is, and the `docket` command that shows it (§54) is where the word does its most
+literal work. Other names floated in the conversation that settled this one — `Relay`,
+`Warrant`, `Loom`, `Slipstream`, `Offload` — none spoke the design's own vocabulary.
 
-`Docket` is recorded here only as the leading candidate from that conversation, not a
-decision. It reads on the courtroom vocabulary this design already speaks — `judge`,
-`ruling`, `disposition review`, the reviews ledger — rather than introducing a new metaphor:
-investigator puts a TASK on the docket, schedule manages the order cases are heard in,
-executor carries out the ruling. Other names floated in the same conversation and set aside
-for now, none ruled out: `Relay`, `Warrant`, `Loom`, `Slipstream`, `Offload`.
+**The package and the binary keep the name `proofspec`, deliberately.** The earlier open
+question — rename the package, demote `proofspec` to an internal dependency — is deferred,
+and the deferral is itself the decision recorded here: Rule 3 (YAGNI) still argues against
+a code- or package-level rename while the pipeline's shape is moving, and nothing in the
+specs or the tools depends on the pipeline having a package of its own. Revisit when the
+shape settles, not before.
+
+## 54. `docket` — one glance at the queue
+
+`inflight` answers how in-flight TASKs relate, as JSON for a program; `schedule` acts on
+the queue and says what it found on the stderr of the pass that found it. Nothing between
+them gathers what a person wants while several executor sessions run: each TASK's own word,
+whether its session is still there to attach to, how long it has stood where it stands,
+when it last moved, and which rulings are still outstanding. `docket` is that one glance —
+one row per queue entry, plus every raised-but-unruled relationship with the exact command
+to rule on it.
+
+**Every fact is read from where some other capability already wrote it.** The queue
+directory `enqueue` writes, the raised-relationships record `schedule` keeps, the heartbeat
+`progress` refreshes, the session list of the very tmux server `startSession` runs sessions
+on. Ages are read from the files' own write times — no log is kept, because the filesystem
+already records when each word took hold and when each move happened. Session presence is
+the server's own answer about what it holds, not the process-probe §41 refuses: listed is
+attachable, absent is absent, and neither is interpreted.
+
+**No `running` word, on purpose.** The state vocabulary keeps its rule — every word has
+exactly one honest producer — and `running` has none available: the session cannot promise
+its own future (it writes the word, then hangs, and the word stays), and the view cannot
+observe activity without the very probe this design refuses. What a person actually wants
+is *how long since the last move*, and that is a fact, not a word: `progress`'s heartbeat,
+refreshed by the session's extension on every observable move — a turn, a tool call, a
+streamed reply, a subagent's step arriving as a tool update — going stale on its own the
+moment moves stop. The view carries the number; the human judges it.
+
+**Reports only.** No gate, no writes, no ordering beyond TASK name, no judgement about
+holds, sessions, or relationships — every decision a docket row might tempt already belongs
+to the capability that makes it. Text by default because a person is its reader; JSON on
+request like every other command.
+
+The pipeline's own name (§53) and this capability's are the same word on purpose: the
+command shows what the pipeline is named after — the docket itself.

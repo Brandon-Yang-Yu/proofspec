@@ -14,9 +14,14 @@ queue lives under.
 
 `leaseDecision` (`src/schedule/lease.ts`) already treats the literal word `building` as proof
 a session is live; before this capability, nothing running inside a session ever produced that
-word. `report_task_state` closes exactly that gap and no more: it does not decide when a TASK
-is actually done, does not carry the text of a parked question, and does not add a `merged`
-state — those remain other capabilities', or a future round's, to build.
+word. `report_task_state` closes exactly that gap: it does not decide when a TASK is actually
+done, does not carry the text of a parked question, and does not add a `merged` state — those
+remain other capabilities', or a future round's, to build. The capability carries a second
+limb, the heartbeat: the same extension refreshes a timestamp in the same queue entry on
+every move the session makes, so that a view reading the entry can tell a working session
+from a silent one without asking either. Neither limb decides anything — the words and the
+timestamps are facts a session leaves behind, and what anything makes of them belongs to
+whoever reads them.
 
 ### Requirement: report_task_state accepts only a closed set of state words
 
@@ -92,3 +97,25 @@ exactly that failure at the boundary and answers it as a value instead, the same
 - "Reporting a state for a TASK whose queue entry has been pruned is refused as a value, never thrown" → tests/progress/extension.test.ts
 - "Reporting a state leaves the entry's MANIFEST and LEASE exactly as they were" → tests/progress/extension.test.ts
 <!-- /scenarios -->
+
+### Requirement: The extension refreshes a heartbeat on every move the session makes
+
+The session's extension SHALL refresh a `heartbeat` file in its TASK's queue entry whenever
+the session makes any observable move — starting or ending a turn, starting, updating, or
+ending a tool call, or streaming part of a reply — resolving the entry the same way
+`report_task_state` does, from `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK`, and writing
+nothing when either is unset. It SHALL NOT touch the `state` file or any other file in the
+entry.
+
+The heartbeat is a fact, not a word, and the difference is who can lie: a state word is a
+claim that stays put until something rewrites it, while a heartbeat refreshed on every move
+goes stale on its own the moment the moves stop — nobody has to remember to say so. That is
+what lets it carry "how long since the last move" honestly where a `running` state word
+would go silently false the moment the session hung after writing it (docs/design.md §54).
+A subagent is a tool call on this session's own surface: its steps arrive as tool updates,
+so a subagent at work refreshes the heartbeat and one that has stopped does not — while the
+refresh grain stays per move, not per token, because a session cannot observe inside a child
+process's token stream, and a requirement promising more than the process can observe would
+be lying about its own facts. The heartbeat feeds the docket view (`specs/docket.md`) and
+nothing else: LEASE staleness keeps measuring elapsed time against the `building` word,
+exactly as it already does, untouched.

@@ -434,6 +434,18 @@ asks. A sub-verb parser would be built for choices the capability does not make.
 - "The command exits its ok code even when the graph carries problems" → tests/cli/inflight.test.ts
 <!-- /scenarios -->
 
+### Requirement: A command answers the docket, as text for a person by default
+
+The CLI SHALL provide a `docket` command that answers the docket view — one row per TASK in
+the conventional queue directory, and the relationships raised but not yet ruled — as text
+by default and as JSON on request, and SHALL exit its ok code whatever it finds.
+
+A person at a terminal watching several TASKs run is the reader this command exists for, so
+the default form is the one a person reads — the mirror image of `inflight`'s JSON by
+default, whose reader is a program, and the same rule that command already records: the
+default follows the kind of answer. The JSON form carries the same content, the way every
+other command's does.
+
 ### Requirement: Two revisions can be compared without checking either one out
 
 The CLI SHALL provide a way to compare two named git revisions without checking either one
