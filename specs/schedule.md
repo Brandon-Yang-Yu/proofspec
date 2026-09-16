@@ -159,6 +159,19 @@ for one TASK. `PROOFSPEC_MAX_SESSIONS` follows the pattern `PROOFSPEC_TMUX_SOCKE
 `PROOFSPEC_JUDGE_BIN` already set: a test exercising the bound points at a throwaway socket
 and a bound of one, rather than starting four real sessions on the production server.
 
+<!-- scenarios: generated -->
+- "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A later pass dispatches a TASK the bound deferred once a session has gone" → tests/schedule/end-to-end.test.ts
+- "A malformed PROOFSPEC_MAX_SESSIONS override falls back to four rather than silently disabling the bound" → tests/schedule/bound.test.ts
+- "A ready TASK with no countSessions action given cannot run the pass" → tests/schedule/end-to-end.test.ts
+- "A scheduling pass starts no session once the live count has reached the bound" → tests/schedule/end-to-end.test.ts
+- "A well-formed PROOFSPEC_MAX_SESSIONS override replaces the default bound" → tests/schedule/bound.test.ts
+- "The live count is asked of the dedicated server by its own -L socket, never the default server" → tests/schedule/session.test.ts
+- "The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK" → tests/schedule/end-to-end.test.ts
+- "The live count reads the sessions standing on the server itself, answering zero when none stand" → tests/schedule/session.test.ts
+- "The live-session bound is four by default" → tests/schedule/bound.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 
 The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its

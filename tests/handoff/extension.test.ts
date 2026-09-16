@@ -136,7 +136,7 @@ it('triggers a scheduling pass that dispatches the TASK it just queued', async (
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await repo.git(['branch', 'work/a-real-task'])
   const started: string[] = []
-  const actions: ScheduleActions = { startSession: async task => { started.push(task) } }
+  const actions: ScheduleActions = { startSession: async task => { started.push(task) }, countSessions: async () => 0 }
 
   const result = await runEnqueueTask(repo.root, VALID_INPUT, actions)
 

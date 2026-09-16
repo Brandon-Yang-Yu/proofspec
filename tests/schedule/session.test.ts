@@ -1,10 +1,14 @@
 // Capability: schedule
 
+import { execFile } from 'node:child_process'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { promptBodyFrom, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { liveSessionCount, promptBodyFrom, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
+
+const execFileAsync = promisify(execFile)
 
 afterEach(cleanupRepos)
 // Unconditional, not a manual delete at the end of the test body it belongs to — a thrown
@@ -228,6 +232,50 @@ it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () 
   const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec-test-run-42'])
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: The live count is asked of the dedicated server by its own -L socket, never the default server
+// GIVEN the counting command a scheduling pass asks for the live session count
+// WHEN it is built
+// THEN it reaches tmux through -L on the dedicated server — the same socket the start commands
+//      use, and the one PROOFSPEC_TMUX_SOCKET overrides — never the user's default server
+it('asks the dedicated server for the live count by its own -L socket, never the default one', () => {
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'list-sessions'] })
+
+  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
+  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
+})
+
+// Requirement: No executor session starts once the live-session bound is reached
+// Scenario: The live count reads the sessions standing on the server itself, answering zero when none stand
+// GIVEN a real throwaway tmux server holding two sessions, then one, then none at all
+// WHEN the live session count is asked of it
+// THEN it answers two, then one, then zero — the server's own list, taken fresh each call, with
+//      no server standing reading as zero rather than a failure
+it('reads the live count from the sessions standing on the server itself', async () => {
+  const socket = 'proofspec-test-session-count'
+  process.env.PROOFSPEC_TMUX_SOCKET = socket
+  // A server can outlive a test that died mid-body, so its residue is cleared before the
+  // sessions this test means to count are placed — counting is exact here or nothing is.
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', socket, ...args])
+  await tmux(['kill-server']).catch(() => {})
+  try {
+    // `sleep` keeps each session's process alive, so the session stands until killed below.
+    await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
+    await tmux(['new-session', '-d', '-s', 'two', 'sleep', '60'])
+
+    await expect(liveSessionCount()).resolves.toBe(2)
+
+    await tmux(['kill-session', '-t', 'one'])
+    await expect(liveSessionCount()).resolves.toBe(1)
+
+    await tmux(['kill-server'])
+    await expect(liveSessionCount()).resolves.toBe(0)
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+  }
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

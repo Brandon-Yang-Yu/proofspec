@@ -1335,3 +1335,34 @@ decision. It reads on the courtroom vocabulary this design already speaks — `j
 investigator puts a TASK on the docket, schedule manages the order cases are heard in,
 executor carries out the ruling. Other names floated in the same conversation and set aside
 for now, none ruled out: `Relay`, `Warrant`, `Loom`, `Slipstream`, `Offload`.
+
+---
+
+## 54. The live-session bound — capacity read from the server, never from state words
+
+Nothing in §41–§47 bounds how many executor sessions may stand at once: every ready TASK
+dispatched in one pass starts a session, and a queue of ten ready TASKs starts ten headed
+`pi` processes on one machine. The bound is four by default, `PROOFSPEC_MAX_SESSIONS`
+overridable, and the count it is compared against is `tmux -L <socket> list-sessions` asked
+of the dedicated server fresh at every dispatch decision — never a count the pass keeps,
+never a reading of TASKs' state words.
+
+Counting the server is counting exactly the sessions this tool started: §47's socket
+isolation means nothing else runs there, and a session that dies — executor finished,
+machine rebooted, tmux killed by hand — shortens the list on its own. A TASK's state word is
+the wrong measure for the same reason the LEASE reads elapsed time rather than a process:
+a session is alive through its whole start-to-`building` window and past `mergeable` while
+it still merges, so a pass counting words would overshoot the bound in exactly those
+windows. A malformed override falls back to four rather than silently disabling the bound,
+because the obvious malformed readings parse to `NaN` and every comparison against `NaN` is
+false — a pass holding `NaN` would dispatch without limit while believing itself bounded.
+
+A TASK the bound leaves undispatched keeps its state word `queued` and takes no LEASE:
+nothing about the TASK changed, only the machine's capacity did, and capacity is no state of
+the TASK's own. The settle step of the same pass already kills a merged TASK's session
+before dispatch runs, so a freed slot is there for the next pass to see — the bound needs no
+producer of its own. What the bound does not promise: two passes triggered at the same
+instant can each see three live sessions and each start one, five briefly. Closing that
+window would take a lock over the whole queue — the exact thing the LEASE requirement
+declines to build — and the LEASE already prevents the common double-dispatch, two sessions
+for one TASK.

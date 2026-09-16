@@ -64,6 +64,9 @@ export type RaisedEntry =
  * rather than being forced to fabricate a `judge` it would rather not pretend is real. */
 export type ScheduleActions = {
   readonly startSession?: (task: string) => Promise<void>
+  /** How many executor sessions stand live on the dedicated tmux server, asked of the server
+   * itself — the one source the pass trusts, keeping no count of its own to drift. */
+  readonly countSessions?: () => Promise<number>
   readonly judge?: (input: RelationshipJudgeInput) => Promise<JudgeVerdict>
   readonly notifyHuman?: (relationship: Relationship) => Promise<void>
 }
@@ -74,5 +77,8 @@ export type SchedulePlan = {
   readonly pruned: readonly string[]
   readonly started: readonly string[]
   readonly blocked: readonly string[]
+  /** TASKs the live-session bound left undispatched: still `queued`, carried no LEASE, and
+   * dispatched by a later pass once a session has gone. */
+  readonly deferred: readonly string[]
   readonly raised: readonly Relationship[]
 }

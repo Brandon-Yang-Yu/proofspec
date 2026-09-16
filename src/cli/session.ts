@@ -115,6 +115,40 @@ export function tmuxKillSessionCommand(task: string): TmuxCommand {
   return { command: 'tmux', args: ['-L', tmuxSocket(), 'kill-session', '-t', task] }
 }
 
+/** The tmux command that lists the sessions standing on the dedicated server. Counting what
+ *  it prints is how a scheduling pass learns how many executor sessions are live: the socket
+ *  isolation means everything standing there is one this tool started, so the plain line count
+ *  is the count — no name filtering, no bookkeeping. */
+export function tmuxListSessionsCommand(): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(), 'list-sessions'] }
+}
+
+/** How many executor sessions stand live on the dedicated server, asked of the server itself
+ *  fresh on every call. A server with no sessions — or no server standing at all — answers
+ *  zero: that is tmux's own reading of "nothing runs there", not a failure to count. */
+export async function liveSessionCount(): Promise<number> {
+  const listing = await runForOutput(tmuxListSessionsCommand())
+  if (listing === undefined) return 0
+  return listing.split('\n').filter(line => line.trim() !== '').length
+}
+
+/** Runs a command and answers its stdout when it exits zero, `undefined` when it exits
+ *  non-zero — `tmux list-sessions` on a server holding no sessions exits non-zero, which is
+ *  the ordinary empty answer rather than a fault, while a command that cannot even start
+ *  (no tmux on the machine) rejects like any real fault: a pass that cannot ask the server
+ *  must not read its silence as zero. */
+function runForOutput(command: TmuxCommand): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command.command, [...command.args], { stdio: ['ignore', 'pipe', 'ignore'] })
+    let stdout = ''
+    child.stdout.on('data', chunk => {
+      stdout += chunk
+    })
+    child.once('error', reject)
+    child.once('exit', code => resolve(code === 0 ? stdout : undefined))
+  })
+}
+
 /** What `tmuxSessionCommands` needs to start a TASK's session — grouped rather than four
  *  positional params (style rule 4) now that the queue root joined worktree/systemPrompt. */
 export type SessionStart = {
