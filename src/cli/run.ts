@@ -28,16 +28,17 @@ import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
 import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
-import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, toRaise } from '../schedule/index.ts'
-import type { JudgeVerdict, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
+import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
+import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
 import type { ChangedFile } from './git.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease } from './queue.ts'
+import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease, writeState } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
+import { teardownTask } from './session.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,
@@ -1136,8 +1137,21 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
     return { kind: 'ruled', entry }
   }
 
-  const gathered = await gatherQueue(options)
+  let gathered = await gatherQueue(options)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
+
+  // The merged-state producer runs ahead of everything else the pass decides: the queue first
+  // catches up on what git already knows, and every later step — the graph, the holds, the
+  // pruner, dispatch — reads the states this pass just settled, not the ones it found. It
+  // needs no action from the caller and each settle is complete on its own terms, which is
+  // why it stands ahead of the cannot-run guards those steps keep.
+  const merged = await settleMergedStates(options, gathered)
+  if (merged.length > 0) {
+    const regathered = await gatherQueue(options)
+    if (!regathered.ok) return { kind: 'cannot-run', reason: regathered.reason }
+    gathered = regathered
+  }
+
   const graph = computeGraph(gathered)
 
   const held = new Set(
@@ -1194,12 +1208,45 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const raised = await raiseRelationships(options, graph.relationships, gathered.records)
   if (!raised.ok) return { kind: 'cannot-run', reason: raised.reason }
 
-  const plan: SchedulePlan = { pruned, started, blocked, raised: raised.raised }
+  const plan: SchedulePlan = { merged, pruned, started, blocked, raised: raised.raised }
   return { kind: 'scheduled', report: plan }
 }
 
 function now(options: RunOptions): string {
   return (options.now ?? new Date()).toISOString()
+}
+
+/**
+ * Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch
+ * has landed in main
+ *
+ * The one place a TASK's state is ever written to `merged`. The executor cannot report the
+ * word itself — `report_task_state`'s closed set excludes it on purpose, because a session
+ * that just did the merging is the least impartial judge of whether its merge landed — so the
+ * pass answers the ancestry question itself, fresh from git, for every candidate on every
+ * pass. A git that cannot answer reads as not-landed, which leaves the word standing — the
+ * safe side of a rule whose every failure mode costs a look, never a lost TASK. Each settle
+ * tears down the TASK's worktree and tmux session in the same breath; that is this pass's
+ * move for the same reason — the executor's own session lives inside the very worktree being
+ * removed, so nothing running there can be the one to remove it.
+ */
+async function settleMergedStates(
+  options: RunOptions,
+  gathered: { readonly records: readonly TaskRecord[]; readonly words: ReadonlyMap<string, string> },
+): Promise<readonly string[]> {
+  const branches = new Map(gathered.records.map(record => [record.task, record.manifest.branch]))
+  const candidates: readonly MergeCandidate[] = [...gathered.words]
+    .map(([task, word]) => ({ task, word, branch: branches.get(task) }))
+    .filter((one): one is MergeCandidate => one.branch !== undefined)
+  const settled = await tasksToMerge(candidates, async branch => {
+    const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: 'main' })
+    return answer.ok && answer.isAncestor
+  })
+  for (const task of settled) {
+    await writeState(options.cwd, task, 'merged')
+    await teardownTask(options.cwd, task)
+  }
+  return settled
 }
 
 /**

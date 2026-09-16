@@ -1020,16 +1020,27 @@ by two guard rules that fail rather than warn — a term defined twice, or defin
 named home. Both are unambiguous the moment a second definition or a second home exists, so a
 warning would have been a fix deferred for no reason.
 
-## 39. A queue entry outlives its TASK, and nobody yet prunes it
+## 39. A queue entry outlives its TASK, until nothing still names it
 
 Once a TASK merges, its queue subdirectory cannot simply be deleted, because the graph tells
 "based on a TASK that merged" apart from "based on a TASK the queue holds no record of"
-purely by whether that subdirectory still exists. So a merged entry stays — state rewritten
-to `merged`, never removed — for as long as anything might still ask about it, and nothing
-in this design prunes it yet. The criterion for whenever that capability gets designed: a
-merged entry is safe to remove once no in-flight TASK's own base still names it — answerable
-from the same graph `inflight` already computes, so the future pruner needs no bookkeeping
-of its own.
+purely by whether that subdirectory still exists. So a merged entry stays — never removed —
+for as long as anything might still ask about it; the scheduling pass prunes it once no
+in-flight TASK's own base still names it, answerable from the same graph `inflight` already
+computes, so the pruner keeps no bookkeeping of its own.
+
+The `merged` word has exactly one producer: the scheduling pass, which rewrites a TASK's
+state to `merged` only when both hold — the TASK's state word is `mergeable`, the executor's
+own claim the work is done, and the TASK's branch is an ancestor of `main`, checked fresh
+from git on every pass. Each condition covers the other's blind spot: a branch is an
+ancestor of `main` from the moment it is cut, so ancestry alone would settle a freshly
+queued TASK before any work happened, and `mergeable` alone is only a claim. The executor
+cannot report `merged` itself (`report_task_state`'s closed set excludes it, §51) — a
+session that just did the merging is the least impartial judge of whether its merge landed.
+The same settle removes the TASK's worktree at its conventional path and kills its
+same-named tmux session on the dedicated server: the executor's own session lives inside
+the worktree being removed, so the teardown is the pass's move, never the executor's — and a
+leftover worktree registration is the exact collision a later dispatch of that name dies on.
 
 ## 40. The MANIFEST carries a branch, not a declared footprint
 
@@ -1262,7 +1273,7 @@ not change, which `inflight`'s census has no need of since it only ever lists ro
 changed. `reworded / new / gone` is the one spelling for this now anywhere in the tool, with
 `kept` as `ship`'s own added category for an unchanged row.
 
-**Who reads it.** Nothing in `schedule`'s own mechanical work (pruning, holds, LEASEs,
+**Who reads it.** Nothing in `schedule`'s own mechanical work (settling, pruning, holds, LEASEs,
 dispatching) needs to classify a spec change — only a human or the investigator judging one
 does, and both reach it through `handoff`'s `census_in_flight` tool, never through `schedule`.
 
@@ -1291,8 +1302,9 @@ a branch cut before this capability existed carries no such file at all, so `pi 
 
 **`report_task_state` reports a word, not a question.** `blocked-on-question` carries no free
 text; a human reads the actual question by attaching to the session's own tmux window. `merged`
-is deliberately not in the reportable set either — §39's pruning question still has no
-producer, and stays out of scope here on purpose.
+is deliberately not in the reportable set either — a session that just did the merging is the
+least impartial judge of whether its merge landed. The word has exactly one producer, the
+scheduling pass (§39), which writes it only after checking the branch landed in `main` itself.
 
 ## 52. Naming cleanup
 
@@ -1314,7 +1326,7 @@ both of which are now named plainly instead.
 pipeline that executes it (§37–§52) has so far carried no name of its own, borrowing
 `proofspec`'s. Whether it should keep borrowing it, get its own name with `proofspec`
 demoted to an internal dependency, or something else, is not decided — the pipeline's own
-shape is still moving (§39's pruning question, for one, has no owner yet), and Rule 3
+shape is still moving, and Rule 3
 (YAGNI) argues for holding off any code- or package-level rename until it stops.
 
 `Docket` is recorded here only as the leading candidate from that conversation, not a

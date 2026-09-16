@@ -37,6 +37,54 @@ both this capability and `inflight` read it the same way.
 - "A held TASK is never ready to dispatch, however queued its own word is" → tests/schedule/lease.test.ts
 <!-- /scenarios -->
 
+### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+
+A scheduling pass SHALL rewrite a TASK's state file to `merged` when both hold: the TASK's
+current state word is `mergeable`, and its MANIFEST's `branch` is an ancestor of `main` —
+checked fresh from git on each pass, never from bookkeeping of its own. A TASK failing
+either condition SHALL keep its state word exactly as it stands. The same pass SHALL
+remove that TASK's worktree at its conventional path and kill its same-named tmux session
+on the dedicated server, so a TASK the queue has settled leaves nothing checked out behind
+it.
+
+§39 left "state rewritten to `merged`, never removed" deliberately without a producer, and
+the lack of one stalls the whole queue behind it: every merged TASK sits at `mergeable`
+forever, which holds every TASK based on it — the hold releases only on `merged` or on no
+record at all — and leaves the pruner with nothing ever to prune. The pass is the one
+component that already recomputes everything fresh from git and the queue directory, and
+the executor cannot report `merged` itself — `report_task_state`'s closed set excludes it
+on purpose — because a session that just did the merging is the least impartial judge of
+whether its merge landed.
+
+Both conditions are required because each covers the other's blind spot. A branch is an
+ancestor of `main` from the moment it is cut, so ancestry alone would mark a freshly
+queued TASK `merged` before any work happened; the `mergeable` word is the executor's own
+claim the work is done. And `mergeable` alone is only a claim — a pass that lands it in
+git is the proof, which is exactly what the ancestor check supplies.
+
+The teardown belongs to this same pass, not to the executor, because the executor's own
+session lives inside the very worktree that would be torn down — removing it is not a
+move a process can safely make on the directory it is running in. A worktree left behind
+is not harmless litter, either: it keeps the TASK's branch checked out under its own
+name, which is exactly the collision a later dispatch of that name stumbles over — the
+first unattended dispatch this queue ever ran died precisely there, on a branch held by a
+leftover worktree. The human's two places in this flow — the disposition gate before any
+of it, and a parked `blocked-on-question` during — are both already standing; settling a
+TASK's residue is mechanics, not judgment, and belongs to no one.
+
+<!-- scenarios: generated -->
+- "A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it" → tests/schedule/end-to-end.test.ts
+- "A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A landed branch alone does not settle a TASK whose word is not mergeable" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has landed in main is named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in main is not named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main" → tests/schedule/end-to-end.test.ts
+- "The landed-in-main check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
+- "The settled TASK's tmux session is killed on the dedicated server" → tests/schedule/session.test.ts
+- "The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch" → tests/schedule/session.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A merged TASK's queue entry is pruned once nothing still names it
 
 A queue entry whose TASK's state has reached merged SHALL be removed by a scheduling pass

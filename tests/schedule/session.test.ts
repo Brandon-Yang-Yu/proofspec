@@ -3,7 +3,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { promptBodyFrom, resolveSessionWorktree, sessionStartFor, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { promptBodyFrom, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
@@ -85,6 +85,41 @@ it('throws an error carrying git\'s own stderr when creating the worktree fails'
   await expect(resolveSessionWorktree(repo.root, 'a')).rejects.toThrow(
     /fatal: 'work\/a' is already (used by worktree|checked out at)/,
   )
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch
+// GIVEN a TASK with a worktree standing at its conventional path
+// WHEN the settled TASK's teardown runs
+// THEN nothing stands at that path, and the branch can be checked out in a fresh worktree again
+it('removes the settled TASK\'s worktree and frees its branch for a later dispatch', async () => {
+  const repo = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  await resolveSessionWorktree(repo.root, 'a')
+  // The teardown kills a tmux session by the TASK's name; pointing it at a throwaway socket
+  // keeps that kill from ever reaching a real session on the production socket.
+  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run'
+
+  await teardownTask(repo.root, 'a')
+
+  await expect(readFile(join(repo.root, '.proofspec', 'worktrees', 'a', '.git'), 'utf8')).rejects.toThrow()
+  // The collision the first unattended dispatch died on: a worktree registration left holding
+  // the branch after its directory was gone. Re-adding must succeed without --force and
+  // without a manual prune — that is what "freed" means here, not merely the empty path.
+  await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'a'), 'work/a'])
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: The settled TASK's tmux session is killed on the dedicated server
+// GIVEN a TASK the queue has settled, and a tmux session still carrying its name
+// WHEN the settled TASK's teardown runs
+// THEN the kill reaches the dedicated server by its -L socket, never the default one, and names the TASK's session
+it('kills the settled TASK\'s tmux session on the dedicated server', () => {
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+  expect(tmuxKillSessionCommand('a')).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] })
+
+  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
+  expect(tmuxKillSessionCommand('a')).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'kill-session', '-t', 'a'] })
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
