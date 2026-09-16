@@ -19,6 +19,12 @@ const MAIN = fileURLToPath(new URL('../../src/cli/main.ts', import.meta.url))
 
 afterEach(cleanupRepos)
 
+// A pass settles a mergeable TASK by tearing down its session — killing a tmux session by the
+// TASK's name and removing its worktree. Pointing the whole suite at a throwaway socket keeps
+// that kill from ever reaching a real session on the production socket, the exact override
+// PROOFSPEC_TMUX_SOCKET exists to provide.
+process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run'
+
 function planOf(outcome: Outcome): SchedulePlan {
   if (outcome.kind !== 'scheduled') throw new Error(`expected a scheduled report, got ${outcome.kind}`)
   return outcome.report
@@ -167,6 +173,108 @@ it('dispatches a TASK once the TASK it was held on has merged', async () => {
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
 
   expect(plan.started).toEqual(['b'])
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// GIVEN a TASK whose state word is mergeable, whose branch has already landed in main
+// WHEN a scheduling pass runs
+// THEN the TASK is reported settled, its state word rewritten to merged and its entry pruned
+//      in the same pass
+it('rewrites a mergeable TASK to merged once its branch has landed in main', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await repo.git(['merge', 'work/a'])
+  await repo.write('.proofspec/dispatch/a/state', 'mergeable')
+
+  const outcome = await schedule({ cwd: repo.root, schedule: fakeActions() })
+
+  expect(planOf(outcome).merged).toEqual(['a'])
+  expect(planOf(outcome).pruned).toEqual(['a'])
+  expect(renderAnswer(outcome)).toContain('merged a')
+  const remaining = await readdir(join(repo.root, '.proofspec', 'dispatch'))
+  expect(remaining).not.toContain('a')
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands
+// GIVEN a TASK whose state word is mergeable, whose branch has not landed in main
+// WHEN a scheduling pass runs
+// THEN the TASK's state file still reads mergeable, and the pass settles nothing
+it('keeps a mergeable TASK\'s state word when its branch has not landed', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await repo.write('.proofspec/dispatch/a/state', 'mergeable')
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
+
+  expect(plan.merged).toEqual([])
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands
+// GIVEN a TASK whose branch has landed in main, whose state word is building — the executor\'s
+//      own word for a session still live
+// WHEN a scheduling pass runs
+// THEN the TASK's state file still reads building — a landed branch alone never settles a TASK
+it('keeps a landed TASK\'s state word when it is not mergeable', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await repo.git(['merge', 'work/a'])
+  await repo.write('.proofspec/dispatch/a/state', 'building')
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
+
+  expect(plan.merged).toEqual([])
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('building')
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: The landed-in-main check is made fresh from git on each pass, never from bookkeeping
+// GIVEN a TASK whose state word is mergeable, whose branch has not yet landed in main
+// WHEN a first pass runs, then the branch is merged into main, then a second pass runs
+// THEN the first pass settles nothing, and the second settles it — the same pass shape answers
+//      differently once git alone has changed
+it('checks the landed-in-main question fresh from git on each pass', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await repo.write('.proofspec/dispatch/a/state', 'mergeable')
+  const actions = fakeActions()
+
+  const before = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+  expect(before.merged).toEqual([])
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
+
+  await repo.git(['merge', 'work/a'])
+  const after = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(after.merged).toEqual(['a'])
+  const remaining = await readdir(join(repo.root, '.proofspec', 'dispatch'))
+  expect(remaining).not.toContain('a')
+})
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it
+// GIVEN a TASK based on another whose state word is mergeable and whose branch has landed in main
+// WHEN a scheduling pass runs
+// THEN the pass settles the held-on TASK, and dispatches the held TASK in that same pass — the
+//      hold never outlives the state word it reads
+it('dispatches a TASK held on a mergeable TASK whose branch has landed, in the same pass', async () => {
+  const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
+  await enterTask(repo, 'a', { edit: 'specs/a.md' })
+  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await repo.git(['merge', 'work/a'])
+  await repo.write('.proofspec/dispatch/a/state', 'mergeable')
+  const actions = fakeActions()
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+
+  expect(plan.merged).toEqual(['a'])
+  expect(plan.started).toEqual(['b'])
+  // b's base still names a, so a's entry survives this pass to answer for the hold — and its
+  // state word is the one this pass wrote, not the one it found.
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('merged')
 })
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it

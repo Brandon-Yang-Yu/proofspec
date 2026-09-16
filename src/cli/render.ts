@@ -422,10 +422,11 @@ function renderRelationship(relationship: Relationship): string {
 
 /** What one scheduling pass did, as a person reads it. */
 function renderScheduled(plan: SchedulePlan): string {
-  if (plan.pruned.length === 0 && plan.started.length === 0 && plan.blocked.length === 0 && plan.raised.length === 0) {
+  if (plan.merged.length === 0 && plan.pruned.length === 0 && plan.started.length === 0 && plan.blocked.length === 0 && plan.raised.length === 0) {
     return 'nothing to do'
   }
   const lines = [
+    ...plan.merged.map(task => `merged ${task} (branch landed in main)`),
     ...plan.pruned.map(task => `pruned ${task}`),
     ...plan.started.map(task => `started ${task}`),
     ...plan.blocked.map(task => `blocked ${task} (a LEASE already stands)`),

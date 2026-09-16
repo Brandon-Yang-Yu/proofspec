@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, rm, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { runGit } from './git.ts'
@@ -97,6 +97,14 @@ function tmuxSocket(): string {
 
 const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
 
+/** The tmux command that kills a TASK's session on the dedicated server. Built for two
+ *  callers that need the identical command: `startSession`, which clears a stale session of
+ *  the same name before starting a fresh one, and the scheduling pass settling a TASK, which
+ *  kills the session outright — same name, same dedicated server, never the user's own. */
+export function tmuxKillSessionCommand(task: string): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(), 'kill-session', '-t', task] }
+}
+
 /** What `tmuxSessionCommands` needs to start a TASK's session — grouped rather than four
  *  positional params (style rule 4) now that the queue root joined worktree/systemPrompt. */
 export type SessionStart = {
@@ -130,7 +138,7 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
   const socket = tmuxSocket()
   const extension = join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)
   return [
-    { command: 'tmux', args: ['-L', socket, 'kill-session', '-t', task] },
+    tmuxKillSessionCommand(task),
     {
       command: 'tmux',
       args: [
@@ -183,6 +191,25 @@ function runIgnoringFailure(command: TmuxCommand): Promise<void> {
     child.once('error', () => resolve())
     child.once('exit', () => resolve())
   })
+}
+
+/** Tears down what a settled TASK leaves checked out: its worktree at the conventional path,
+ * and its same-named tmux session on the dedicated server. This is the scheduling pass's
+ * move, never the executor's own — the executor's session lives inside the very worktree
+ * being removed, and a process cannot safely delete the directory it is running in.
+ *
+ * The directory is removed directly and `git worktree prune` clears the registration a
+ * removed worktree leaves behind, because that registration is itself the collision: a
+ * later dispatch of the same name dies on "missing but already registered worktree" until
+ * pruned, which is exactly where the first unattended dispatch died. Pruning also covers the
+ * residue a failed `git worktree add` leaves — a directory no worktree stands behind — which
+ * `git worktree remove` would refuse rather than clear. Killing the session first means the
+ * process whose cwd is about to disappear is gone before it does.
+ */
+export async function teardownTask(cwd: string, task: string): Promise<void> {
+  await runIgnoringFailure(tmuxKillSessionCommand(task))
+  await rm(worktreePathFor(cwd, task), { recursive: true, force: true })
+  await runGit(cwd, ['worktree', 'prune'])
 }
 
 /** Runs a command, throwing when it could not even start or exited non-zero — unlike the kill

@@ -7,6 +7,11 @@ import type { Relationship } from '../inflight/index.ts'
  */
 export const BUILDING = 'building'
 
+/** The literal state word an executor's own report leaves behind once its TASK's work is done
+ * and every gate it touched is clean — the executor's claim, which git's ancestry check is
+ * asked to prove before anyone acts on it. */
+export const MERGEABLE = 'mergeable'
+
 /** One in-flight TASK whose `base` names another TASK, and whether that hold still stands. */
 export type HoldStatus =
   | { readonly kind: 'held'; readonly task: string; readonly on: string }
@@ -22,6 +27,14 @@ export type LeaseDecision = { readonly kind: 'take' } | { readonly kind: 'blocke
 export type ScheduleTask = {
   readonly task: string
   readonly word: string
+}
+
+/** One TASK as the merged-state producer needs it: the literal state word — the executor's
+ * own claim its work is done — and the branch whose landing in main is git's to confirm. */
+export type MergeCandidate = {
+  readonly task: string
+  readonly word: string
+  readonly branch: string
 }
 
 /** Whether a fresh agent, reading both TASKs' intent, judged a relationship a real conflict. */
@@ -57,6 +70,7 @@ export type ScheduleActions = {
 
 /** What one scheduling pass did. */
 export type SchedulePlan = {
+  readonly merged: readonly string[]
   readonly pruned: readonly string[]
   readonly started: readonly string[]
   readonly blocked: readonly string[]

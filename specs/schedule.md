@@ -72,6 +72,19 @@ leftover worktree. The human's two places in this flow — the disposition gate 
 of it, and a parked `blocked-on-question` during — are both already standing; settling a
 TASK's residue is mechanics, not judgment, and belongs to no one.
 
+<!-- scenarios: generated -->
+- "A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it" → tests/schedule/end-to-end.test.ts
+- "A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A landed branch alone does not settle a TASK whose word is not mergeable" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has landed in main is named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in main is not named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main" → tests/schedule/end-to-end.test.ts
+- "The landed-in-main check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
+- "The settled TASK's tmux session is killed on the dedicated server" → tests/schedule/session.test.ts
+- "The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch" → tests/schedule/session.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A merged TASK's queue entry is pruned once nothing still names it
 
 A queue entry whose TASK's state has reached merged SHALL be removed by a scheduling pass

@@ -38,8 +38,9 @@ Commands:
            reach it and the requirements they prove. Needs a codebase-memory index.
   inflight Read the conventional queue directory and answer how the in-flight TASK found there
            relate to one another. Reports only, and always exits ok.
-  schedule Run one scheduling pass over the queue: prune a merged TASK nothing still names,
-           dispatch every ready TASK, and raise an unresolved relationship at most once. Given
+  schedule Run one scheduling pass over the queue: settle a mergeable TASK whose branch has landed
+           in main, prune a merged TASK nothing still names, dispatch every ready TASK, and raise an
+           unresolved relationship at most once. Given
            --ruling, records a human's ruling on an already-raised relationship instead.
            The bare command line supplies real startSession, judge, and notifyHuman actions
            itself: a ready TASK starts a headed pi executor session in a detached tmux
