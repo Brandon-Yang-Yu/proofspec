@@ -1211,7 +1211,8 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
     // carries no LEASE, so a later pass is free to dispatch it the moment a session has gone,
     // and the deferred TASK keeps its own state word untouched — capacity is no state of the
     // TASK's own.
-    if (await countSessions() >= bound) {
+    const live = await countSessions()
+    if (live >= bound) {
       deferred.push(task)
       continue
     }
