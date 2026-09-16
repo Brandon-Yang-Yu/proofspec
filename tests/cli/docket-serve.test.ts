@@ -84,15 +84,17 @@ it('listens on the loopback at the conventional port by default', async () => {
 
 // Requirement: A command serves the docket as a page
 // Scenario: A port a caller names is the port served on
-// GIVEN a free port the caller names
-// WHEN the command is asked to serve on it
-// THEN it answers there — a second instance can run beside a first
-it('serves on the port a caller names', async () => {
-  const port = await freePort()
-  const served = await serveOver(FILES, { port })
+// GIVEN a served docket standing on one port, and a second free port the caller names
+// WHEN a second instance is asked to serve beside the first, on that port
+// THEN both answer — each on the port it was given, standing beside the other
+it('serves on the port a caller names, beside a first instance', async () => {
+  const first = await serveOver(FILES, { port: await freePort() })
+  const secondPort = await freePort()
+  const second = await serveOver(FILES, { port: secondPort })
 
-  expect(served.url).toBe(`http://localhost:${port}/`)
-  expect((await request('/docket', port)).status).toBe(200)
+  expect(second.url).toBe(`http://localhost:${secondPort}/`)
+  expect((await request('/docket', secondPort)).status).toBe(200)
+  expect((await request('/docket', first.port)).status).toBe(200)
 })
 
 // Requirement: A command serves the docket as a page
