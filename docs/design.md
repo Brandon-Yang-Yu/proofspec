@@ -1416,7 +1416,7 @@ command shows what the pipeline is named after — the docket itself.
 asked" — restating at repo level what §37 and §49 had already settled where it belongs: a
 persona's pipeline behavior is owned by the persona's own file plus this design, and
 repo-level project instructions are not a second source of pipeline truth. The rule was noise
-for every session that is not an executor — investigator, coordinator, a human's own
+for every session that is not an executor — investigator, reviewers, a human's own
 interactive session — and a second copy that would drift silently the moment `executor.md`
 moved. The one real function it ever performed, resolving the ask-before-committing habit
 against `executor.md`'s instruction, belongs at the persona's own level: a persona instruction
