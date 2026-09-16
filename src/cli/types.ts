@@ -8,6 +8,7 @@
 
 import type { GuardReport } from '../guard/index.ts'
 import type { Graph } from '../inflight/index.ts'
+import type { Docket, DocketActions } from '../docket/index.ts'
 import type { TermChange } from '../glossary/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { LineRange, TouchedScenario } from '../locate/index.ts'
@@ -63,6 +64,9 @@ export type RunOptions = {
   /** The external actions a scheduling pass hands off: starting a session, judging a relationship,
    *  notifying a human. Only required when a pass actually needs one of them. */
   readonly schedule?: ScheduleActions
+  /** The external action the docket hands off: asking the dedicated tmux server for its
+   *  session list. Left out, the real tmux server is asked. */
+  readonly docket?: DocketActions
   /** What a scheduling pass treats as "now", for a LEASE's elapsed time; left out, the real clock. */
   readonly now?: Date
   /** Tests read by the caller, instead of discovering them under `testsDir`. */
@@ -339,6 +343,7 @@ export type Outcome =
   | { readonly kind: 'impact'; readonly report: ImpactReport }
   | { readonly kind: 'wrote'; readonly files: readonly string[] }
   | { readonly kind: 'inflight'; readonly report: Graph }
+  | { readonly kind: 'docket'; readonly report: Docket }
   | { readonly kind: 'scheduled'; readonly report: SchedulePlan }
   | { readonly kind: 'ruled'; readonly entry: Extract<RaisedEntry, { readonly kind: 'ruled' }> }
   | { readonly kind: 'cannot-run'; readonly reason: string }

@@ -1,5 +1,5 @@
 import type { Relationship } from '../inflight/index.ts'
-import { relationshipKey } from '../schedule/index.ts'
+import { relationshipKey, rulingCommandFor } from '../schedule/index.ts'
 import type { ScheduleActions } from '../schedule/index.ts'
 
 /**
@@ -21,6 +21,6 @@ function messageFor(relationship: Relationship): string {
   const tasks = [...relationship.tasks].join(', ')
   return (
     `schedule: an unresolved relationship needs a human — ${relationship.node.kind} "${relationship.node.name}" shared by ${tasks}\n` +
-    `  answer with: proofspec schedule --ruling "<your ruling>" '${key}'\n`
+    `  answer with: ${rulingCommandFor(key)}\n`
   )
 }

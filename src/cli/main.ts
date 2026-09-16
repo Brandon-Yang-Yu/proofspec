@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { check, impact, inflight, render, review, schedule, touched, write } from './run.ts'
+import { check, docket, impact, inflight, render, review, schedule, touched, write } from './run.ts'
 import { piJudge } from './judge.ts'
 import { stderrNotifyHuman } from './notify.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
-import { liveSessionCount, tmuxStartSession } from './session.ts'
+import { listTmuxSessions, liveSessionCount, tmuxStartSession } from './session.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
 
@@ -49,6 +49,11 @@ Commands:
            to rule on it. No session starts once the live-session bound is reached (four by
            default, PROOFSPEC_MAX_SESSIONS). An embedder passing RunOptions may still
            override any of the actions.
+  docket   One glance at the queue: a row per TASK in the conventional queue directory — its own
+           state word, how long it has stood there, when its session last moved, and whether
+           that session is still there to attach to — plus every relationship raised but not
+           yet ruled, each with the exact command that records a ruling. Text by default,
+           JSON with --format json. Reports only: writes nothing, judges nothing, always ok.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -151,6 +156,9 @@ const options: RunOptions = {
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   },
+  docket: {
+    listSessions: listTmuxSessions,
+  },
   specsDir: values.specs,
   testsDir: values.tests,
   out: values.out,
@@ -214,11 +222,12 @@ function runCommand(command: string | undefined, options: RunOptions): Promise<O
   if (command === 'review') return review(options)
   if (command === 'impact') return impact(options)
   if (command === 'inflight') return inflight(options)
+  if (command === 'docket') return docket(options)
   if (command === 'schedule') return schedule(options)
   const named = command === undefined ? 'no command' : `unknown command "${command}"`
   return Promise.resolve({
     kind: 'cannot-run',
-    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", "inflight", or "schedule".`,
+    reason: `${named}. Use "check", "write", "render", "touched", "review", "impact", "inflight", "docket", or "schedule".`,
   })
 }
 

@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readManifest, stateOf } from '../inflight/index.ts'
 import type { Manifest, TaskFailure, TaskRecord } from '../inflight/index.ts'
@@ -18,6 +18,7 @@ const QUEUE_DIR = ['.proofspec', 'dispatch'] as const
 const MANIFEST_FILE = 'MANIFEST'
 const STATE_FILE = 'state'
 const LEASE_FILE = 'LEASE'
+const HEARTBEAT_FILE = 'heartbeat'
 
 /** One task's MANIFEST and state as read, or the reason that task alone could not be read. */
 export type QueueEntry =
@@ -174,6 +175,34 @@ export async function reclaimLease(cwd: string, task: string, staleAt: string, t
     return await takeLease(cwd, task, takenAt)
   } finally {
     await rm(lock, { recursive: true, force: true })
+  }
+}
+
+/** When a TASK's `state` and `heartbeat` files were last written, read from the filesystem's
+ * own record of each write — the two ages the docket answers, tracked nowhere else. The
+ * heartbeat may legitimately be absent (a TASK with no session), so its time is optional; a
+ * `state` file that cannot be statted makes the whole read fail, because a TASK whose word
+ * cannot be aged is a problem for that TASK alone rather than a row with a number invented
+ * for it. */
+export type WriteTimes = {
+  readonly stateWrittenAt: number
+  readonly heartbeatWrittenAt: number | undefined
+}
+
+/** The write times of a TASK's `state` and `heartbeat` files, or nothing when the `state`
+ * file itself cannot be read. */
+export async function writeTimes(cwd: string, task: string): Promise<WriteTimes | undefined> {
+  const stateWrittenAt = await mtimeOf(join(cwd, ...QUEUE_DIR, task, STATE_FILE))
+  if (stateWrittenAt === undefined) return undefined
+  return { stateWrittenAt, heartbeatWrittenAt: await mtimeOf(join(cwd, ...QUEUE_DIR, task, HEARTBEAT_FILE)) }
+}
+
+/** A file's write time, or nothing when it cannot be read — a miss, not a crash. */
+async function mtimeOf(path: string): Promise<number | undefined> {
+  try {
+    return (await stat(path)).mtimeMs
+  } catch {
+    return undefined
   }
 }
 

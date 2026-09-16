@@ -115,12 +115,40 @@ export function tmuxKillSessionCommand(task: string): TmuxCommand {
   return { command: 'tmux', args: ['-L', tmuxSocket(), 'kill-session', '-t', task] }
 }
 
-/** The tmux command that lists the sessions standing on the dedicated server. Counting what
- *  it prints is how a scheduling pass learns how many executor sessions are live: the socket
- *  isolation means everything standing there is one this tool started, so the plain line count
- *  is the count — no name filtering, no bookkeeping. */
+/** The tmux command that lists the sessions standing on the dedicated server. Two readers,
+ *  two questions: a scheduling pass counts the lines to learn how many executor sessions are
+ *  live (the socket isolation means everything standing there is one this tool started, so
+ *  the plain line count is the count), and the docket reads the names to learn whether a
+ *  TASK's session is still there to attach to. */
 export function tmuxListSessionsCommand(): TmuxCommand {
   return { command: 'tmux', args: ['-L', tmuxSocket(), 'list-sessions'] }
+}
+
+/** The exact command a person runs to attach to a TASK's session on the dedicated server —
+ *  the one line the docket carries for every session the server still holds. */
+export function tmuxAttachCommand(task: string): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(), 'attach-session', '-t', task] }
+}
+
+/** A command as the one line a person copies and runs. */
+export function commandLine(command: TmuxCommand): string {
+  return `${command.command} ${command.args.join(' ')}`
+}
+
+/** Each line of tmux's `list-sessions` output names one session, colon-separated from its
+ *  details — only the name is the docket's, to match against TASK names. */
+export function parseSessionNames(output: string): readonly string[] {
+  return output
+    .split('\n')
+    .map(line => line.split(':')[0]!.trim())
+    .filter(name => name !== '')
+}
+
+/** The session names the dedicated server holds, or none when the server holds no session at
+ *  all — a server with nothing on it is the docket's ordinary every-session-absent case, not
+ *  a fault worth surfacing. */
+export async function listTmuxSessions(): Promise<readonly string[]> {
+  return parseSessionNames(await capture(tmuxListSessionsCommand()))
 }
 
 /** How many executor sessions stand live on the dedicated server, asked of the server itself
@@ -146,6 +174,24 @@ function runForOutput(command: TmuxCommand): Promise<string | undefined> {
     })
     child.once('error', reject)
     child.once('exit', code => resolve(code === 0 ? stdout : undefined))
+  })
+}
+
+/** Runs a command and answers its stdout, or the empty string when it could not run. No
+ *  special case for a non-zero exit: tmux writes its own failures to stderr, so a failed ask
+ *  still answers no sessions on stdout — which every row reads as absent rather than as a
+ *  fault. Where `runForOutput` above treats a start failure as a real fault (a scheduling
+ *  pass gating on the count must not read silence as zero), this is the docket's read: a view
+ *  that cannot ask reports every session absent rather than refusing to answer at all. */
+function capture(command: TmuxCommand): Promise<string> {
+  return new Promise(resolve => {
+    const child = spawn(command.command, [...command.args], { stdio: ['ignore', 'pipe', 'ignore'] })
+    let out = ''
+    child.stdout.on('data', chunk => {
+      out += chunk
+    })
+    child.once('error', () => resolve(''))
+    child.once('exit', () => resolve(out))
   })
 }
 
