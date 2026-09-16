@@ -119,3 +119,9 @@ process's token stream, and a requirement promising more than the process can ob
 be lying about its own facts. The heartbeat feeds the docket view (`specs/docket.md`) and
 nothing else: LEASE staleness keeps measuring elapsed time against the `building` word,
 exactly as it already does, untouched.
+
+<!-- scenarios: generated -->
+- "A heartbeat file is refreshed in the TASK's queue entry on every observable move the session makes" → tests/progress/extension.test.ts
+- "A heartbeat refresh leaves the entry's state, MANIFEST, and LEASE exactly as they were" → tests/progress/extension.test.ts
+- "No heartbeat is written when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/progress/extension.test.ts
+<!-- /scenarios -->

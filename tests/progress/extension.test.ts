@@ -1,10 +1,10 @@
 // Capability: progress
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent'
-import { executeReportTaskState, runReportTaskState } from '../../src/progress/extension.ts'
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import progressExtension, { executeReportTaskState, runReportTaskState } from '../../src/progress/extension.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
@@ -177,4 +177,134 @@ it('refuses as a value, never throwing, when the TASK has no queue entry', async
   const result = await runReportTaskState({ queueRoot: repo.root, task: 'never-queued' }, 'building')
 
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('never-queued') })
+})
+
+// --- the heartbeat limb ---------------------------------------------------------
+
+/** The six pi events the heartbeat contract counts as observable moves: a turn starting or
+ *  ending, a tool call starting, updating, or ending, and each streamed part of a reply. */
+const OBSERVABLE_MOVES = [
+  'turn_start',
+  'turn_end',
+  'tool_execution_start',
+  'tool_execution_update',
+  'tool_execution_end',
+  'message_update',
+] as const
+
+/** A handler the extension subscribed, with the per-event payloads this contract ignores
+ *  stripped away — one shape so one Map can hold all six. */
+type CapturedHandler = (event: never, ctx: ExtensionContext) => unknown
+
+/** Registers the extension against a fake `ExtensionAPI` that records every `on(event,
+ *  handler)` subscription for the test to fire itself. `registerTool` is accepted and
+ *  ignored — the tool is the other limb's concern. */
+function registerExtension(): ReadonlyMap<string, CapturedHandler> {
+  const handlers = new Map<string, CapturedHandler>()
+  const pi = {
+    on: (event: string, handler: CapturedHandler): void => {
+      handlers.set(event, handler)
+    },
+    registerTool: (): void => {},
+  }
+  progressExtension(pi as unknown as ExtensionAPI)
+  return handlers
+}
+
+/** Fires the handler subscribed to `event`. The heartbeat contract ignores the event's own
+ *  payload, so empty stand-ins stand in for it; a missing subscription is itself the
+ *  failure — thrown with the event named so the red run says what never arrived. */
+async function fireEvent(handlers: ReadonlyMap<string, CapturedHandler>, event: string): Promise<void> {
+  const handler = handlers.get(event)
+  if (handler === undefined) throw new Error(`the extension subscribed no handler to ${event}`)
+  await handler({} as never, {} as unknown as ExtensionContext)
+}
+
+function heartbeatPath(root: string, task: string): string {
+  return join(root, '.proofspec', 'dispatch', task, 'heartbeat')
+}
+
+/** Reads the TASK's heartbeat, or `undefined` while none exists — one shape that backs both
+ *  "it appeared" and "it never appeared" without absence having to throw. */
+async function readHeartbeat(root: string, task: string): Promise<string | undefined> {
+  try {
+    return await readFile(heartbeatPath(root, task), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Scenario: A heartbeat file is refreshed in the TASK's queue entry on every observable move the session makes
+// GIVEN a real queue entry named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK
+// WHEN each of the six observable-move events fires, with the heartbeat deleted before each one
+// THEN after each event the entry holds a heartbeat whose content parses as a timestamp
+// Deleting the heartbeat between fires is what proves each event writes on its own — no
+// ordering between events, no timing to race.
+it('refreshes a heartbeat in the TASK\'s queue entry on every observable move', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'queued' })
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  process.env.PROOFSPEC_TASK = 'a'
+  const handlers = registerExtension()
+
+  for (const event of OBSERVABLE_MOVES) {
+    await rm(heartbeatPath(repo.root, 'a'), { force: true })
+    await fireEvent(handlers, event)
+
+    const heartbeat = await readHeartbeat(repo.root, 'a')
+    expect(heartbeat, `no heartbeat was refreshed after ${event}`).toBeDefined()
+    expect(
+      heartbeat !== undefined && !Number.isNaN(Date.parse(heartbeat)),
+      `the heartbeat refreshed by ${event} is not a timestamp`,
+    ).toBe(true)
+  }
+})
+
+// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Scenario: No heartbeat is written when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset
+// GIVEN a real queue entry, and first PROOFSPEC_QUEUE_ROOT then PROOFSPEC_TASK unset in the environment
+// WHEN an observable-move event fires after each unset
+// THEN no heartbeat file ever appears in the entry
+it('writes no heartbeat when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'queued' })
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  process.env.PROOFSPEC_TASK = 'a'
+  const handlers = registerExtension()
+
+  delete process.env.PROOFSPEC_QUEUE_ROOT
+  await fireEvent(handlers, 'turn_start')
+  expect(await readHeartbeat(repo.root, 'a')).toBeUndefined()
+
+  // Restoring QUEUE_ROOT keeps the second fire about TASK's absence alone, not both at once.
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  delete process.env.PROOFSPEC_TASK
+  await fireEvent(handlers, 'turn_start')
+  expect(await readHeartbeat(repo.root, 'a')).toBeUndefined()
+})
+
+// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Scenario: A heartbeat refresh leaves the entry's state, MANIFEST, and LEASE exactly as they were
+// GIVEN a queue entry carrying a state, a MANIFEST, and a LEASE
+// WHEN all six observable-move events fire
+// THEN the state, the MANIFEST, and the LEASE read back byte-for-byte as written
+it('leaves the entry\'s state, MANIFEST, and LEASE untouched by heartbeat refreshes', async () => {
+  const repo = await makeRepo({})
+  const manifest = '{"branch":"work/a"}'
+  const state = 'building'
+  const lease = '2026-01-01T00:00:00.000Z'
+  await writeTask(repo.root, 'a', { manifest, state, lease })
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  process.env.PROOFSPEC_TASK = 'a'
+  const handlers = registerExtension()
+
+  for (const event of OBSERVABLE_MOVES) {
+    await fireEvent(handlers, event)
+  }
+
+  expect(await manifestOf(repo.root, 'a')).toBe(manifest)
+  expect(await stateOf(repo.root, 'a')).toBe(state)
+  expect(await leaseOf(repo.root, 'a')).toBe(lease)
 })
