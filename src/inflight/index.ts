@@ -1,5 +1,7 @@
 export { basesFor } from './bases.ts'
 export type { BasedOnClaim, TaskBasis, TaskRecord } from './bases.ts'
+export { changedRequirements, computeCensus } from './census.ts'
+export type { CapabilityRead, CapabilityRewrite, Census, RequirementChange, TaskCapabilityReads, TaskRewrite } from './census.ts'
 export { computeGraph, GLOSSARY_CAPABILITY } from './graph.ts'
 export type { TaskChange, TaskFailure, VerifiedClaim, Vocabulary, VocabularyCapability, VocabularyTerm } from './graph.ts'
 export { readManifest } from './manifest.ts'

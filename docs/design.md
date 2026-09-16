@@ -2649,3 +2649,81 @@ inside a worktree address the main checkout's queue directory; is this a new `pi
 tool in the same shape as `handoff`'s `enqueue_task`, or something else) — the same discipline
 this document has kept since §39: wait for the round that actually needs it, rather than
 fabricate a default now.
+
+## 50. `census_in_flight` closes §42's gap; `inflight` and `handoff` each grow one requirement
+
+§42 named the investigation agent's census as stale the moment more than one TASK is in
+flight: it only ever read its own worktree's `specs/*.md`, whatever `main` looked like when
+that worktree was cut, so a requirement another in-flight TASK is mid-rewrite on — on a branch
+not yet merged — was invisible to it. `investigator.md` itself (§48) made the gap sharper than
+§42 had: its own "Census, then draft for real" step named no mechanical command at all,
+leaning on `proofspec inflight` for a graph that answers node *names* only
+(`capability:cli`), never prose. This round closes both: `census_in_flight`, a second tool
+beside `handoff`'s `enqueue_task`, answers what every in-flight TASK's branch has actually
+rewritten, relative to its own base — carrying the prose as it stands there, not just the
+fact that a file moved.
+
+**Ownership followed the existing split exactly, once traced.** `inflight` already answers a
+question about work already in flight and writes nothing; `handoff` already wraps one queue
+operation the investigation agent cannot make by hand (`enqueue`) behind one tool call. The
+census's own read — resolve a TASK's basis, diff its base against its branch tip, parse and
+compare requirement/TERM prose — is exactly `inflight`'s shape, so `computeCensus` and
+`changedRequirements` (`src/inflight/census.ts`) are pure functions living there, mirroring
+`changedTerms` (`src/glossary/change.ts`) arm for arm: reworded, new, gone, and no arm at all
+for a row that did not move — the same omission `changedTerms` already makes. The git half —
+resolving each in-flight TASK's basis, reading before/after text via the already-existing
+`readFileAt`, parsing with the already-existing `readCapabilityFile` — is `cli`'s job exactly
+as `inflight`'s own graph already draws that line, and lands in `src/cli/census.ts`.
+`census_in_flight` (`src/handoff/extension.ts`) is the thinnest possible wrapper on top,
+matching `enqueue_task`'s own shape (`runCensusInFlight(cwd)` factored out for tests to call
+directly, never through `pi`).
+
+**No trace, on purpose.** The census is computed fresh from git and the queue on every call
+and remembered by nothing — no MANIFEST field, no ledger line — the same discipline
+`inflight`'s own graph already keeps. A ledger like `schedule`'s `raised.jsonl` exists only
+because a human's ruling on the same relationship must not be re-asked; a census has no
+analogous case yet, so building one now would be exactly the fabricated-before-it-was-needed
+default §41 and §46 both already refused.
+
+**The completion check found the drafted prose claiming a failure mode the design cannot
+produce.** The first draft of `specs/handoff.md`'s new requirement named "a specs directory
+[`census_in_flight`] cannot read" as a second thing that must refuse as a value, alongside an
+unlistable queue directory — copied, reasonably, from the shape `enqueue_task`'s own refusals
+already take. But `census_in_flight` never reads the specs directory as a live filesystem
+directory at all: every read of `specs/*.md` content goes through `git show <rev>:./<path>`
+(`readFileAt`), which answers from git's object database and does not care whether a
+directory on disk can be listed. Building a filesystem check to satisfy the sentence would
+have been dead code guarding against something this design structurally cannot hit — the
+same shape of mistake §47 named for tmux sharing a server and §41 named for probing whether a
+claimant process is alive: the fix here was narrowing the sentence to the one refusal that is
+real, not adding a check for the one that is not.
+
+**Two review-gate findings, both in test strength, neither in the implementation.** A "writes
+nothing" scenario asserted on `git status --porcelain` before and after — a technique that
+works everywhere else in this suite, but not here: the fixture's whole `.proofspec/dispatch/`
+tree is untracked, and git collapses an untracked subtree into one line regardless of what
+changes inside it, so a write landing inside an already-untracked directory would have passed
+the test unchanged. The fix reused the recursive path-plus-content `snapshotOf` helper
+`tests/inflight/end-to-end.test.ts` already proves the same claim with, scoped to the whole
+repo root minus `.git` rather than one named subdirectory, since this scenario's own THEN
+names both "the working tree" and "the queue directory." A second scenario claimed a TERM
+change and a requirement change land beside each other in one capability's entry, but its
+fixture declared no requirement on either end at all — an empty list trivially staying empty
+proves nothing about two kinds of change actually sharing one entry. Both fixes were verified
+by deliberately reintroducing the defect the fixed test now claims to catch (a stray write, a
+`terms: []` mutation) and confirming the test failed before being reverted — the same
+discipline §46 and §47's own sibling notes already record: a promised behavior earns no more
+trust than a test that has been made to fail for the right reason once.
+
+**A real regression, caught by review before it ever ran against a live queue.** Sharing the
+queue-entry-to-`TaskRecord` loop between `inflight`'s own graph and the new census
+(`recordsFrom`, `src/cli/queue.ts`) — its second real caller, not a speculative extraction —
+almost changed what feeds `schedule`'s own dispatch decision along the way: the first draft
+populated `words` (the raw state word `readyToDispatch` reads) for every queue entry whose
+state file merely parsed, rather than only for one whose MANIFEST also parsed, which would
+have let a TASK with a broken MANIFEST — previously never dispatchable — read as ready to
+start a work-agent session for. No test caught it; a fresh guideline reviewer, comparing the
+extraction line by line against the loop it replaced, did. `changedSpecPaths`
+(`src/cli/git.ts`) closed a second, quieter duplication the same review found: `inflight`'s
+own `measure` and the census's own basis-to-changed-paths read had begun composing
+`mergeBase` and `changedPathsBetween` identically in two places, now one function both call.

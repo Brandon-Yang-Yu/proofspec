@@ -1,10 +1,46 @@
 // Capability: cli
 
 import { afterEach, expect, it } from 'vitest'
-import { changedPathsBetween, isAncestor, mergeBase, pathsAtEither } from '../../src/cli/git.ts'
+import { changedPathsBetween, isAncestor, mergeBase, pathsAtEither, readFileAt } from '../../src/cli/git.ts'
 import { cleanupRepos, makeGitRepo } from './support.ts'
 
 afterEach(cleanupRepos)
+
+// Requirement: A path's content at a named revision is read without checking it out
+// Scenario: A path's content at a named revision is read as that revision holds it
+// GIVEN a branch that rewrote a file's content after main last agreed with it
+// WHEN that file's content is read at main and at the branch
+// THEN each answers the content as that revision holds it, and the checked-out branch never moved
+it('reads a path\'s content exactly as a named revision holds it', async () => {
+  const repo = await makeGitRepo({ 'a.txt': 'before' })
+  await repo.git(['checkout', '-b', 'work'])
+  await repo.write('a.txt', 'after')
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'on work'])
+  const reflogBefore = await repo.git(['reflog', '--format=%H %gs'])
+
+  const atMain = await readFileAt({ cwd: repo.root, rev: 'main', path: 'a.txt' })
+  const atWork = await readFileAt({ cwd: repo.root, rev: 'work', path: 'a.txt' })
+
+  expect(atMain).toBe('before')
+  expect(atWork).toBe('after')
+  expect(await repo.git(['reflog', '--format=%H %gs'])).toBe(reflogBefore)
+})
+
+// Requirement: A path's content at a named revision is read without checking it out
+// Scenario: A path a revision does not hold answers nothing, not a refusal
+// GIVEN a revision that never held a given path, and a revision this repository does not have at all
+// WHEN that path's content is read at each
+// THEN both answer nothing, rather than a refusal
+it('answers nothing, not a refusal, for a path or a revision it does not have', async () => {
+  const repo = await makeGitRepo({ 'a.txt': 'content' })
+
+  const missingPath = await readFileAt({ cwd: repo.root, rev: 'main', path: 'ghost.txt' })
+  const missingRev = await readFileAt({ cwd: repo.root, rev: 'ghost', path: 'a.txt' })
+
+  expect(missingPath).toBeUndefined()
+  expect(missingRev).toBeUndefined()
+})
 
 // Requirement: Two revisions can be compared without checking either one out
 // Scenario: Where two revisions last agreed is answered without either being checked out

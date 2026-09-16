@@ -1,4 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import { readCensus } from '../cli/census.ts'
+import type { CensusRead } from '../cli/census.ts'
 import { enqueue } from '../cli/queue.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
 
@@ -83,8 +85,29 @@ function toolResultFrom(result: EnqueueTaskResult): { content: [{ type: 'text'; 
   return { content: [{ type: 'text', text }], details: result }
 }
 
-/** The real `pi` extension: registers `enqueue_task` as a tool a coding agent inside `pi`
- *  can call directly, instead of a human hand-writing a MANIFEST by hand. */
+/** `census_in_flight` takes no arguments: it answers for the whole repo it runs in, the same
+ *  way `proofspec inflight` does. */
+const CENSUS_IN_FLIGHT_PARAMETERS = { type: 'object', properties: {}, required: [] } as const
+
+/**
+ * The whole of `census_in_flight`'s own job: read the calling repo's queue directory and
+ * answer the census `inflight` computes. This is the one hop in front of a read the
+ * investigation agent cannot make by walking every in-flight TASK's own worktree itself, the
+ * same way `enqueue_task` is the one hop in front of a write it cannot make by hand.
+ */
+export async function runCensusInFlight(cwd: string): Promise<CensusRead> {
+  return readCensus(cwd)
+}
+
+function censusResultFrom(result: CensusRead): { content: [{ type: 'text'; text: string }]; details: CensusRead } {
+  const text = result.ok
+    ? JSON.stringify(result.census, null, 2)
+    : `Could not read the in-flight census: ${result.reason}`
+  return { content: [{ type: 'text', text }], details: result }
+}
+
+/** The real `pi` extension: registers `enqueue_task` and `census_in_flight` as tools a coding
+ *  agent inside `pi` can call directly. */
 export default function handoffExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: 'enqueue_task',
@@ -94,6 +117,18 @@ export default function handoffExtension(pi: ExtensionAPI): void {
     async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
       const result = await runEnqueueTask(ctx.cwd, params)
       return toolResultFrom(result)
+    },
+  })
+
+  pi.registerTool({
+    name: 'census_in_flight',
+    label: 'Census In-Flight',
+    description:
+      'Answers what every in-flight TASK has rewritten in specs/*.md on its own branch, relative to its own base — so a census can draft against the freshest view, not a main that is about to be stale.',
+    parameters: CENSUS_IN_FLIGHT_PARAMETERS,
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx: ExtensionContext) {
+      const result = await runCensusInFlight(ctx.cwd)
+      return censusResultFrom(result)
     },
   })
 }

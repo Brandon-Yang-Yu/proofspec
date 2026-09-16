@@ -26,17 +26,17 @@ import { buildTree, identityKey } from '../spec-tree/index.ts'
 import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
-import { basesFor, computeGraph, GLOSSARY_CAPABILITY, readManifest, stateOf } from '../inflight/index.ts'
+import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
 import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
 import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
-import { changedPathsBetween, isAncestor, mergeBase, readChangedFiles, readFileAt } from './git.ts'
+import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
 import type { ChangedFile } from './git.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { reclaimLease, readLease, readQueue, removeQueueEntry, takeLease } from './queue.ts'
+import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
@@ -1101,22 +1101,8 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   if (!specs.ok) return { ok: false, reason: specs.reason }
   const vocabulary = vocabularyOf(specs.files.map(file => readCapabilityFile(file.source, { capability: file.capability })))
 
-  const failures: TaskFailure[] = []
-  const records: TaskRecord[] = []
-  const words = new Map<string, string>()
-  for (const entry of queue.tasks) {
-    if (!entry.ok) {
-      failures.push({ task: entry.task, reason: entry.reason })
-      continue
-    }
-    const manifest = readManifest(entry.manifest)
-    if (!manifest.ok) {
-      failures.push({ task: entry.task, reason: manifest.reason })
-      continue
-    }
-    words.set(entry.task, entry.state)
-    records.push({ task: entry.task, manifest: manifest.manifest, state: stateOf(entry.state) })
-  }
+  const { records, failures: recordFailures, words } = recordsFrom(queue.tasks)
+  const failures: TaskFailure[] = [...recordFailures]
 
   const bases = basesFor(records)
   const changes: TaskChange[] = []
@@ -1292,17 +1278,12 @@ function vocabularyOf(specs: readonly CapabilitySpec[]): Vocabulary {
 
 /** What one in-flight TASK's branch changed, relative to its own base — or why it could not be measured. */
 async function measure(cwd: string, basis: TaskBasis): Promise<{ readonly ok: true; readonly change: TaskChange } | { readonly ok: false; readonly reason: string }> {
-  const merged = await mergeBase({ cwd, a: basis.manifest.branch, b: basis.against })
-  if (!merged.ok) return { ok: false, reason: merged.reason }
-
-  const changedPaths = await changedPathsBetween({ cwd, from: merged.base, to: basis.manifest.branch, paths: [DEFAULT_SPECS_DIR] })
+  const changedPaths = await changedSpecPaths({ cwd, branch: basis.manifest.branch, against: basis.against, specsDir: DEFAULT_SPECS_DIR })
   if (!changedPaths.ok) return { ok: false, reason: changedPaths.reason }
-  const editedCapabilities = changedPaths.paths
-    .filter(path => SPEC_PATH.test(path))
-    .map(path => basename(path, '.md'))
+  const editedCapabilities = changedPaths.paths.map(path => basename(path, '.md'))
 
   const glossaryPath = `${DEFAULT_SPECS_DIR}/${GLOSSARY_CAPABILITY}.md`
-  const before = (await readFileAt({ cwd, rev: merged.base, path: glossaryPath })) ?? ''
+  const before = (await readFileAt({ cwd, rev: changedPaths.base, path: glossaryPath })) ?? ''
   const after = (await readFileAt({ cwd, rev: basis.manifest.branch, path: glossaryPath })) ?? ''
   const changed = changedTerms({ before: readTerms(before), after: readTerms(after) }).map(one => one.term)
 
@@ -1338,5 +1319,3 @@ async function verifiedClaim(
   return { ok: true, claim: verified }
 }
 
-/** A path directly under the conventional specs directory, one requirement file: `specs/<name>.md`. */
-const SPEC_PATH = new RegExp(`^${DEFAULT_SPECS_DIR}/[^/]+\\.md$`)

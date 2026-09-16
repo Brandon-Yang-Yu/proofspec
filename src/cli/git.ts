@@ -148,6 +148,31 @@ export async function changedPathsBetween(options: {
   return { ok: true, paths: linesOf(diff).sort(compareStrings) }
 }
 
+/** The base a TASK's branch is measured against, and which `specs/<name>.md` paths changed there. */
+export type SpecPathsRead =
+  | { readonly ok: true; readonly base: string; readonly paths: readonly string[] }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * Resolves a TASK's own basis — where its branch and `against` last agreed — and answers
+ * which capability files under `specsDir` changed there, one requirement file to a path.
+ * `inflight`'s own graph and the queue-aware census both start from exactly this: the graph
+ * keeps only the names, the census goes on to read each one's content at both ends.
+ */
+export async function changedSpecPaths(options: {
+  readonly cwd: string
+  readonly branch: string
+  readonly against: string
+  readonly specsDir: string
+}): Promise<SpecPathsRead> {
+  const merged = await mergeBase({ cwd: options.cwd, a: options.branch, b: options.against })
+  if (!merged.ok) return merged
+  const changed = await changedPathsBetween({ cwd: options.cwd, from: merged.base, to: options.branch, paths: [options.specsDir] })
+  if (!changed.ok) return changed
+  const specPath = new RegExp(`^${options.specsDir}/[^/]+\\.md$`)
+  return { ok: true, base: merged.base, paths: changed.paths.filter(path => specPath.test(path)) }
+}
+
 /** Every path either of two revisions holds, under a pathspec. */
 export async function pathsAtEither(options: {
   readonly cwd: string

@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { readManifest } from '../inflight/index.ts'
-import type { Manifest } from '../inflight/index.ts'
+import { readManifest, stateOf } from '../inflight/index.ts'
+import type { Manifest, TaskFailure, TaskRecord } from '../inflight/index.ts'
 import { compareStrings } from '../order.ts'
 
 /**
@@ -71,6 +71,42 @@ async function readOptional(path: string): Promise<string | undefined> {
   } catch {
     return undefined
   }
+}
+
+/**
+ * Turns the queue's raw per-task strings into typed records, splitting one unreadable or
+ * unparsable TASK into its own failure rather than stopping the rest — the same per-task
+ * resilience `readQueue` itself already keeps one level down. Shared by every reader that
+ * needs the queue as `TaskRecord` rather than raw text: `inflight`'s own graph and the
+ * queue-aware census alike.
+ *
+ * `words` carries a TASK's raw state word alongside its record, for a caller (`schedule`)
+ * that dispatches on the literal word rather than the collapsed `TaskState` — populated only
+ * for a TASK that also produced a record, so a TASK whose MANIFEST cannot be read is never
+ * dispatchable on its state word alone.
+ */
+export function recordsFrom(tasks: readonly QueueEntry[]): {
+  readonly records: readonly TaskRecord[]
+  readonly failures: readonly TaskFailure[]
+  readonly words: ReadonlyMap<string, string>
+} {
+  const failures: TaskFailure[] = []
+  const records: TaskRecord[] = []
+  const words = new Map<string, string>()
+  for (const entry of tasks) {
+    if (!entry.ok) {
+      failures.push({ task: entry.task, reason: entry.reason })
+      continue
+    }
+    const manifest = readManifest(entry.manifest)
+    if (!manifest.ok) {
+      failures.push({ task: entry.task, reason: manifest.reason })
+      continue
+    }
+    words.set(entry.task, entry.state)
+    records.push({ task: entry.task, manifest: manifest.manifest, state: stateOf(entry.state) })
+  }
+  return { records, failures, words }
 }
 
 /** A TASK's own MANIFEST, parsed — or nothing when its queue entry has none, or the one it has
