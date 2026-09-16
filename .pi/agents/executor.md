@@ -37,6 +37,26 @@ progress on this TASK until a human answers. Everything else — a failing test 
 bug, a review finding, a merge conflict — you resolve yourself; only a wrong *standard*, never
 a wrong *implementation*, parks the TASK.
 
+## The acceptance gate, in front of `mergeable`
+Before reporting `mergeable`, spawn a fresh **acceptance checker** subagent
+(`.pi/agents/acceptance-checker.md`) and hand it two things: the acceptance script's path
+and this worktree's root. The path is
+`$PROOFSPEC_QUEUE_ROOT/.proofspec/dispatch/$PROOFSPEC_TASK/acceptance.md` — the TASK's own
+queue entry in the main checkout, built from the two environment variables your session
+already carries. The checker runs every step of the script for real and reports pass or
+fail per step.
+
+A TASK whose outcome cannot be driven end-to-end has no script and no gate: a missing
+script is an absent gate, never a failure.
+
+A failed step is handled like a review finding: fix the work, rerun the checker. A script
+proven wrong — a step whose judged standard cannot be right — parks the TASK through
+`report_task_state` with `blocked-on-question`, the one exception's own path.
+
+Commit the checker's report to this branch, then remove it in a follow-up commit before
+merging. The final tree never carries it; the branch's history keeps it — so how this TASK
+was checked stays readable after the queue entry is pruned.
+
 ## Report your own state
 Call `report_task_state` (`specs/progress.md`) to tell the scheduler
 what you're doing — it writes straight back to `.proofspec/dispatch/<task>/` in the main
@@ -55,6 +75,8 @@ this session (`tmux attach`), not from anything the report itself carries.
   for the coding steps, fresh reviewers for guideline/completion, same as that pipeline.
 - Use codebase-memory (`codebase-memory-mcp cli list_projects 2>/dev/null` → pick
   `Users-yang-Projects-proofspec`) rather than reading code blind.
+- Run the acceptance gate before `mergeable`: spawn a fresh **acceptance checker**
+  (`.pi/agents/acceptance-checker.md`) with the script's path and the worktree root.
 - Commit as you go; merge once every gate the branch touches is clean.
 
 ## Do not

@@ -1491,3 +1491,43 @@ One pinning consequence of §51: executor sessions load the extension from the m
 checkout's own copy, so a session started before this landed never produces a heartbeat —
 and the docket saying "no heartbeat" for it is the honest reading, because nothing that
 session does is observable to the reader as a move.
+
+## 58. The acceptance script — the end-to-end check in front of `mergeable`
+
+Every gate before this one checks a part: tests, code review, spec consistency. None drives
+a TASK's whole outcome end-to-end, from outside, the way a person would check that the built
+thing works — a TASK can pass every part and still deliver an outcome that does not run. The
+acceptance script is that check, written per TASK: numbered steps, each saying what to do
+and naming the standard that makes the step pass.
+
+The script's home is `.proofspec/dispatch/<task>/acceptance.md` in the main checkout,
+untracked. It is written once, for one TASK, and is worth nothing after that TASK merges, so
+git never tracks it. The queue machinery reads only that directory's MANIFEST, state, LEASE,
+and heartbeat files, so the script is invisible to it; `enqueue` refuses only a MANIFEST
+that already exists, so a script already sitting there stops nothing. The script is written
+before `enqueue_task` is called.
+
+The investigator judges, during the investigation, whether the TASK's outcome can be driven
+end-to-end. An outcome that can gets its script drafted by the intent writer
+(`.pi/agents/intent-writer.md`), in the same pass as the intent doc. An outcome that cannot
+is said plainly and skipped: a missing script is an absent gate, never a failure. The human
+judges the drafted script in the disposition review, like the prose.
+
+Before reporting `mergeable`, the executor spawns a fresh acceptance checker
+(`.pi/agents/acceptance-checker.md`) and hands it the script's path and the worktree root —
+the path built from the `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` pair the executor session
+already carries (`specs/schedule.md`). The checker runs every step for real and reports pass
+or fail per step, with the command it ran and what it observed. A failed step is a finding:
+the executor fixes the work and reruns the checker. A script proven wrong — a step whose
+judged standard cannot be right — parks the TASK through `report_task_state` with
+`blocked-on-question` (`specs/progress.md`), the one exception's own path.
+
+The checker's report is committed to the TASK's branch, then removed in a follow-up commit
+before merging. The final tree never carries it; the branch's history keeps it — so how a
+TASK was checked stays readable after the queue entry is pruned (§39).
+
+Two existing "future acceptance check" mentions stay future. One is in `specs/schedule.md`,
+in the `PROOFSPEC_TMUX_SOCKET` paragraph; the other in `src/cli/session.ts`, on the
+`tmuxSocket` comment. Both describe running the bare CLI against a real tmux binary. This
+mechanism does not touch them: it checks a TASK's outcome through its own checker persona,
+not the CLI against tmux.
