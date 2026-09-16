@@ -79,9 +79,9 @@ end-to-end — from outside, the way a person would check that the built thing w
 whose outcome cannot says so plainly and skips the script. A missing script is an absent
 gate, never a failure.
 
-A drivable outcome gets its script drafted by the intent writer, in the same pass as the
-intent doc. The format is numbered steps, each saying what to do and naming the standard
-that makes the step pass.
+An outcome that can be driven end-to-end gets its script drafted by the intent writer, in
+the same pass as the intent doc. The format is numbered steps, each saying what to do and
+naming the standard that makes the step pass.
 
 Present the drafted script to the human in the disposition review. The human judges it
 there, like the prose.

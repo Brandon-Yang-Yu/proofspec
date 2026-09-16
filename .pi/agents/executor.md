@@ -46,8 +46,8 @@ queue entry in the main checkout, built from the two environment variables your 
 already carries. The checker runs every step of the script for real and reports pass or
 fail per step.
 
-A TASK whose outcome was judged not drivable has no script and no gate: a missing script is
-an absent gate, never a failure.
+A TASK whose outcome cannot be driven end-to-end has no script and no gate: a missing
+script is an absent gate, never a failure.
 
 A failed step is handled like a review finding: fix the work, rerun the checker. A script
 proven wrong — a step whose judged standard cannot be right — parks the TASK through

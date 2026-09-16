@@ -1496,7 +1496,7 @@ session does is observable to the reader as a move.
 
 Every gate before this one checks a part: tests, code review, spec consistency. None drives
 a TASK's whole outcome end-to-end, from outside, the way a person would check that the built
-thing works — a TASK can pass every part and still be an outcome that does not run. The
+thing works — a TASK can pass every part and still deliver an outcome that does not run. The
 acceptance script is that check, written per TASK: numbered steps, each saying what to do
 and naming the standard that makes the step pass.
 
@@ -1508,8 +1508,8 @@ that already exists, so a script already sitting there stops nothing. The script
 before `enqueue_task` is called.
 
 The investigator judges, during the investigation, whether the TASK's outcome can be driven
-end-to-end. A drivable outcome gets its script drafted by the intent writer
-(`.pi/agents/intent-writer.md`), in the same pass as the intent doc. A not-drivable outcome
+end-to-end. An outcome that can gets its script drafted by the intent writer
+(`.pi/agents/intent-writer.md`), in the same pass as the intent doc. An outcome that cannot
 is said plainly and skipped: a missing script is an absent gate, never a failure. The human
 judges the drafted script in the disposition review, like the prose.
 

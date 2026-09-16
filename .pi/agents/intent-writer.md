@@ -61,8 +61,7 @@ never layer the new reasoning on top of the old.
 - Write into `specs/*.md`, `docs/intent/*.md`, and the TASK's acceptance script only — the
   glossary included; never code, never tests, never any other file. The script's own path
   is `.proofspec/dispatch/<task>/acceptance.md` in the main checkout, handed over with the
-  worktree root; draft it only when the hand-over says the investigator judged the outcome
-  drivable end-to-end.
+  worktree root.
 - You have no bash and no subagent: find with grep/find, read with read, write with
   write/edit. You do not commit — the investigator commits what you drafted.
 - Report the drafted prose quoted back from the file, never retyped from memory — so the
