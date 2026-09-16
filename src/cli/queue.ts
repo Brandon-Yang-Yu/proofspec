@@ -219,6 +219,15 @@ export async function writeState(cwd: string, task: string, word: string): Promi
   await writeFile(join(cwd, ...QUEUE_DIR, task, STATE_FILE), word)
 }
 
+/** Overwrites a TASK's heartbeat with the instant `at` — the write side of the `HEARTBEAT_FILE`
+ * `writeTimes` above already stats. Like `writeState` it judges nothing (whether the session
+ * that left this instant is still alive is a question about the file's age, not its content)
+ * and no mkdir: the heartbeat is left inside an entry that already stands, and a session whose
+ * entry was pruned mid-flight has nothing left to be heard by. */
+export async function writeHeartbeat(cwd: string, task: string, at: string): Promise<void> {
+  await writeFile(join(cwd, ...QUEUE_DIR, task, HEARTBEAT_FILE), at)
+}
+
 /** Whether `enqueue` created a new entry, or refused because one already stood. */
 export type EnqueueResult = { readonly ok: true } | { readonly ok: false; readonly reason: string }
 

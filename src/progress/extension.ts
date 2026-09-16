@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
-import { writeState } from '../cli/queue.ts'
+import { writeHeartbeat, writeState } from '../cli/queue.ts'
 import { BUILDING } from '../schedule/types.ts'
 
 /**
@@ -101,10 +101,40 @@ export async function executeReportTaskState(
   return toolResultFrom(result)
 }
 
+/**
+ * The heartbeat's whole step: resolve the entry exactly as `report_task_state` does — the same
+ * two environment variables, the same refusal to guess when either is missing — and leave the
+ * current instant in it. Only the one expected failure is caught: an entry pruned mid-session
+ * (`ENOENT`) is ordinary for a fire-and-forget fact nobody asked for, and is swallowed because
+ * the heartbeat going stale is itself the signal. Every other fault propagates to pi's own
+ * handler dispatch, which reports it without crashing the session — the same ENOENT-only split
+ * `runReportTaskState` keeps, except there a caller asked, so its refusal is answered as a
+ * value instead of left to the error surface.
+ */
+async function refreshHeartbeat(): Promise<void> {
+  const envResult = resolveReportEnv(process.env)
+  if (!envResult.ok) return
+  try {
+    await writeHeartbeat(envResult.env.queueRoot, envResult.env.task, new Date().toISOString())
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+}
+
 /** The real `pi` extension: registers `report_task_state` so an executor session can tell a
  *  scheduling pass it is live, without ever needing to know where its own worktree sits
  *  relative to the main checkout. */
 export default function progressExtension(pi: ExtensionAPI): void {
+  // The heartbeat limb: the same zero-argument step subscribed to every move a session can be
+  //  seen making — the six events the requirement pins and no others. A function of no
+  //  parameters fits each handler signature, so no casts are needed.
+  pi.on('turn_start', refreshHeartbeat)
+  pi.on('turn_end', refreshHeartbeat)
+  pi.on('tool_execution_start', refreshHeartbeat)
+  pi.on('tool_execution_update', refreshHeartbeat)
+  pi.on('tool_execution_end', refreshHeartbeat)
+  pi.on('message_update', refreshHeartbeat)
   pi.registerTool({
     name: 'report_task_state',
     label: 'Report Task State',

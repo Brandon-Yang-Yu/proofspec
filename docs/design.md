@@ -1452,3 +1452,27 @@ The timing principle is stated once, in `executor.md` itself: committing is cont
 executor's own discretion — commit whenever work stands — and merge is the only act that
 waits, waiting for gates rather than permission: merge once every gate the branch touches is
 clean.
+
+## 57. The heartbeat — a fact the session leaves behind
+
+The docket (§55) already read a `heartbeat` file's write time; nothing ever wrote one. The
+extension that reports state words now also subscribes one zero-argument step to the six
+events pi's surface names for the moves a session can be seen making — a turn starting or
+ending, a tool call starting, updating, or ending, each streamed part of a reply — and that
+step leaves the current instant in the entry the same `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK`
+pair already names. A subagent needs no case of its own: it is a tool call on the parent's
+surface, so its work arrives as tool updates and refreshes the heartbeat with everything
+else.
+
+The grain is per move, not per token, because the parent cannot observe inside a child
+process's token stream — a requirement promising more than the process can observe would be
+lying about its own facts. And a failed write is not a refusal: only the ordinary
+pruned-entry `ENOENT` is swallowed, staleness being itself the signal a reader needs; every
+other fault propagates to pi's handler dispatch, which reports it without crashing the
+session — the same ENOENT-only split `report_task_state` keeps on its own side, where a
+caller did ask and is answered as a value instead.
+
+One pinning consequence of §51: executor sessions load the extension from the main
+checkout's own copy, so a session started before this landed never produces a heartbeat —
+and the docket saying "no heartbeat" for it is the honest reading, because nothing that
+session does is observable to the reader as a move.
