@@ -19,8 +19,8 @@ Before proposing anything, look at what's actually there:
 - `census_in_flight` — what those in-flight TASKs have actually rewritten, on their own
   branches, right now: every requirement and TERM whose prose moved, carrying the text as it
   stands there. This is the one that matters for drafting: `specs/*.md` on disk is only ever
-  as fresh as when your own worktree was cut, so a requirement another TASK is mid-rewrite on
-  is invisible to a plain read of the working tree until you ask this tool.
+  as fresh as this checkout's own last pull of `main`, so a requirement another TASK is
+  mid-rewrite on is invisible to a plain read of the working tree until you ask this tool.
 - Current `specs/*.md`, including `specs/glossary.md` — every requirement and TERM this
   intent might reach.
 - codebase-memory (`codebase-memory-mcp cli list_projects 2>/dev/null` → pick
@@ -35,10 +35,28 @@ draft may still collide with that TASK's own branch at merge time regardless. A 
 new TERM's own ripple — every requirement that TERM reopens — gets classified too and shown to
 the human, even where that requirement's own row would otherwise read keep.
 
-Create the TASK's own branch (ask the human for its name) and draft every die/rewrite/new
-row's prose onto it for real, as a real commit — never onto `main`, never as free text in the
-conversation. A die row's scenarios and tests are not yours to remove; that is proof, and
-proof happens after hand-off, at the executor's tests-red step.
+Create the TASK's own branch inside its own dedicated worktree — never checked out in this
+session's own directory, which is the main checkout `enqueue_task`/`census_in_flight` need to
+keep addressing regardless of what your shell has `cd`'d into (`ExtensionContext.cwd` is fixed
+to wherever this session itself was started, not wherever a bash `cd` lands):
+
+```
+git worktree add .proofspec/worktrees/<task> -b <branch>
+```
+
+— the same conventional path `schedule`'s own `startSession` later opens for the executor
+(`specs/schedule.md`), so a worktree already sitting there from an earlier attempt at this same
+TASK is reused, not recreated, and the executor picks up exactly where you left off rather than
+starting a fresh checkout of the same branch. `cd` into it (ask the human for the branch name
+first) and draft every die/rewrite/new row's prose there, as a real commit — never onto `main`,
+never checked out in the main checkout itself, never as free text in the conversation.
+
+Checking out a TASK's branch in the main checkout is exactly what stops a second investigator
+running at the same time: only one branch can be checked out there at once, and switching back
+and forth mid-conversation is how one investigator's uncommitted work collides with another's.
+A dedicated worktree per TASK is what lets more than one investigator run at once. A die row's
+scenarios and tests are not yours to remove; that is proof, and proof happens after hand-off,
+at the executor's tests-red step.
 
 ## Disposition review — the one synchronous moment
 Present the non-`keep` rows and the drafted prose, and ask anything only the human can
@@ -72,3 +90,5 @@ collision refuses outright, and nothing here overwrites an existing entry.
 - Invent `intentRef`/`branch`/`base` values the human has not confirmed.
 - Treat a rewritten TERM's ripple as optional — every requirement it reopens gets its own row
   in the same table, even one that reads keep.
+- Check out the TASK's branch in the main checkout itself, ever — always a dedicated worktree
+  at `.proofspec/worktrees/<task>`, so more than one investigator can run at once.
