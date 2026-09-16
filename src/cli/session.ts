@@ -1,7 +1,7 @@
-import { access, readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { git } from './git.ts'
+import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
 
 /**
@@ -22,22 +22,30 @@ function worktreePathFor(cwd: string, task: string): string {
 
 /**
  * Makes sure a TASK's branch has a worktree checked out at its conventional path, creating
- * one when none exists yet. A ready TASK can reach this action having had no worktree ever
- * opened for it, or having had one opened and since torn down independently of its queue
- * entry — starting a session cannot assume one is there.
+ * one with `git worktree add` whenever no worktree truly stands there. Reuse is decided by
+ * the `.git` file a linked worktree keeps at its root — a local fact of the path itself —
+ * never by the path merely existing: a `git worktree add` that fails partway can leave an
+ * empty directory behind, and reusing whatever merely sits there would start the session
+ * in a directory with no repository of its own behind it, on every retry. A creation that
+ * fails throws carrying git's own stderr — a bare "could not create" names no cause, and
+ * the causes git names (a branch already checked out elsewhere, say) are actionable.
  */
 export async function ensureWorktree(cwd: string, task: string, branch: string): Promise<string> {
   const path = worktreePathFor(cwd, task)
-  if (await pathExists(path)) return path
-  const added = await git(cwd, ['worktree', 'add', path, branch])
-  if (added === undefined) throw new Error(`could not create a worktree for TASK ${task}'s branch ${branch} at ${path}`)
+  if (await isWorktree(path)) return path
+  const added = await runGit(cwd, ['worktree', 'add', path, branch])
+  if (!added.ok) {
+    throw new Error(`could not create a worktree for TASK ${task}'s branch ${branch} at ${path}: ${added.stderr.trim()}`)
+  }
   return path
 }
 
-async function pathExists(path: string): Promise<boolean> {
+/** Whether a worktree stands at `path`: the `.git` file a linked worktree keeps at its
+ * root, and nothing looser — a directory merely sitting at the path is not one. */
+async function isWorktree(path: string): Promise<boolean> {
   try {
-    await access(path)
-    return true
+    const dotGit = await stat(join(path, '.git'))
+    return dotGit.isFile()
   } catch {
     return false
   }
