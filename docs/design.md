@@ -1407,3 +1407,22 @@ request like every other command.
 
 The pipeline's own name (§53) and this capability's are the same word on purpose: the
 command shows what the pipeline is named after — the docket itself.
+
+---
+
+## 56. The persona owns its own commit rule
+
+`CLAUDE.md` briefly carried a sixth rule — "the executor commits without waiting to be
+asked" — restating at repo level what §37 and §49 had already settled where it belongs: a
+persona's pipeline behavior is owned by the persona's own file plus this design, and
+repo-level project instructions are not a second source of pipeline truth. The rule was noise
+for every session that is not an executor — investigator, reviewers, a human's own
+interactive session — and a second copy that would drift silently the moment `executor.md`
+moved. The one real function it ever performed, resolving the ask-before-committing habit
+against `executor.md`'s instruction, belongs at the persona's own level: a persona instruction
+*is* the explicit instruction that habit asks for.
+
+The timing principle is stated once, in `executor.md` itself: committing is continuous at the
+executor's own discretion — commit whenever work stands — and merge is the only act that
+waits, waiting for gates rather than permission: merge once every gate the branch touches is
+clean.
