@@ -89,6 +89,16 @@ function tmuxSocket(): string {
 
 const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
 
+/** The one initial user message `pi` is handed as its positional prompt argument. Its exact
+ * words are this implementation's own choice; what is not negotiable is that it exists — an
+ * unattended session with no first message sits at `pi`'s input box indefinitely, loaded and
+ * healthy but doing nothing, because `--append-system-prompt` changes who the model is,
+ * never that it should act. Naming the TASK keeps the message self-contained rather than
+ * leaning on the `PROOFSPEC_TASK` environment variable alone. */
+function kickoffFor(task: string): string {
+  return `Begin: work your TASK ${task} now - read the MANIFEST's intentRef on this branch, then run the full pipeline through to merge.`
+}
+
 /** What `tmuxSessionCommands` needs to start a TASK's session — grouped rather than four
  *  positional params (style rule 4) now that the queue root joined worktree/systemPrompt. */
 export type SessionStart = {
@@ -116,7 +126,8 @@ export type SessionStart = {
  * both, and refuses to start at all: two extensions registering the same tool name,
  * `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not. The pinned
  * `--extension` path still loads under `--no-extensions`, same as `pi`'s own help text says
- * an explicit `-e` does.
+ * an explicit `-e` does. The trailing positional argument is the kickoff message above: the
+ * last thing after every flag/value pair, which is exactly how `pi` reads a first prompt.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
@@ -129,6 +140,7 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
         'pi', '--approve', '--no-extensions', '--extension', extension, '--append-system-prompt', start.systemPrompt,
+        kickoffFor(task),
       ],
     },
   ]
