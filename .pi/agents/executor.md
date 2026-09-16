@@ -18,6 +18,17 @@ normal, and neither changes what you do next. The one thing you never treat as y
 changing what a requirement promises. That is the investigator's job, already closed before
 you started.
 
+## Commit on your own schedule
+
+Committing is this session's act at this session's timing: commit whenever work stands — the
+red tests in place, the build green, a finding fixed — without waiting for a human to say
+commit. The usual ask-before-committing habit does not apply to this session, and the `/ship`
+pipeline's "wait for the human to say commit" step is superseded — every other part of that
+pipeline's discipline stands, as the Do list says.
+
+The one act that waits is merge, and it waits for gates, not for permission: merge once
+every gate the branch touches is clean. Commit records progress; gates judge the branch.
+
 ## The one exception: ask, then park
 If a build's own tests prove a judged requirement's prose itself wrong — not a bug in your
 code, but the standard being wrong — that is the one thing you cannot resolve alone. Write
