@@ -21,7 +21,7 @@ const ANSWER = {
       state: 'merged',
       branch: 'work/settled',
       base: { kind: 'main' },
-      stateAgeSeconds: 90,
+      stateAgeSeconds: 45,
       heartbeatAgeSeconds: null,
       session: { listed: false },
     },
@@ -61,7 +61,12 @@ async function renderPageWith(answer: unknown) {
   const flush = async (): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  const context = {
+  // The page's whole reach, recorded: every global its script touches by name routes
+  // through this proxy, so a test can hold the inventory. "The page's requests are its
+  // refreshes" is then a fact about what the script can reach for — no list of API
+  // spellings to walk around.
+  const touched = new Set<string>()
+  const globals: Record<string, unknown> = {
     document: { getElementById: element },
     fetch: async (url: string) => {
       fetched.push(url)
@@ -72,11 +77,20 @@ async function renderPageWith(answer: unknown) {
       renewals.push(renew)
     },
   }
+  const context = new Proxy(globals, {
+    get(target, name) {
+      // Every global the script reaches for is recorded, then answered: from the stubs when
+      // the harness holds one, from the language's own when it is an intrinsic — so the run
+      // proceeds exactly as in a browser while the inventory holds the page's whole reach.
+      if (typeof name === 'string') touched.add(name)
+      return name in target ? Reflect.get(target, name) : Reflect.get(globalThis, name)
+    },
+  })
   createContext(context)
   runInContext(pageScript(), context)
   // The first refresh is asynchronous; let it land before the assertions read the page.
   await flush()
-  return { elements, fetched, timers, renewals, flush }
+  return { elements, fetched, timers, renewals, touched, flush }
 }
 
 /** The page's own script, lifted out of the page unchanged. */
@@ -115,9 +129,11 @@ it('shows every age exactly as the last answer held it', async () => {
   // Two spellings that cannot be substrings of one another, so each age is pinned on its own.
   expect(rows).toContain('2h 5m 41s')
   expect(rows).toContain('1m 30s')
+  expect(rows).toContain('45s')
   expect(rows).toContain('no heartbeat')
   expect(docketPage()).not.toContain('Date.now')
   expect(docketPage()).not.toContain('new Date')
+  expect(docketPage()).not.toContain('performance.now')
 })
 
 // Requirement: The page shows commands and offers no control that runs them
@@ -140,18 +156,22 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page
-// WHEN it is read as the HTML it is
-// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, and no request by any door other than its one refresh of /docket
+// WHEN it is read as the HTML it is, and its script is run the way a browser runs it
+// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, no markup that points a request anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
 it('offers no control that runs anything', async () => {
   const page = docketPage()
+  const { touched } = await renderPageWith(ANSWER)
 
   for (const control of ['<button', '<form', '<input', '<select', '<textarea', '<a ', 'javascript:']) {
     expect(page).not.toContain(control)
   }
   // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
   expect(page).not.toMatch(/\son[a-z]+\s*=/i)
-  // The other doors a script could put a request through; the one it uses is the fetch below.
-  expect(page).not.toMatch(/XMLHttpRequest|EventSource|WebSocket|sendBeacon|addEventListener/)
-  expect(page.match(/fetch\(/g)).toEqual(['fetch('])
-  expect(page).toContain(`fetch('/docket')`)
+  // Markup that could point a request: any element attribute that names a target, or a
+  // stylesheet url(). The page holds none; a request by markup is a door only these open.
+  expect(page).not.toMatch(/\s(src|href|action)\s*=|url\(/i)
+  // The script's whole reach: every global it touches by name, recorded by the harness.
+  // Anything else a page could ask through — location, XMLHttpRequest, a window it opens —
+  // is a global this inventory would have to carry, and the claim above with it.
+  expect([...touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
 })
