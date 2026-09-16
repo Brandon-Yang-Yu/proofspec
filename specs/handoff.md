@@ -112,3 +112,39 @@ read and relay to the human, not an exception it has to catch.
 - "An in-flight TASK's rewritten requirement is answered, naming the TASK and its branch" → tests/handoff/census.test.ts
 - "Nothing on disk is created, changed, or removed" → tests/handoff/census.test.ts
 <!-- /scenarios -->
+
+### Requirement: A successful enqueue immediately triggers a scheduling pass
+
+Once `enqueue()` reports a TASK newly queued, `enqueue_task` (`src/handoff/extension.ts`) SHALL
+run one scheduling pass over the queue — the same `schedule` (`src/cli/run.ts`) a human would
+otherwise have to run by hand — using the same real `startSession`/`judge`/`notifyHuman`
+actions the bare CLI supplies (`tmuxStartSession`, `piJudge()`, `stderrNotifyHuman()`), before
+`enqueue_task` returns its own result. A refusal to enqueue — the `task` name failed
+validation, or a TASK of that name already exists — SHALL NOT trigger a pass at all: nothing
+new entered the queue, so there is nothing for a pass to react to.
+
+`specs/schedule.md` already requires that "a scheduling pass is triggered by events... a TASK
+enqueued... and SHALL NOT run inside a resident process or on a timer" — the domain rule has
+stood since §41, but nothing has ever called `schedule()` when that event actually happens.
+Today a human hands a TASK to `enqueue_task` and then has to separately remember to run
+`proofspec schedule` for anything to happen; investigator only owns intent and hand-off, and
+the human's own attention is the one thing this whole pipeline exists to spend on judgment,
+not on remembering to press a button. Running the pass from inside `enqueue_task` itself,
+synchronously, before it answers, closes that gap without inventing a new triggering mechanism
+— `enqueue_task` already is the one moment code runs exactly when a TASK enters the queue.
+
+The triggered pass's own outcome SHALL be carried alongside `enqueue_task`'s result, never in
+place of it: a TASK that is genuinely now queued stays reported as queued even if the pass
+that followed found nothing ready, raised a relationship, or could not run at all (no judge or
+startSession action wired, an unreadable queue) — a hiccup in the pass that happened to run
+next is not a fact about whether the enqueue itself succeeded, and conflating the two would
+make a human debug a write that worked by reading a report about something else that didn't.
+
+A merge landing on `main` is the other event `specs/schedule.md` names — that half is ops
+glue, not domain logic, and belongs beside `.githooks/post-commit` (which already runs an
+unrelated command on its own event with nothing of its own to test): a `post-merge` hook that
+shells out to `pnpm proofspec schedule` on a merge into `main`. It is part of this TASK's
+intent but carries no requirement or scenario here, the same reason `post-commit` carries none.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
