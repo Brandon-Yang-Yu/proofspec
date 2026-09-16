@@ -2727,3 +2727,65 @@ extraction line by line against the loop it replaced, did. `changedSpecPaths`
 (`src/cli/git.ts`) closed a second, quieter duplication the same review found: `inflight`'s
 own `measure` and the census's own basis-to-changed-paths read had begun composing
 `mergeBase` and `changedPathsBetween` identically in two places, now one function both call.
+
+## 51. `progress` — the gap §49 left open, closed with a second `pi` extension
+
+§49 named the fix's shape as an open question: a new `pi` extension tool in `handoff`'s own
+shape, or something else. It is the former. `progress` registers `report_task_state`, letting
+a running executor session write `building`, `mergeable`, or `blocked-on-question` straight
+into `.proofspec/dispatch/<task>/` in the main checkout, even though the session itself runs
+inside the TASK's own worktree — a different directory by construction, not by an oversight.
+
+**Addressing across the boundary is the scheduler's job, not an inference.** `ExtensionContext`
+gives an extension only `cwd`, and `cwd` for a session `startSession` opens is the worktree, not
+the main checkout the queue lives under — no path computed from `cwd` alone, and no `git
+rev-parse --git-common-dir` plus the worktree's own directory name, ever names the queue
+correctly for every session, only for one that happens to follow today's naming convention.
+`startSession` already holds both facts the moment it starts a session — the main checkout is
+its own `cwd`, and the TASK is the one it was asked to dispatch — so it hands them down as
+`PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` environment variables on the tmux `new-session` command
+(`tmux new-session -e VAR=value`, confirmed against the real tmux 3.6a binary on this machine),
+the same shape `PROOFSPEC_TMUX_SOCKET` and `PROOFSPEC_JUDGE_BIN` already use. `report_task_state`
+refuses outright, naming whichever is missing, rather than falling back to `cwd` or guessing —
+a statement from the party that already knows cannot be wrong the way an inference can.
+
+**Two ways a freshly-created worktree could have loaded the tool at all, and failed silently,
+found before anything shipped rather than after.** `pi`'s own project trust
+(`resolveProjectTrusted`, `core/project-trust.js`) is keyed per directory; a worktree
+`ensureWorktree` just created is always an unknown path to it, and the default `ask` policy
+means a startup prompt nobody can answer in a detached tmux session — project-local extensions
+then never load, silently. `pi --approve` sets pi's own trust override and skips the prompt
+entirely. Separately, `.pi/` is tracked in git, so a worktree's own copy of
+`.pi/extensions/progress.ts` is whatever commit its branch happened to cut from — a branch cut
+before this capability existed carries no such file at all. `pi --extension
+<queueRoot>/.pi/extensions/progress.ts` pins the tool to this tool's own checkout, the same
+choice `startSession` already makes for the executor's system prompt (§49). Both gaps were
+found by reading `pi`'s own source (`node_modules/@earendil-works/pi-coding-agent`) rather than
+assumed, before either was written into the plan.
+
+**`report_task_state` reports a word, not a question.** `blocked-on-question` carries no free
+text; a human reads the actual question by attaching to the session tmux already named after
+the TASK. Building a note-carrying convention now, with no reader for it yet, would repeat
+§46's own shape (`enqueue`'s own primitive shipping with no caller) one level up. `merged` is
+deliberately not in the reportable set either — §39's pruning question still has no producer,
+and stays out of scope here on purpose.
+
+**Two review passes each found a real proof gap, not a style nit — the review gate is not
+theater.** A guideline reviewer caught `REPORTABLE_STATES` inlining `'building'` as a fresh
+string literal instead of reusing `BUILDING` (`src/schedule/types.ts`) — exactly the drift
+`specs/progress.md`'s own rationale warned against — and a `catch` block silently swallowing
+every `writeState` failure, permissions and disk faults included, as an ordinary refusal
+rather than only the one expected `ENOENT`. A completion-check reviewer then found three
+scenarios whose tests could not actually fail against a wrong implementation: "never written
+under the session's own cwd" was asserted against a pure function (`runReportTaskState`) that
+never receives a `cwd` at all, so the negative assertion held trivially regardless of
+correctness; two "nothing is written" claims about a missing environment variable were proven
+only against `resolveReportEnv`, a string check with no filesystem access at all. All three
+were rewired to exercise the real boundary — `executeReportTaskState`, the registered tool's
+actual `execute`, called directly with a constructed `ExtensionContext` whose `cwd` genuinely
+differs from the env vars — which is where the risk `ExtensionContext.cwd` might get used
+after all actually lives. A second guideline pass on the fix caught two more scenarios proven
+with `expect.arrayContaining`, which only proves tokens appear somewhere in `args`, not that an
+`-e` flag is immediately followed by its own value or that `--extension` is immediately
+followed by the exact path claimed — replaced with an index-computed slice against the literal
+contiguous sub-array. Every fix passed back through a fresh judge before the gate closed.

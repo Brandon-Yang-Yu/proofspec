@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { promptBodyFrom, resolveSessionWorktree, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { promptBodyFrom, resolveSessionWorktree, sessionStartFor, tmuxSessionCommands } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
@@ -56,18 +56,49 @@ it('reuses a TASK\'s worktree once it already exists, rather than recreating it'
 // WHEN the tmux commands to start its session are built
 // THEN the first kills that stale session, and the second starts a fresh one running pi under the same name
 it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', () => {
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', 'you are the executor')
+  const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
   expect(commands).toEqual([
     { command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] },
     {
       command: 'tmux',
       args: [
-        '-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a', 'pi',
+        '-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a',
+        '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
+        'pi', '--approve', '--extension', '/repo/.pi/extensions/progress.ts',
         '--append-system-prompt', 'you are the executor',
       ],
     },
   ])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK
+// GIVEN a TASK and its worktree
+// WHEN the tmux start command is built
+// THEN it carries PROOFSPEC_QUEUE_ROOT naming the main checkout and PROOFSPEC_TASK naming the TASK
+it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on the start command', () => {
+  const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+
+  // A slice at the flags' own position, not arrayContaining — proves each -e immediately
+  // precedes the value it names, not just that all four tokens appear somewhere in args.
+  const envFlagIndex = start.args.indexOf('-c') + 2
+  expect(start.args.slice(envFlagIndex, envFlagIndex + 4)).toEqual(['-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a'])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: The pi invocation carries --approve and --extension pinned to this checkout's own progress extension
+// GIVEN a TASK and its worktree
+// WHEN the tmux start command is built
+// THEN the pi invocation carries --approve and --extension pinned to this checkout's own progress extension
+it('carries --approve and --extension pinned to this checkout\'s own progress extension', () => {
+  const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+
+  // A slice starting at 'pi' itself, not arrayContaining — proves --approve immediately
+  // follows pi and --extension is immediately followed by exactly this path, not merely that
+  // all four tokens appear somewhere in args.
+  const piIndex = start.args.indexOf('pi')
+  expect(start.args.slice(piIndex, piIndex + 4)).toEqual(['pi', '--approve', '--extension', '/repo/.pi/extensions/progress.ts'])
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
@@ -78,7 +109,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 it('runs against a dedicated tmux server, never the default one, unless overridden', () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', '')
+  const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
 })
@@ -91,9 +122,20 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
 it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () => {
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 
-  const commands = tmuxSessionCommands('a', '/repo/.proofspec/worktrees/a', '')
+  const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec-test-run-42'])
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree
+// GIVEN startSession's own cwd and a TASK's worktree path
+// WHEN the SessionStart is built
+// THEN its queueRoot is startSession's own cwd, not the worktree
+it('builds the SessionStart with startSession\'s own cwd as queueRoot, distinct from the worktree', () => {
+  const start = sessionStartFor('/repo', '/repo/.proofspec/worktrees/a', 'you are the executor')
+
+  expect(start).toEqual({ worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 })
 
 // Requirement: startSession seeds the executor session with the executor's own system prompt
