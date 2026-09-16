@@ -104,18 +104,21 @@ export async function executeReportTaskState(
 /**
  * The heartbeat's whole step: resolve the entry exactly as `report_task_state` does — the same
  * two environment variables, the same refusal to guess when either is missing — and leave the
- * current instant in it. A write that fails is swallowed, never answered or thrown: a heartbeat
- * is a fact a session leaves behind, not a promise to anyone, so no caller is waiting for a
- * reply, and the heartbeat going stale is itself the signal. `runReportTaskState` answers its
- * failure as a value because there a caller asked; here nobody did.
+ * current instant in it. Only the one expected failure is caught: an entry pruned mid-session
+ * (`ENOENT`) is ordinary for a fire-and-forget fact nobody asked for, and is swallowed because
+ * the heartbeat going stale is itself the signal. Every other fault propagates to pi's own
+ * handler dispatch, which reports it without crashing the session — the same ENOENT-only split
+ * `runReportTaskState` keeps, except there a caller asked, so its refusal is answered as a
+ * value instead of left to the error surface.
  */
 async function refreshHeartbeat(): Promise<void> {
   const envResult = resolveReportEnv(process.env)
   if (!envResult.ok) return
   try {
     await writeHeartbeat(envResult.env.queueRoot, envResult.env.task, new Date().toISOString())
-  } catch {
-    // Swallowed on purpose — the reasoning above: nobody asked, so nobody is owed a refusal.
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
   }
 }
 
