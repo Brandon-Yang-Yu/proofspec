@@ -1257,7 +1257,7 @@ disposition, never a commit. The conversation holder keeps what only it can hold
 orchestrating the intent, owning the branch and the commits, running the disposition review.
 The house prose discipline — a rationale states the current, correct design, never the
 history of how the draft got there — has its single home in the persona that writes under it,
-no longer only in the legacy `ship` skill the investigator was never pointed at.
+no longer living only in the legacy `ship` skill the investigator was never pointed at.
 
 ## 50. `census_in_flight` closes §42's gap
 
