@@ -141,13 +141,17 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page
 // WHEN it is read as the HTML it is
-// THEN it offers no control that runs anything — no button, no form, no input, no handler — and the page's requests are its refreshes: its one request target is /docket
+// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, and no request by any door other than its one refresh of /docket
 it('offers no control that runs anything', async () => {
   const page = docketPage()
 
-  for (const control of ['<button', '<form', '<input', '<select', '<textarea', 'onclick=', 'onsubmit=', 'javascript:']) {
+  for (const control of ['<button', '<form', '<input', '<select', '<textarea', '<a ', 'javascript:']) {
     expect(page).not.toContain(control)
   }
-  expect(page.match(/fetch\(/g)).toEqual([`fetch(`])
+  // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
+  expect(page).not.toMatch(/\son[a-z]+\s*=/i)
+  // The other doors a script could put a request through; the one it uses is the fetch below.
+  expect(page).not.toMatch(/XMLHttpRequest|EventSource|WebSocket|sendBeacon|addEventListener/)
+  expect(page.match(/fetch\(/g)).toEqual(['fetch('])
   expect(page).toContain(`fetch('/docket')`)
 })
