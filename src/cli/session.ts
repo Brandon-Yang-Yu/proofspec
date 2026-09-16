@@ -149,9 +149,10 @@ export async function listTmuxSessions(): Promise<readonly string[]> {
   return parseSessionNames(await capture(tmuxListSessionsCommand()))
 }
 
-/** Runs a command and answers its stdout, or the empty string when it could not run or exited
- *  non-zero — a server that cannot be asked answers no sessions, which every row reads as
- *  absent rather than as a failure. */
+/** Runs a command and answers its stdout, or the empty string when it could not run. No
+ *  special case for a non-zero exit: tmux writes its own failures to stderr, so a failed ask
+ *  still answers no sessions on stdout — which every row reads as absent rather than as a
+ *  fault. */
 function capture(command: TmuxCommand): Promise<string> {
   return new Promise(resolve => {
     const child = spawn(command.command, [...command.args], { stdio: ['ignore', 'pipe', 'ignore'] })

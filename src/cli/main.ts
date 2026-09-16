@@ -4,7 +4,7 @@ import { check, docket, impact, inflight, render, review, schedule, touched, wri
 import { piJudge } from './judge.ts'
 import { stderrNotifyHuman } from './notify.ts'
 import { exitCodeOf, FORMATS, isFormat, renderAnswer } from './render.ts'
-import { tmuxStartSession, listTmuxSessions } from './session.ts'
+import { listTmuxSessions, tmuxStartSession } from './session.ts'
 import type { Format, Layout } from './render.ts'
 import type { Outcome, ProposedInput, ProposedRuling, RunOptions, TouchedAsk } from './types.ts'
 

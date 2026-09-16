@@ -40,7 +40,7 @@ import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
 import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease, writeState, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
-import { commandLine, teardownTask, tmuxAttachCommand, listTmuxSessions } from './session.ts'
+import { commandLine, listTmuxSessions, teardownTask, tmuxAttachCommand } from './session.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,

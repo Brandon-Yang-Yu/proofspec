@@ -36,9 +36,9 @@ async function writtenAgo(repo: { readonly root: string }, path: string, seconds
 }
 
 /** Runs the docket against `files`, with no session server to ask — the ordinary fixture. */
-async function docketOver(files: Readonly<Record<string, string>>, options: { readonly now?: Date } = {}) {
+async function docketOver(files: Readonly<Record<string, string>>) {
   const repo = await makeRepo(files)
-  const outcome = await docket({ cwd: repo.root, now: options.now ?? NOW, docket: { listSessions: async () => [] } })
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
   return { repo, outcome }
 }
 

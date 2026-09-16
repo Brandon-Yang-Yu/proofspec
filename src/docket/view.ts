@@ -1,8 +1,8 @@
 import { compareStrings } from '../order.ts'
-import { readManifest } from '../inflight/manifest.ts'
-import { rulingCommandFor } from '../schedule/relationships.ts'
-import type { ManifestBase, Node } from '../inflight/types.ts'
-import type { RaisedEntry } from '../schedule/types.ts'
+import { readManifest } from '../inflight/index.ts'
+import { rulingCommandFor } from '../schedule/index.ts'
+import type { ManifestBase, Node } from '../inflight/index.ts'
+import type { RaisedEntry } from '../schedule/index.ts'
 
 /**
  * The docket view: one row per queue entry, plus every raised-but-unruled relationship. It
@@ -56,7 +56,7 @@ export type DocketRow = {
 export type DocketProblem = {
   readonly task: string
   readonly reason: string
-};
+}
 
 /** A relationship raised but not yet ruled: the one debt the queue cannot pay itself. Carries
  * everything a human needs to rule on it, including the exact command line that records the
