@@ -107,4 +107,8 @@ driving this tool through a conversation needs an unreadable repo back as someth
 read and relay to the human, not an exception it has to catch.
 
 <!-- scenarios: generated -->
+- "A queue entry naming a branch that does not exist is a named problem, not a thrown error" → tests/handoff/census.test.ts
+- "An empty queue answers no TASK, rather than a refusal" → tests/handoff/census.test.ts
+- "An in-flight TASK's rewritten requirement is answered, naming the TASK and its branch" → tests/handoff/census.test.ts
+- "Nothing on disk is created, changed, or removed" → tests/handoff/census.test.ts
 <!-- /scenarios -->

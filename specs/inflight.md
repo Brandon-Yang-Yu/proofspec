@@ -99,6 +99,12 @@ task inside it that cannot be read, and the one "A TASK that cannot be read carr
 problem, and the rest of the graph still answers" already keeps for the graph itself.
 
 <!-- scenarios: generated -->
+- "A TASK whose own census could not be read is a named problem, and every other TASK still answers" → tests/inflight/census.test.ts
+- "A requirement neither end moved is absent from the census entirely" → tests/inflight/census.test.ts
+- "A requirement the branch added is answered as new, carrying only the after text" → tests/inflight/census.test.ts
+- "A requirement the branch removed is answered as gone, carrying only the before text" → tests/inflight/census.test.ts
+- "A rewritten TERM is answered beside that file's rewritten requirements" → tests/inflight/census.test.ts
+- "A rewritten requirement's description is answered as reworded, carrying both texts" → tests/inflight/census.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The graph reports a writes edge for every CAPABILITY_FILE and TERM a TASK's branch changed

@@ -469,6 +469,8 @@ it — without disturbing whatever the caller has checked out, the same way the 
 are compared without either one being checked out.
 
 <!-- scenarios: generated -->
+- "A path a revision does not hold answers nothing, not a refusal" → tests/cli/revisions.test.ts
+- "A path's content at a named revision is read as that revision holds it" → tests/cli/revisions.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A conventional queue directory is read one task at a time
