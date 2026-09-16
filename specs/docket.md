@@ -35,6 +35,14 @@ its entry, because a person asking what happened to a TASK wants the answer `mer
 silent absence. Sorting by name keeps two runs over the same queue comparable, the same
 reason the graph answers in one stable order.
 
+<!-- scenarios: generated -->
+- "A TASK entry that cannot be read answers a problem naming it, with every other TASK's row still standing" → tests/docket/view.test.ts
+- "A merged TASK stays on the docket until a pass prunes its entry" → tests/docket/view.test.ts
+- "A queue directory that does not exist answers an empty docket" → tests/docket/view.test.ts
+- "A state word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
+- "Rows come back sorted by TASK name" → tests/docket/view.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A row carries how long the TASK has stood in its word, and when it last moved
 
 Each row SHALL carry two numbers: how much time has passed since the TASK's `state` file was
@@ -53,6 +61,12 @@ session — `queued` before dispatch, `merged` after a pass killed its session �
 answered as absent rather than dressed up as the word's own age. No log is kept and none is
 needed: every word and every move was a file write, and the filesystem already records when
 each happened.
+
+<!-- scenarios: generated -->
+- "A TASK with no heartbeat file carries the second number as absent, never as a repeat of the first" → tests/docket/view.test.ts
+- "A row carries how long it has been since the heartbeat was last refreshed" → tests/docket/view.test.ts
+- "A row carries how long it has been since the state file was last written" → tests/docket/view.test.ts
+<!-- /scenarios -->
 
 ### Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
 
@@ -73,6 +87,13 @@ server's own answer about what it holds. Absent is answered as absent and never 
 deciding what an absent session means belongs to the capabilities that already decide such
 things.
 
+<!-- scenarios: generated -->
+- "A session not listed is marked absent, and nothing further asked about it" → tests/docket/sessions.test.ts
+- "A session the server holds is listed on the row with its exact attach command" → tests/docket/sessions.test.ts
+- "The server's session list is read from tmux's own output, one name per line" → tests/docket/sessions.test.ts
+- "The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default" → tests/docket/sessions.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The answer names every relationship raised but not yet ruled
 
 The docket SHALL read the raised-relationships record `schedule` keeps and name every entry
@@ -89,6 +110,11 @@ view keeps the outstanding. Reading `schedule`'s record does not make this capab
 orchestrator: it reads a fact another capability wrote to disk, exactly the way it reads the
 queue directory.
 
+<!-- scenarios: generated -->
+- "A raised entry with no ruling is named with both TASKs, the shared CAPABILITY_FILE or TERM, the key, and the ruling command" → tests/docket/view.test.ts
+- "An entry already ruled is absent from the answer" → tests/docket/view.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The docket reports, and judges nothing
 
 The docket SHALL write nothing anywhere, SHALL exit its ok code whatever it finds, and
@@ -100,3 +126,9 @@ holds and releases to `schedule`, relationships to `inflight`, the meaning of a 
 to whoever wrote it. A view that began deciding would be a second scheduler liable to
 disagree with the first, and a person reading it wants the queue's facts, not a second
 opinion about them.
+
+<!-- scenarios: generated -->
+- "The docket exits its ok code whatever it finds" → tests/docket/view.test.ts
+- "The docket orders TASKs by name alone, whatever their ages or words" → tests/docket/view.test.ts
+- "The docket writes nothing anywhere" → tests/docket/view.test.ts
+<!-- /scenarios -->

@@ -28,6 +28,8 @@ import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
 import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
+import { docketView } from '../docket/index.ts'
+import type { QueueEntryRead, TaskTimes } from '../docket/index.ts'
 import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
@@ -36,9 +38,9 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease, writeState } from './queue.ts'
+import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease, writeState, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
-import { teardownTask } from './session.ts'
+import { commandLine, teardownTask, tmuxAttachCommand, listTmuxSessions } from './session.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,
@@ -1071,6 +1073,51 @@ export async function inflight(options: RunOptions): Promise<Outcome> {
   const gathered = await gatherQueue(options)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
   return { kind: 'inflight', report: computeGraph(gathered) }
+}
+
+/**
+ * The one glance at the queue: a row per queue entry carrying its own word, its ages, and its
+ * session's whereabouts, plus every ruling still outstanding. Every fact is read fresh from
+ * where some other capability already wrote it — the queue directory, the heartbeat `progress`
+ * refreshes, the raised-relationships record `schedule` keeps, and the dedicated tmux server's
+ * own session list — and nothing is written anywhere: this command reports, and every
+ * judgement a row might tempt belongs to the capability that makes it.
+ */
+export async function docket(options: RunOptions): Promise<Outcome> {
+  const queue = await readQueue(options.cwd)
+  if (!queue.ok) return { kind: 'cannot-run', reason: queue.reason }
+
+  // The server is asked once, and each session it names carries its own attach command — the
+  // map the rows match TASK names against, never a question asked per TASK.
+  const listSessions = options.docket?.listSessions ?? listTmuxSessions
+  const sessions = new Map((await listSessions()).map(name => [name, commandLine(tmuxAttachCommand(name))]))
+
+  const entries: QueueEntryRead[] = []
+  const times: TaskTimes[] = []
+  for (const entry of queue.tasks) {
+    if (!entry.ok) {
+      entries.push(entry)
+      continue
+    }
+    const written = await writeTimes(options.cwd, entry.task)
+    if (written === undefined) {
+      entries.push({ ok: false, task: entry.task, reason: `TASK ${entry.task}'s state file could not be read` })
+      continue
+    }
+    entries.push(entry)
+    times.push({ task: entry.task, ...written })
+  }
+
+  return {
+    kind: 'docket',
+    report: docketView({
+      entries,
+      times,
+      sessions,
+      raised: await readRaisedLedger(options.cwd),
+      now: options.now ?? new Date(),
+    }),
+  }
 }
 
 /** Every in-flight TASK's own basis and record, alongside the raw state word `schedule` needs and

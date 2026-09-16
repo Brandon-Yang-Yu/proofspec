@@ -1,5 +1,6 @@
 import { assertNever } from '../assert-never.ts'
 import type { Graph, Node, Relationship, TaskEntry } from '../inflight/index.ts'
+import type { Docket, DocketRow, OutstandingRuling } from '../docket/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
 import type { ImpactNode } from '../impact/index.ts'
 import type { ReviewEntry } from '../review/index.ts'
@@ -59,6 +60,9 @@ export function exitCodeOf(outcome: Outcome): 0 | 1 | 2 {
     // A relationship the graph found, or a problem one of its TASK carries, is not a build
     // this command is entitled to fail — the same way `impact`'s tree never fails a build.
     case 'inflight':
+    // The docket's rows, problems, and outstanding rulings are facts about the queue, not
+    // verdicts on it — reporting them holds no gate, exactly as `inflight` does not.
+    case 'docket':
     // What a scheduling pass did, or a recorded ruling, are reports of an action taken, not a
     // verdict on the build.
     case 'scheduled':
@@ -131,6 +135,10 @@ function defaultFormatOf(outcome: Outcome): Format {
     // person, the same reason `touched` defaults to JSON.
     case 'inflight':
       return 'json'
+    // A person at a terminal watching several TASKs run is the reader the docket exists for,
+    // so its default is the mirror image of `inflight`'s: text for a person, JSON on request.
+    case 'docket':
+      return 'text'
     case 'checked':
     case 'wrote':
     case 'reviewed':
@@ -165,6 +173,8 @@ export function renderText(outcome: Outcome): string {
       return renderImpact(outcome.report)
     case 'inflight':
       return renderInflight(outcome.report)
+    case 'docket':
+      return renderDocket(outcome.report)
     case 'scheduled':
       return renderScheduled(outcome.report)
     case 'ruled':
@@ -190,6 +200,7 @@ export function renderJson(outcome: Outcome, layout: Layout = 'compact'): string
     case 'touched':
     case 'impact':
     case 'inflight':
+    case 'docket':
     case 'scheduled':
       return stringify(outcome.report, layout)
     case 'reviewed':
@@ -438,6 +449,53 @@ function renderScheduled(plan: SchedulePlan): string {
 /** One recorded ruling, said back so the person who wrote it sees what was filed. */
 function renderRuled(entry: Extract<RaisedEntry, { readonly kind: 'ruled' }>): string {
   return `ruled ${entry.key}\n    ${entry.ruling}`
+}
+
+/**
+ * The docket as a person reads it: one line per TASK, then the problems that kept a TASK off
+ * the rows, then the rulings still outstanding — each with the exact command that pays it.
+ * The ages are laid out for a person ("2h 5m", not a number of seconds); the JSON form carries
+ * the same content as plain seconds, which is what a program wants.
+ */
+function renderDocket(report: Docket): string {
+  if (report.rows.length === 0 && report.problems.length === 0 && report.outstanding.length === 0) {
+    return 'no TASK in the queue'
+  }
+  const parts: string[] = []
+  if (report.rows.length > 0) parts.push(report.rows.map(renderDocketRow).join('\n'))
+  if (report.problems.length > 0) {
+    parts.push(['problems:', ...report.problems.map(problem => `  ${problem.task}: ${problem.reason}`)].join('\n'))
+  }
+  if (report.outstanding.length > 0) {
+    parts.push(['rulings outstanding:', ...report.outstanding.map(renderOutstanding)].join('\n'))
+  }
+  return parts.join('\n\n')
+}
+
+function renderDocketRow(row: DocketRow): string {
+  const sinceMove = row.heartbeatAgeSeconds === null ? 'no heartbeat' : `moved ${humanAge(row.heartbeatAgeSeconds)} ago`
+  const session = row.session.listed ? row.session.attach : 'no session'
+  return `  ${row.task}  ${row.state}  on ${row.branch} from ${baseLabel(row.base)}  in word ${humanAge(row.stateAgeSeconds)}  ${sinceMove}  ${session}`
+}
+
+function renderOutstanding(ruling: OutstandingRuling): string {
+  const shared = ruling.node === null ? 'a relationship this key does not name' : `${ruling.node.kind} "${ruling.node.name}"`
+  const tasks = ruling.tasks.length === 0 ? '' : ` shared by ${ruling.tasks.join(', ')}`
+  return `  ${shared}${tasks}\n    ${ruling.answerWith}`
+}
+
+/** A base as one word on a row: `main`, or the TASK this one was built on. */
+function baseLabel(base: DocketRow['base']): string {
+  return base.kind === 'main' ? 'main' : base.task
+}
+
+/** An age as a person reads it off a queue: seconds, then minutes, then the two-part spans a
+ *  long-running TASK actually stands at. */
+function humanAge(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+  return `${Math.floor(seconds / 86_400)}d ${Math.floor((seconds % 86_400) / 3600)}h`
 }
 
 function nodeList(nodes: readonly Node[]): string {

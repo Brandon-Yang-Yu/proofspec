@@ -7,6 +7,15 @@ export function relationshipKey(relationship: Relationship): string {
 }
 
 /**
+ * The exact command line that records a human's ruling on the relationship a key names — one
+ * home for the line `notifyHuman` writes to stderr and the docket carries on an outstanding
+ * ruling, so the two readers are always handed the same thing to run.
+ */
+export function rulingCommandFor(key: string): string {
+  return `proofspec schedule --ruling "<your ruling>" '${key}'`
+}
+
+/**
  * Requirement: The same finding is not raised to a human twice
  *
  * Filters the graph's relationships down to the ones a human has not already seen: the fresh

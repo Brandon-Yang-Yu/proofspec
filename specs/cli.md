@@ -446,6 +446,12 @@ default, whose reader is a program, and the same rule that command already recor
 default follows the kind of answer. The JSON form carries the same content, the way every
 other command's does.
 
+<!-- scenarios: generated -->
+- "The docket command answers as JSON on request, carrying the same content" → tests/cli/docket.test.ts
+- "The docket command answers as text for a person by default" → tests/cli/docket.test.ts
+- "The docket command exits its ok code whatever it finds" → tests/cli/docket.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Two revisions can be compared without checking either one out
 
 The CLI SHALL provide a way to compare two named git revisions without checking either one
