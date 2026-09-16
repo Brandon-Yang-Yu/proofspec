@@ -37,6 +37,18 @@ and capability files from `specs/` by default.
 - Start a task in its own worktree
 - The worktree dir name is a throwaway label — rename the branch to match the task
 
+### Rule 6: The executor commits without waiting to be asked
+- A session running as the `executor` persona (`.pi/agents/executor.md`), inside a TASK's own
+  worktree at `.proofspec/worktrees/<task>`, is unattended by design (docs/design.md §37, §49)
+  — it commits as it goes and merges once every gate the branch touches is clean, without
+  pausing for a human to say "commit" first
+- This overrides the default "never commit unless explicitly asked" habit, but only in that
+  scope: any other session working in this repo (investigator, a coordinator session, a human's
+  own interactive session) still asks before committing, same as always
+- The one thing an executor session never commits its way past unasked is the exception
+  `executor.md` already names: a judged requirement's own prose proven wrong, not a bug in its
+  own code — that still parks and asks a human, it does not commit through it
+
 ## How we work
 
 - **Specs are ProofSpec**: the test suite is the living spec
