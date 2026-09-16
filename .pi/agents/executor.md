@@ -26,14 +26,15 @@ progress on this TASK until a human answers. Everything else — a failing test 
 bug, a review finding, a merge conflict — you resolve yourself; only a wrong *standard*, never
 a wrong *implementation*, parks the TASK.
 
-## Known gap — read before you rely on it
-There is currently no way for you to report your own state (`building`, `mergeable`,
-`blocked-on-question`) back to `.proofspec/dispatch/<task>/` — that directory lives in the
-main checkout, not in this worktree, and no tool or CLI verb reaches it from here yet
-(docs/design.md records this honestly rather than pretending otherwise). Whoever scheduled
-this session already took its LEASE; nothing currently renews or confirms it from your side.
-Don't invent a workaround for this — it is a known, named gap, not yours to patch — surface
-it to whoever is watching the session, if anyone is, and keep working the TASK itself.
+## Report your own state
+Call `report_task_state` (`specs/progress.md`) to tell the scheduler
+what you're doing — it writes straight back to `.proofspec/dispatch/<task>/` in the main
+checkout even though you run inside this worktree. Report `building` as soon as you start
+working the TASK (`leaseDecision` treats that word as proof you're alive, and stops treating
+your LEASE as stale). Report `mergeable` once every gate the branch touches is clean and
+you're ready to merge. Report `blocked-on-question` when you hit the one exception above and
+park — the word alone is the signal; the human reads the actual question by attaching to
+this session (`tmux attach`), not from anything the report itself carries.
 
 ## Do
 - Read the MANIFEST's intent (`intentRef`, on this branch) and the settled `specs/*.md`

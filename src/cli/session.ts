@@ -87,6 +87,18 @@ function tmuxSocket(): string {
   return process.env.PROOFSPEC_TMUX_SOCKET ?? DEFAULT_TMUX_SOCKET
 }
 
+const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
+
+/** What `tmuxSessionCommands` needs to start a TASK's session — grouped rather than four
+ *  positional params (style rule 4) now that the queue root joined worktree/systemPrompt. */
+export type SessionStart = {
+  readonly worktree: string
+  /** This tool's own checkout, absolute — never the TASK's own worktree — so a session
+   *  started from it can address the queue and load this checkout's own `progress` tool. */
+  readonly queueRoot: string
+  readonly systemPrompt: string
+}
+
 /**
  * The tmux commands that (re)start a TASK's pi executor: killing whatever tmux session
  * already carries the TASK's name before creating a fresh one, so retrying a TASK whose LEASE
@@ -95,12 +107,25 @@ function tmuxSocket(): string {
  * which is why it is a command of its own rather than folded into one call. `systemPrompt` is
  * appended to `pi`'s own default coding-assistant prompt (`--append-system-prompt`), not a
  * replacement for it — the executor still needs everything that default already grants.
+ * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` are how the session later addresses the queue from
+ * inside its own worktree (`specs/progress.md`); `--approve` and the pinned `--extension` are
+ * what let it actually load the tool that reports there — a freshly created worktree is an
+ * unknown path to `pi`'s own project trust, and `.pi/` being tracked in git means the TASK's
+ * own branch can carry a stale (or missing) copy of `progress.ts`.
  */
-export function tmuxSessionCommands(task: string, worktree: string, systemPrompt: string): readonly [kill: TmuxCommand, start: TmuxCommand] {
+export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
+  const extension = join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)
   return [
     { command: 'tmux', args: ['-L', socket, 'kill-session', '-t', task] },
-    { command: 'tmux', args: ['-L', socket, 'new-session', '-d', '-s', task, '-c', worktree, 'pi', '--append-system-prompt', systemPrompt] },
+    {
+      command: 'tmux',
+      args: [
+        '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
+        '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
+        'pi', '--approve', '--extension', extension, '--append-system-prompt', start.systemPrompt,
+      ],
+    },
   ]
 }
 
@@ -117,6 +142,14 @@ export async function resolveSessionWorktree(cwd: string, task: string): Promise
   return ensureWorktree(cwd, task, manifest.branch)
 }
 
+/** Maps `startSession`'s own inputs onto the `SessionStart` `tmuxSessionCommands` needs —
+ *  its own function so the one fact the `progress` boundary depends on (`queueRoot` is this
+ *  tool's own `cwd`, never the TASK's worktree) is something a test can check without
+ *  spawning a real tmux session. */
+export function sessionStartFor(cwd: string, worktree: string, systemPrompt: string): SessionStart {
+  return { worktree, queueRoot: cwd, systemPrompt }
+}
+
 /**
  * The real `startSession`: resolves the TASK's own worktree, then starts `pi` there in a
  * detached tmux session named for the TASK, seeded with the executor's own system prompt.
@@ -124,7 +157,7 @@ export async function resolveSessionWorktree(cwd: string, task: string): Promise
 export async function tmuxStartSession(cwd: string, task: string): Promise<void> {
   const worktree = await resolveSessionWorktree(cwd, task)
   const systemPrompt = await executorSystemPrompt(cwd)
-  const [kill, start] = tmuxSessionCommands(task, worktree, systemPrompt)
+  const [kill, start] = tmuxSessionCommands(task, sessionStartFor(cwd, worktree, systemPrompt))
   await runIgnoringFailure(kill)
   await runOrThrow(start)
 }
