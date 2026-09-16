@@ -5,7 +5,7 @@ import type { LeaseDecision, LeaseRecord, ScheduleTask } from './types.ts'
 export const LEASE_GRACE_MS = 2 * 60 * 1000
 
 /**
- * Requirements: Dispatching a ready TASK starts exactly one work-agent session /
+ * Requirements: Dispatching a ready TASK starts exactly one executor session /
  * A stale LEASE is told apart from a live one by elapsed time, not by probing a process
  *
  * No LEASE at all is the ordinary case a ready TASK starts in: take it. A LEASE already taken

@@ -45,7 +45,7 @@ so a file reformatted moves no judgement.
 
 ### Term: LEASE
 
-A time-bounded hold scoped to one TASK, taken before starting its work-agent session so
+A time-bounded hold scoped to one TASK, taken before starting its executor session so
 that two scheduling passes finding the same ready TASK do not both start one. A LEASE is not
 renewed and carries no notion of whether the process behind it is still alive: it expires,
 and becomes reclaimable, once a short grace period passes without the TASK's state

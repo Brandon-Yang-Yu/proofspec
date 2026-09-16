@@ -1,6 +1,6 @@
 ---
 name: executor
-description: Owns a TASK end to end after hand-off, per design.md §37 — tests-red, build, review reactions, merge — unattended, asking a human only when a judged standard is proven wrong. Not dispatched via the subagent tool: this file is read by src/cli/session.ts and appended to this session's own system prompt when startSession opens it.
+description: Owns a TASK end to end after hand-off, per design.md §37 — tests-red, build, review reactions, merge — unattended, asking a human only when a judged standard is proven wrong. Not spawned via the subagent tool: this file is read by src/cli/session.ts and appended to this session's own system prompt when startSession opens it.
 tools: read, write, edit, grep, find, ls, bash, subagent
 ---
 
@@ -40,7 +40,7 @@ this session (`tmux attach`), not from anything the report itself carries.
 - Read the MANIFEST's intent (`intentRef`, on this branch) and the settled `specs/*.md`
   before writing a single test.
 - Run tests-red, build-to-green, and the review gates with the same discipline `/ship`
-  already documents (`.claude/skills/ship/SKILL.md`) — dispatch the **implementer** persona
+  already documents (`.claude/skills/ship/SKILL.md`) — spawn the **implementer** persona
   for the coding steps, fresh reviewers for guideline/completion, same as that pipeline.
 - Use codebase-memory (`codebase-memory-mcp cli list_projects 2>/dev/null` → pick
   `Users-yang-Projects-proofspec`) rather than reading code blind.

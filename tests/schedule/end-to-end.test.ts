@@ -39,7 +39,7 @@ function fakeActions(overrides: Partial<ScheduleActions> = {}): ScheduleActions 
   }
 }
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A ready TASK starts a session and takes a LEASE
 // GIVEN a queued TASK based on main
 // WHEN a scheduling pass runs
@@ -56,7 +56,7 @@ it('starts a session for a ready TASK and takes its LEASE', async () => {
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'LEASE'), 'utf8')).resolves.not.toBe('')
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: The real command blocks a second pass from starting a second session for a ready TASK
 // GIVEN a queued TASK a first scheduling pass already dispatched
 // WHEN a second pass runs immediately after, before the TASK's state has moved
@@ -74,7 +74,7 @@ it('does not start a second session on a second pass over the same ready TASK', 
   expect(second.blocked).toEqual(['a'])
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: Two passes racing at the same instant still start exactly one session
 // GIVEN a queued TASK, and two scheduling passes launched at the same instant rather than
 //       one after the other
@@ -399,7 +399,7 @@ it('does not repeat pruning, dispatching, or raising across two passes run back 
   expect(second.raised).toEqual([])
 })
 
-// Requirement: Dispatching a ready TASK starts exactly one work-agent session
+// Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A ready TASK with no startSession action given cannot run
 // GIVEN a queued, ready TASK
 // WHEN a scheduling pass runs with no startSession action given

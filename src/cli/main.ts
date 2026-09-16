@@ -42,7 +42,7 @@ Commands:
            dispatch every ready TASK, and raise an unresolved relationship at most once. Given
            --ruling, records a human's ruling on an already-raised relationship instead.
            The bare command line supplies real startSession, judge, and notifyHuman actions
-           itself: a ready TASK starts a headed pi work-agent session in a detached tmux
+           itself: a ready TASK starts a headed pi executor session in a detached tmux
            session named for the TASK, a relationship is judged by a fresh one-shot pi
            process, and one it cannot resolve is reported to stderr naming both TASKs and how
            to rule on it. An embedder passing RunOptions may still override any of the three.

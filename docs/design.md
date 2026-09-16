@@ -2789,3 +2789,64 @@ with `expect.arrayContaining`, which only proves tokens appear somewhere in `arg
 `-e` flag is immediately followed by its own value or that `--extension` is immediately
 followed by the exact path claimed — replaced with an index-computed slice against the literal
 contiguous sub-array. Every fix passed back through a fresh judge before the gate closed.
+
+## 52. Naming cleanup: §42's census question closed for the record, `executor` catches up to the spec, `dispatch` stops meaning `pi`'s own spawn mechanism
+
+§50 and §51 landed while this cleanup was in progress, on branches this section never saw
+until rebasing past them — so the census question §42 left open is already answered in code,
+below. What follows closes three narrower gaps a plain read of the current specs, tests, and
+personas turned up on top of that landing: no behavior changed anywhere in this section, only
+which word names it.
+
+**§42's "Left open," for the record: `schedule` does not consume the census.** §50 already
+settled which capability owns it — `inflight` computes it, `handoff` exposes it — but not
+who reads it. Nothing in `schedule`'s own mechanical work (pruning, holds, LEASEs,
+dispatching) needs to classify a spec change; only a human or the `investigator` judging one
+does, and both already reach it through `handoff`'s `census_in_flight` tool, never through
+`schedule`. A capability of its own — §42's other named shape — would have split one report
+about in-flight TASKs across two capabilities for no reader's benefit.
+
+**One vocabulary for "diff a spec row against its base," not two.** §50's `inflight` census
+classifies a row **reworded / new / gone**. `/ship`'s older, unrelated file-scanning census
+(`rg` over `specs/*.md`, step 1) called the same three outcomes **die / rewrite / keep**,
+plus a fourth, **new**, `inflight`'s census has no need of since it only ever lists rows that
+changed. `reworded / new / gone` is now the one spelling for what a changed row is called
+anywhere in this tool — `.claude/skills/ship/SKILL.md` renamed **die → gone**,
+**rewrite → reworded**, and kept **keep** (now **kept**) as the one category with no
+counterpart in `inflight`'s vocabulary, since only `ship`'s census ever needs to name an
+unchanged row at all.
+
+**`executor` was renamed in §49; the spec and its tests were not told.** §49 renamed
+`.pi/agents/worker.md`'s replacement top-level persona to `executor`, but
+`specs/schedule.md`'s own requirement heading — "Dispatching a ready TASK starts exactly one
+work-agent session" — and `specs/glossary.md`'s LEASE definition kept saying `work-agent`,
+the pre-rename vocabulary §37 coined and §43 was still quoting accurately when it was written.
+Both now say `executor`, along with every test tag that named the same requirement
+(`tests/schedule/lease.test.ts`, `tests/schedule/end-to-end.test.ts`) and every code comment
+or user-facing string that named the persona in passing (`src/schedule/lease.ts`,
+`src/cli/{main,run,session}.ts`). §37's, §42's, and §50's own historical prose keeps saying
+`work agent`, unedited, for the same reason §43 gave for `dispatch`: the record is dated to
+when it was written.
+
+**`dispatch` stops standing in for `pi`'s own spawn mechanism, or for an unbuilt orchestrator
+role.** §43 kept exactly one live meaning for the word: the verb `schedule` performs, and the
+literal `.proofspec/dispatch/` directory name. Two other senses had crept into currently-live
+text anyway — `specs/schedule.md` and `.pi/agents/executor.md` called the `subagent` tool's
+own frontmatter convention a "dispatch mechanism" and its reader a "dispatcher," and
+`specs/schedule.md`'s own rationale for the human-ruling requirement called an unbuilt,
+too-powerful orchestrator role a "dispatcher" too — both senses this document's own §37 used
+before `dispatch` was ever a capability name. The `subagent` convention is now a "spawn
+mechanism" read by nothing that "dispatches"; the orchestrator-role sentence now says
+"orchestrator." Historical sections keep the old wording, same as always.
+
+**Branch and worktree naming, cleaned up as housekeeping rather than recorded as a design
+decision.** A directory whose name disagreed with its own branch (`dispatch-agent-v0` →
+`dispatch-queue`), an inconsistent `worktree-` prefix, one slash-namespaced branch, and two
+stray `-v0` suffixes were three abandoned lineages (`dispatch-queue`, `dispatch-squad-v0`,
+`spec-steward/dispatch`) with real, divergent content — confirmed genuinely divergent from
+`main`, not just differently-shaped merges of the same thing, before deleting — plus one
+branch already merged into `main` (`worktree-glossary-editorial`) with nothing left to lose.
+All four are gone. No convention is written down here for future worktree names; the
+`worktree-` prefix this very task's own branch carries is the tool's own default, not this
+project's choice, and renaming a session's own current branch is blocked at the harness level
+as self-modification — left as-is rather than worked around.
