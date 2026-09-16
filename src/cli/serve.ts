@@ -55,9 +55,16 @@ export type RefusedServe = { readonly ok: false; readonly reason: string }
  */
 export async function serveDocket(options: ServeOptions): Promise<StandingServe | RefusedServe> {
   const port = options.port ?? DOCKET_SERVE_PORT
-  const clock = options.now ?? (() => new Date())
+  const ask: Answering = { options, clock: options.now ?? (() => new Date()) }
   const server = createServer((request, response) => {
-    void answer(request, response, options, clock)
+    void answer(request, response, ask).catch(() => {
+      // Nothing on the answering path is expected to throw — failures are values — so this is
+      // the boundary catch for a real bug: say so over the socket and keep serving.
+      if (!response.headersSent) {
+        response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+        response.end('the docket could not be answered')
+      }
+    })
   })
   const listening = await listen(server, port)
   if (!listening.ok) return listening
@@ -87,7 +94,11 @@ function listen(server: ReturnType<typeof createServer>, port: number): Promise<
   return new Promise(resolve => {
     const onListening = (): void => {
       server.off('error', onError)
-      resolve({ ok: true, port: server.address() === null ? port : (server.address() as { port: number }).port })
+      // A TCP listener answers an address object; the string arm belongs to pipes, which
+      // this listener never is, so falling back to the named port is for the type, not a
+      // case a caller can reach.
+      const bound = server.address()
+      resolve({ ok: true, port: typeof bound === 'object' && bound !== null ? bound.port : port })
     }
     const onError = (error: Error & { readonly code?: string }): void => {
       server.off('listening', onListening)
@@ -104,17 +115,19 @@ function listen(server: ReturnType<typeof createServer>, port: number): Promise<
   })
 }
 
+/** What one request is answered from: the serving options and the clock this server reads,
+ *  resolved once at startup but called per request — a fresh now for every answer. */
+type Answering = {
+  readonly options: ServeOptions
+  readonly clock: () => Date
+}
+
 /**
  * The two paths the page needs and nothing more. A request for anything else — or by any
  * method other than GET — is a 404, because the page's requests are its refreshes and a
  * server that answered more would be inviting controls the page refuses to hold.
  */
-async function answer(
-  request: IncomingMessage,
-  response: ServerResponse,
-  options: ServeOptions,
-  clock: () => Date,
-): Promise<void> {
+async function answer(request: IncomingMessage, response: ServerResponse, ask: Answering): Promise<void> {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname
   if (request.method !== 'GET' || (path !== '/' && path !== '/docket')) {
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
@@ -128,7 +141,7 @@ async function answer(
   }
   // The same read the one-shot command makes, made again for this request: the JSON the
   // page reads is that command's own JSON form, not a dialect of it.
-  const outcome = await docket({ cwd: options.cwd, docket: options.docket, now: clock() })
+  const outcome = await docket({ cwd: ask.options.cwd, docket: ask.options.docket, now: ask.clock() })
   if (outcome.kind === 'cannot-run') {
     response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
     response.end(outcome.reason)
