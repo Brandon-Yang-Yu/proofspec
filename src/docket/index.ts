@@ -1,4 +1,5 @@
 export { docketView, outstandingRulings, relationshipFromKey } from './view.ts'
+export { docketPage, PAGE_REFRESH_MILLISECONDS } from './page.ts'
 export type {
   Docket,
   DocketActions,

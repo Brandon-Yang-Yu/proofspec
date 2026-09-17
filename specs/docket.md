@@ -16,6 +16,10 @@ queue directory, the raised-relationships record `schedule` keeps, the heartbeat
 refreshes, the session list of the tmux server `startSession` runs sessions on. It reports
 only — it writes nothing, judges nothing, dispatches nothing.
 
+The same answer is served as a page a browser keeps current on its own. A person watching
+the queue does not retype a command at every glance; the docket is left open on a second
+screen and read sideways, and the page is the surface that takes.
+
 ### Requirement: The docket answers one row per queue entry
 
 The docket SHALL answer one row for every TASK the conventional queue directory holds —
@@ -131,4 +135,63 @@ opinion about them.
 - "The docket exits its ok code whatever it finds" → tests/docket/view.test.ts
 - "The docket orders TASKs by name alone, whatever their ages or words" → tests/docket/view.test.ts
 - "The docket writes nothing anywhere" → tests/docket/view.test.ts
+<!-- /scenarios -->
+
+### Requirement: The docket answers on a page
+
+The docket SHALL be answerable as a page a browser shows, served over HTTP on the machine
+the command runs on, carrying exactly the content the JSON form carries: one row per queue
+entry with every fact the row holds, every problem, and every outstanding ruling with the
+command that records a ruling on it. Each request the server answers SHALL compute the
+docket fresh — reading the queue directory, the heartbeat files, the raised-relationships
+record, and the session list as that moment holds them — so a page held open shows the
+docket as it stood at its last request, never as it stood when the server started.
+
+The server owns no facts of its own. It is the same read the one-shot command makes, made
+again each time it is asked, and a queue that has not moved between two requests answers
+those two requests identically — which is the honesty this page is built on: nothing on it
+is a cache, a prediction, or the residue of an earlier glance. Serving a page is not a
+second capability beside the view; it is the view, asked more than once.
+
+<!-- scenarios: generated -->
+- "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
+- "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
+- "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
+<!-- /scenarios -->
+
+### Requirement: The page refreshes itself, and its numbers move only when an answer does
+
+The page SHALL ask the server for the docket again on its own, on a short interval of its
+own, and SHALL show every age exactly as the answer it last received held it — never
+advancing a number in the browser between answers.
+
+A person watching ten executor sessions wants the page to move without being told to ask,
+so the refresh is the page's job and not the reader's. The ages stand still between answers
+for the same reason the view reads them from file write times rather than keeping a log:
+an age is a fact about a moment, and a number the browser inflates on its own clock is a
+performance of the fact rather than the fact. When the next answer arrives the numbers
+move with it — and two people reading the same open page read the same numbers.
+
+<!-- scenarios: generated -->
+- "Every age is shown exactly as the last answer held it, never advanced in the browser" → tests/docket/page.test.ts
+- "The page asks the server for the docket again on its own, on a short interval" → tests/docket/page.test.ts
+<!-- /scenarios -->
+
+### Requirement: The page shows commands and offers no control that runs them
+
+The page SHALL show the attach command of a listed session and the ruling command of an
+outstanding relationship as text a person can copy, and SHALL offer no control that
+attaches to a session, records a ruling, holds or releases a TASK, or starts, restarts, or
+kills anything.
+
+The reports-only rule is the page's rule too, and the browser is where it is most tempting
+to break: a row that names a live session invites an attach button, and an outstanding
+ruling invites a form. Both would put an actor inside the view — every action the queue
+knows how to take already has a command that takes it, run in a terminal where its output
+and its failure are readable, and `schedule` keeps every one of those decisions its own.
+The page's requests are its refreshes, nothing else.
+
+<!-- scenarios: generated -->
+- "No control on the page attaches, rules, holds, or starts anything" → tests/docket/page.test.ts
+- "The attach command of a listed session and the ruling command of an outstanding relationship are shown as copyable text" → tests/docket/page.test.ts
 <!-- /scenarios -->
