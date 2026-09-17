@@ -22,10 +22,14 @@ calls the moment its own merge lands, which re-verifies the landing from git its
 it rewrites the state word and tears the TASK's worktree and session down. The third limb
 is the heartbeat: the same extension refreshes a timestamp in the same queue entry on
 every move the session makes, so that a view reading the entry can tell a working session
-from a silent one without asking either. The words and the timestamps are facts a session
-leaves behind, and what anything makes of them belongs to whoever reads them; the settle is
-the one act among the three, and every question it answers it answers from git, never from
-its caller's word.
+from a silent one without asking either. The fourth limb is the pace word: the same extension
+registers `report_task_phase`, which writes the executor's own word for where inside its
+pipeline the work stands, beside a round number for the gates that loop. The vocabulary is
+the executor persona's own (`.pi/agents/executor.md`) — it evolves without the queue's
+permission, and the queue judges none of it. The words and the timestamps are facts a
+session leaves behind, and what anything makes of them belongs to whoever reads them; the
+settle is the one act among the four, and every question it answers it answers from git,
+never from its caller's word.
 
 ### Requirement: report_task_state accepts only a closed set of state words
 
@@ -171,3 +175,34 @@ exactly as it already does, untouched.
 - "No heartbeat is written when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/progress/extension.test.ts
 - "The heartbeat is subscribed to exactly the six observable-move events, and to no others" → tests/progress/extension.test.ts
 <!-- /scenarios -->
+
+### Requirement: report_task_phase reports the executor's own pace word and round
+
+`report_task_phase` (`src/progress/extension.ts`, registered by the same extension that
+registers `report_task_state`) SHALL take a `phase` argument — any non-empty trimmed word;
+the queue enforces no vocabulary of its own — and a `round` argument, an integer of 1 or
+more defaulting to 1. It SHALL refuse an empty or whitespace-only `phase`, naming why,
+touching nothing. It SHALL resolve the queue and the TASK exactly as `report_task_state`
+does — from `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK`, never from `ExtensionContext.cwd` —
+and SHALL refuse, naming the missing variable, when either is unset, without writing
+anything. It SHALL write its word and round into a `phase` file in the TASK's queue entry,
+overwriting whatever the file held before, and SHALL touch nothing else in the entry: the
+`state` file, the MANIFEST, the LEASE, and the heartbeat stand exactly as they were. A
+write that fails because the entry no longer exists — pruned by a scheduling pass — SHALL
+be answered as `{ok: false, reason}`, never thrown, the same boundary `report_task_state`
+already keeps. On success it SHALL answer `{ok: true, task, phase, round}`.
+
+The state word is the machine's closed vocabulary: `building` is what keeps a LEASE from
+being reclaimed, and `mergeable` is what triggers the settle. It answers no human question
+for most of a TASK's life — from the moment work starts to the moment every gate is clean,
+the word just says `building` — and what a person watching ten sessions actually wants to
+know is 「state其实绝大多数时间都是building 我其实并不关心building 我关心的是building到
+哪了」: not that the work is building, but where inside the building it has reached. The
+phase word is the executor's answer to that question, written at the executor's own pace,
+in the executor's own words. The vocabulary is free on purpose: the pipeline's words belong
+to the executor persona (`.pi/agents/executor.md`), which evolves without the queue's
+permission, and a closed set here would freeze the persona's pipeline into the queue's
+contract. The round exists because the review gates loop — 「还可以带轮次 比方说第几轮
+test review」 — and the executor that looped is the one that knows which round it is on.
+Like the state word, the phase word is a fact the session leaves behind for whoever reads
+it; the docket carries it on its row (`specs/docket.md`).

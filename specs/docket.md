@@ -25,19 +25,26 @@ screen and read sideways, and the page is the surface that takes.
 The docket SHALL answer one row for every TASK the conventional queue directory holds —
 including one whose state word has reached `merged`, until a scheduling pass prunes its
 entry — each row carrying the TASK's name, its state word exactly as its `state` file holds
-it, and the branch and base its MANIFEST records. Rows SHALL come back sorted by TASK name.
-A queue directory that does not exist SHALL answer an empty docket, and a TASK entry that
-cannot be read SHALL answer a problem naming it, with every other TASK's row still standing.
+it, its phase word and round exactly as its `phase` file holds them, and the branch and
+base its MANIFEST records. A TASK with no `phase` file SHALL carry the phase word and its
+round both as absent, never invented. Rows SHALL come back sorted by TASK name. A queue
+directory that does not exist SHALL answer an empty docket, and a TASK entry that cannot
+be read SHALL answer a problem naming it, with every other TASK's row still standing.
 
 The row's honesty is the literal word, the same literalism the graph reads a state with: a
-word this capability has never met is shown as it stands rather than translated, because an
-unknown word on a docket is a signal to look, not an error to hide. The branch and base ride
-along as the two facts that say which work the row stands for and where it was built;
-whether that base still holds the TASK is `schedule`'s judgement to make, and this view
-records it rather than deciding it. A merged TASK stays on the docket until the pass prunes
-its entry, because a person asking what happened to a TASK wants the answer `merged`, not a
-silent absence. Sorting by name keeps two runs over the same queue comparable, the same
-reason the graph answers in one stable order.
+word this capability has never met — a state word or a phase word — is shown as it stands
+rather than translated, because an unknown word on a docket is a signal to look, not an
+error to hide. The state word spends most of a TASK's life as `building`, and tells a
+watching human nothing about where the work stands; the phase word is the executor's own
+account of that — written at the executor's own pace, in the executor's own words
+(`report_task_phase`, `specs/progress.md`) — and the docket carries it without judging it,
+the same way it carries the state word. The branch and base ride along as the two facts
+that say which work the row stands for and where it was built; whether that base still
+holds the TASK is `schedule`'s judgement to make, and this view records it rather than
+deciding it. A merged TASK stays on the docket until the pass prunes its entry, because a
+person asking what happened to a TASK wants the answer `merged`, not a silent absence.
+Sorting by name keeps two runs over the same queue comparable, the same reason the graph
+answers in one stable order.
 
 <!-- scenarios: generated -->
 - "A TASK entry that cannot be read answers a problem naming it, with every other TASK's row still standing" → tests/docket/view.test.ts
@@ -49,22 +56,28 @@ reason the graph answers in one stable order.
 
 ### Requirement: A row carries how long the TASK has stood in its word, and when it last moved
 
-Each row SHALL carry two numbers: how much time has passed since the TASK's `state` file was
-last written, and how much time has passed since the TASK's heartbeat was last refreshed —
-each read from its own file's write time, tracked nowhere else. A TASK with no heartbeat
-file SHALL carry the second number as absent, never as a repeat of the first.
+Each row SHALL carry three numbers: how much time has passed since the TASK's `state` file
+was last written, how much time has passed since the TASK's heartbeat was last refreshed,
+and how much time has passed since the TASK's `phase` file was last written — each read
+from its own file's write time, tracked nowhere else. A TASK with no heartbeat file SHALL
+carry the second number as absent, never as a repeat of the first; a TASK with no `phase`
+file SHALL carry the third number as absent the same way, never as a repeat of another.
 
-The two numbers answer different questions, and neither can stand in for the other. Time in
+The three numbers answer different questions, and none can stand in for another. Time in
 word says how long the TASK has been where it is — one `blocked-on-question` for two days
 has been waiting on a human for two days, whatever its session did since. Time since the
 heartbeat says how long the session has been silent — a TASK `building` for two hours whose
 heartbeat is five minutes old is working, and one whose heartbeat is forty minutes old has
 probably stopped; the word alone cannot tell those two apart, and telling them apart is the
-case this capability exists for. No heartbeat is the ordinary state of a TASK with no
-session — `queued` before dispatch, `merged` after a pass killed its session — so it is
-answered as absent rather than dressed up as the word's own age. No log is kept and none is
-needed: every word and every move was a file write, and the filesystem already records when
-each happened.
+case this capability exists for. Time since the phase was written says how long the work has
+stood where it stands: the phase word moves more often than the state word does — every
+pipeline step is a phase move while the state stays `building` — so a TASK showing
+`test-review` for two hours is a different fact from one showing it for two minutes, and
+neither the state word nor the heartbeat can tell those two apart. No heartbeat is the
+ordinary state of a TASK with no session — `queued` before dispatch, `merged` after a pass
+killed its session — so it is answered as absent rather than dressed up as the word's own
+age. No log is kept and none is needed: every word and every move was a file write, and the
+filesystem already records when each happened.
 
 <!-- scenarios: generated -->
 - "A TASK with no heartbeat file carries the second number as absent, never as a repeat of the first" → tests/docket/view.test.ts
