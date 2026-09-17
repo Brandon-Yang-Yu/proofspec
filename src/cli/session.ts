@@ -289,22 +289,53 @@ function runIgnoringFailure(command: TmuxCommand): Promise<void> {
 }
 
 /** Tears down what a settled TASK leaves checked out: its worktree at the conventional path,
- * and its same-named tmux session on the dedicated server. This is the scheduling pass's
- * move, never the executor's own — the executor's session lives inside the very worktree
- * being removed, and a process cannot safely delete the directory it is running in.
+ * and its same-named tmux session on the dedicated server — the session killed not here but
+ * by the reaper below, a moment later. That delay is the whole reason this teardown is safe
+ * to call from inside the session being killed: the settle answers its caller first, and the
+ * host session dies only once the answer is already out.
  *
  * The directory is removed directly and `git worktree prune` clears the registration a
  * removed worktree leaves behind, because that registration is itself the collision: a
  * later dispatch of the same name dies on "missing but already registered worktree" until
  * pruned, which is exactly where the first unattended dispatch died. Pruning also covers the
  * residue a failed `git worktree add` leaves — a directory no worktree stands behind — which
- * `git worktree remove` would refuse rather than clear. Killing the session first means the
- * process whose cwd is about to disappear is gone before it does.
+ * `git worktree remove` would refuse rather than clear.
  */
 export async function teardownTask(cwd: string, task: string): Promise<void> {
-  await runIgnoringFailure(tmuxKillSessionCommand(task))
   await rm(worktreePathFor(cwd, task), { recursive: true, force: true })
   await runGit(cwd, ['worktree', 'prune'])
+  reapSession(task)
+}
+
+/** How many seconds the reaper waits before its kill lands — long enough for the settle's
+ *  own answer to reach its caller, short enough that the teardown still lands as one act.
+ *  The one number here that is a felt compromise rather than a fact derived from anything. */
+const REAP_DELAY_SECONDS = '2'
+
+/** The reaper's script: wait out the delay, then run the kill on the dedicated server. The
+ *  three variables arrive through the environment rather than the command line, so a TASK
+ *  name can never be read as shell syntax — the values are expanded by the shell, never
+ *  parsed by it. */
+const REAPER_SCRIPT =
+  'sleep "$PROOFSPEC_REAP_SECONDS" && exec tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"'
+
+/** Schedules the TASK's session kill: a process of its own, detached from this one, that
+ *  waits out the delay and then runs the kill. Detached and unref'd, it survives both the
+ *  process that scheduled it and the session it kills — which is the point: the caller of a
+ *  settle is usually the very session being killed, so nothing that session owns can be the
+ *  one holding the kill. */
+function reapSession(task: string): void {
+  const child = spawn('sh', ['-c', REAPER_SCRIPT], {
+    detached: true,
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      PROOFSPEC_REAP_SECONDS: REAP_DELAY_SECONDS,
+      PROOFSPEC_REAP_SOCKET: tmuxSocket(),
+      PROOFSPEC_REAP_TASK: task,
+    },
+  })
+  child.unref()
 }
 
 /** Runs a command, throwing when it could not even start or exited non-zero — unlike the kill

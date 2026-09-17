@@ -140,6 +140,13 @@ export async function readLease(cwd: string, task: string): Promise<string | und
   return readOptional(join(cwd, ...QUEUE_DIR, task, LEASE_FILE))
 }
 
+/** A TASK's raw state word as it stands on disk, or nothing when no state file stands — the
+ *  one fact a settle re-reads at the moment it acts, fresh from the queue rather than from
+ *  any caller's bookkeeping of what the word used to be. */
+export async function readState(cwd: string, task: string): Promise<string | undefined> {
+  return readOptional(join(cwd, ...QUEUE_DIR, task, STATE_FILE))
+}
+
 /**
  * Takes a LEASE by creating its file exclusively — `wx` fails with `EEXIST` rather than
  * overwriting, which is what makes the take itself the single atomic step two scheduling

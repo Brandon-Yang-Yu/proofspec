@@ -92,6 +92,7 @@ and asks nothing of a human.
 - "A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
 - "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main" → tests/schedule/end-to-end.test.ts
 - "The landed-in-main check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
+- "The pass's settle kills the TASK's session through the reaper, so the pass has already answered when the kill lands" → tests/schedule/end-to-end.test.ts
 - "The settled TASK's tmux session is killed on the dedicated server" → tests/schedule/session.test.ts
 - "The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch" → tests/schedule/session.test.ts
 <!-- /scenarios -->

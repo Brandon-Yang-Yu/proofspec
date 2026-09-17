@@ -1607,3 +1607,44 @@ answer that walks every rendering branch, and the one fetch's URL — held for t
 run and for a network that fails, because the refresh's catch branch is shipped code too.
 A control is markup, a handler, or script reach; each has an inventory that would have to
 carry it.
+
+## 61. `settle_task` — the event the pass could never hear
+
+TASKs merged and the cleanup after them never ran: the executor's tmux session stayed open,
+its worktree stayed checked out, and the docket kept showing a TASK long finished. The
+break was structural. Teardown was made the scheduling pass's move by design — the
+executor's session lives inside the very worktree being removed, so it never tears down its
+own house (§39) — but a pass wakes only on events, and the executor merges inside its own
+worktree: the post-merge hook fires there, where the queue directory does not live, and no
+event reaches anyone who could settle. The executor followed its prompt; the delivery itself
+was what failed. The fix is not a better prompt but a tool call, because a tool call is
+deterministic where a prompt's instruction is a hope.
+
+`settle_task` is registered in the progress extension an executor session already loads,
+and the executor calls it the moment its own merge lands — it is the one party that knows
+the moment. The tool never trusts that caller. It re-verifies both conditions itself,
+fresh: the TASK's state word read back from the queue must be `mergeable`, and the
+MANIFEST's `branch` must be an ancestor of `main`, asked of git. Either failing, it refuses
+as a value naming which condition failed and touches nothing. This is the identical check
+the pass runs, which is the same reason `report_task_state`'s closed set has no `merged` to
+report: a session that just did the merging is the least impartial judge of whether the
+merge landed, so neither caller of the settle is believed on its word — one settle
+(`src/cli/settle.ts`), two callers, both verifying.
+
+The reaper is what answers §39's reason for keeping teardown away from the executor. The
+session being killed is the very process whose tool call this is, and a kill that took
+effect at once would cut the answer off before the caller ever saw whether the settle
+succeeded. So the session kill goes through a detached process of its own — a short delay,
+then `tmux kill-session` on the dedicated server — spawned detached and unref'd so it
+survives both the process that scheduled it and the session it kills. An executor-triggered
+teardown is safe exactly because the answer returns before the host session dies; the delay
+is the one number in the mechanism that is a felt compromise rather than a derived fact.
+
+The settle performs in a fixed order: the state word first, because it is the fact the rest
+of the queue keys on (a hold releases on `merged`; the pruner waits for it); then the
+worktree, residue that goes; then the session, residue that dies a moment later. Pruning
+the queue entry stays the pass's alone — which bases still name an entry is a global graph
+fact one TASK's session cannot answer — and the pass keeps running the same settle as a
+backstop, so a TASK the tool never settles (a session that died mid-merge, a merge landed
+by hand) is still settled the next time a pass runs. The first real `settle_task` call is
+this very TASK's own finish: the dogfood is the proof.

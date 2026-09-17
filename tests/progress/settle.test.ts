@@ -17,12 +17,14 @@ afterEach(async () => {
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
   await execFileAsync('tmux', ['-L', SOCKET, 'kill-server']).catch(() => {})
-  delete process.env.PROOFSPEC_TMUX_SOCKET
 })
 
 // Every settle in this suite targets this throwaway socket — the reaper's kill included — so
 // nothing here can ever reach a real session on the production socket, the exact override
-// PROOFSPEC_TMUX_SOCKET exists to provide.
+// PROOFSPEC_TMUX_SOCKET exists to provide. Set once for the whole file and never deleted in
+// the per-test cleanup: the reaper reads it at spawn time, so a test that ran after a delete
+// would schedule its kill against the production socket — the one failure this override
+// exists to make impossible.
 const SOCKET = 'proofspec-settle-test'
 process.env.PROOFSPEC_TMUX_SOCKET = SOCKET
 
@@ -134,7 +136,9 @@ it('refuses a TASK whose branch has not landed in main, leaving everything stand
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'never-landed' })
 
-  expect(result).toEqual({ ok: false, reason: expect.stringContaining('work/never-landed').and.stringContaining('main') })
+  if (result.ok) throw new Error('expected a refusal, got a settle')
+  expect(result.reason).toContain('work/never-landed')
+  expect(result.reason).toContain('main')
   expect(await stateOf(repo.root, 'never-landed')).toBe('mergeable')
   expect(await worktreeStands(repo.root, 'never-landed')).toBe(true)
   await expect(hasSession('never-landed')).resolves.toBe(true)
@@ -202,4 +206,4 @@ it('kills the session through a detached reaper, answering while the session sti
   expect(result).toEqual({ ok: true, task: 'reaped' })
   await expect(hasSession('reaped')).resolves.toBe(true)
   await expect(sessionGoneWithin('reaped', 8000)).resolves.toBe(true)
-})
+}, 15000)

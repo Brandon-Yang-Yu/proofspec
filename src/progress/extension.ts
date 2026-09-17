@@ -1,4 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import { settleTask } from '../cli/settle.ts'
+import type { SettleResult } from '../cli/settle.ts'
 import { writeHeartbeat, writeState } from '../cli/queue.ts'
 import { BUILDING } from '../schedule/types.ts'
 
@@ -43,25 +45,56 @@ export type ReportTaskStateResult =
   | { readonly ok: true; readonly task: string; readonly state: ReportableState }
   | { readonly ok: false; readonly reason: string }
 
-/** What a settle answers: it happened, or the reason it refused — never a throw. */
-export type SettleTaskResult =
-  | { readonly ok: true; readonly task: string }
-  | { readonly ok: false; readonly reason: string }
+/** What a settle answers: it happened, or the reason it refused — never a throw. Reused from
+ *  the shared settle rather than restated here: one result shape, two callers. */
+export type { SettleResult }
 
-/** The settle limb's pure half: STUB, not built yet — tests run red against this shape. */
-export async function runSettleTask(_env: ReportEnv): Promise<SettleTaskResult> {
-  return { ok: false, reason: 'settle_task is not built yet' }
+/**
+ * The settle limb's pure half: the shared settle (`src/cli/settle.ts`) pointed at the queue
+ * and TASK the environment names. Everything the tool promises beyond this — resolving
+ * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` the same way `report_task_state` does, refusing
+ * rather than guessing when either is missing — is `executeSettleTask`'s, the boundary that
+ * actually has an environment to read.
+ */
+export function runSettleTask(env: ReportEnv): Promise<SettleResult> {
+  return settleTask({ queueRoot: env.queueRoot, task: env.task })
 }
 
-/** The settle tool's `execute`, STUB: same wiring shape as `executeReportTaskState`. */
+const SETTLE_TASK_PARAMETERS = {
+  type: 'object',
+  properties: {},
+} as const
+
+/** The answer a settle gives the model that called it — the same shape the report tool's
+ *  boundary answers in, so a caller reads either tool's outcome the same way. */
+export type SettleToolResult = {
+  readonly content: [{ readonly type: 'text'; readonly text: string }]
+  readonly details: SettleResult
+}
+
+/**
+ * The settle tool's `execute`, pulled out for the same reason `executeReportTaskState` is:
+ * a test can call it with a constructed `ExtensionContext` and prove the queue and TASK are
+ * resolved from the environment, never from `ctx.cwd`. The settle itself is the shared one
+ * the scheduling pass runs — the tool adds no conditions of its own and skips none.
+ */
 export async function executeSettleTask(
   _toolCallId: string,
   _params: Record<string, never>,
   _signal: AbortSignal | undefined,
   _onUpdate: unknown,
   _ctx: ExtensionContext,
-): Promise<{ content: [{ type: 'text'; text: string }]; details: SettleTaskResult }> {
-  return { content: [{ type: 'text', text: 'not built yet' }], details: { ok: false, reason: 'settle_task is not built yet' } }
+): Promise<SettleToolResult> {
+  const envResult = resolveReportEnv(process.env)
+  if (!envResult.ok) return settleToolResultFrom(envResult)
+  return settleToolResultFrom(await runSettleTask(envResult.env))
+}
+
+function settleToolResultFrom(result: SettleResult | { readonly ok: false; readonly reason: string }): SettleToolResult {
+  const text = result.ok
+    ? `Settled TASK ${result.task}: state rewritten to merged, worktree removed, session kill scheduled through the reaper.`
+    : `Could not settle: ${result.reason}`
+  return { content: [{ type: 'text', text }], details: result }
 }
 
 /**
@@ -162,5 +195,16 @@ export default function progressExtension(pi: ExtensionAPI): void {
     description: "Reports this executor session's own state (building, mergeable, or blocked-on-question) back to the queue entry that started it.",
     parameters: REPORT_TASK_STATE_PARAMETERS,
     execute: executeReportTaskState,
+  })
+  // The settle limb: the one call that finishes a TASK. Registered with no parameters of its
+  // own because it takes nothing on trust — the TASK it settles is the one the environment
+  // names, and whether that TASK may be settled is answered from the queue and from git,
+  // never from the caller.
+  pi.registerTool({
+    name: 'settle_task',
+    label: 'Settle Task',
+    description: 'Settles this session\'s own TASK once its merge has landed in main: re-verifies from git that the TASK is mergeable and its branch is an ancestor of main, then rewrites the state to merged, removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
+    parameters: SETTLE_TASK_PARAMETERS,
+    execute: executeSettleTask,
   })
 }
