@@ -455,23 +455,28 @@ other command's does.
 ### Requirement: A command serves the docket as a page
 
 The CLI SHALL provide a way to serve the docket as a page: the `docket` command, asked to
-serve, SHALL answer the page at the root and the JSON the page reads at `/docket`,
-listening on the loopback interface at port 4567 by default — a port a caller can override
-— and SHALL run until stopped.
+serve, SHALL answer the page at the root and the JSON the page reads at `/docket`, and
+SHALL run until stopped. The listener SHALL bind the loopback interface by default, and
+the interface a caller names with `--host`. It SHALL listen on port 4567 by default, and
+on the port a caller names with `--port`.
 
 Serving is a command, not a daemon: a person asks for the page the way they ask for any
-other answer, and stopping it is closing the terminal it runs in. The listener answers the
-loopback interface only, because the docket names this machine's queue, this machine's
-sessions, and this machine's ruling debts — facts no other host has any business reading.
-The port is conventional so the URL is memorable, and overridable so a second instance can
-run beside a first. The JSON it answers at `/docket` is the same answer the one-shot
-command's JSON form gives, so nothing about the page is a dialect of its own.
+other answer, and stopping it is closing the terminal it runs in. The loopback interface
+is the default because the docket names this machine's queue, this machine's sessions,
+and this machine's ruling debts. Naming an interface with `--host` is the caller choosing
+who reads. `0.0.0.0` is the spelling that answers every interface the machine has, so the
+docket can be watched from another device on the same network. The port is conventional
+so the URL is memorable, and overridable so a second instance can run beside a first.
+The JSON it answers at `/docket` is the same answer the one-shot command's JSON form
+gives, so nothing about the page is a dialect of its own.
 
 <!-- scenarios: generated -->
+- "A named --host is the interface served on" → tests/cli/docket-serve.test.ts
 - "A port a caller names is the port served on" → tests/cli/docket-serve.test.ts
 - "Asked to serve, the command answers the page at / and the JSON the page reads at /docket" → tests/cli/docket-serve.test.ts
 - "Serving runs until stopped, and stopping releases the port" → tests/cli/docket-serve.test.ts
 - "The listener answers the loopback interface at port 4567 by default" → tests/cli/docket-serve.test.ts
+- "The listener answers the loopback interface only" → tests/cli/docket-serve.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out
