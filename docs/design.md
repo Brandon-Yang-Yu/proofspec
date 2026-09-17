@@ -1565,3 +1565,45 @@ The TASK that shipped this rule is itself the transition: at its own enqueue tim
 did not exist yet, so its own intent document is committed to its branch as
 `docs/intent/dispatch-intent.md`, under the rules in force then. TASKs after it use the
 `INTENT` file; the past `docs/intent/*.md` on `main` stay untouched.
+
+## 60. The docket page — the view, asked more than once
+
+`docket` answered as text and JSON; §55's reader — a person watching ten executor sessions
+— was still retyping a command at every glance. The page is the fourth form of the same
+answer: `docket --serve` listens on the loopback at the conventional port 4567, answers the
+page at `/` and the JSON the page reads at `/docket`, and runs until stopped. Serving is a
+command, not a daemon: a person asks for the page the way they ask for any other answer,
+and stopping it is closing the terminal it runs in.
+
+Three decisions carry the design. First, **the server owns no facts**: each request runs
+the one-shot command's own read, made again at that moment, so a page held open shows the
+docket as it stood at its last request and a queue that has not moved answers two requests
+identically — nothing on the page is a cache, a prediction, or the residue of an earlier
+glance. The JSON at `/docket` is the one-shot command's own JSON form (`renderAnswer`
+format `json`), not a dialect of it. Second, **the page keeps no clock**: its script polls
+`/docket` on its own every two seconds and shows every age exactly as the answer it last
+received held it, because an age is a fact about a moment and a number the browser inflates
+on its own would be a performance of the fact rather than the fact — two people reading the
+same open page read the same numbers. Third, **commands are shown as text, never wired as
+controls**: the attach command and the ruling command stand in copyable `<code>` runs, and
+the page offers nothing that attaches, rules, holds, or kills — every action the queue
+knows how to take has a command that takes it, run in a terminal where its output and its
+failure are readable, and `schedule` keeps every one of those decisions its own.
+
+The split the code keeps is the split the tool already keeps: the page is pure content in
+the docket capability (`src/docket/page.ts`, a string — the view reads no files and runs no
+processes), and the socket is `cli`'s (`src/cli/serve.ts`), because `cli` is the one
+capability that owns the process. The listener answers the loopback interface only — the
+docket names this machine's queue, sessions, and ruling debts, facts no other host has any
+business reading — and the port is overridable so a second instance runs beside a first.
+
+Proving the third decision is where the branch's tests earned their shape. A no-control
+claim cannot be held by naming what was refused — a list of spellings is exactly the thing
+a case variant or a renamed attribute walks around — so the page's tests record the page's
+whole reach instead: every global its script touches (through a proxy around the vm's
+global), every document property read or written, every element property read or written,
+every element and valued attribute in the markup it ships and the HTML it renders for an
+answer that walks every rendering branch, and the one fetch's URL — held for the answering
+run and for a network that fails, because the refresh's catch branch is shipped code too.
+A control is markup, a handler, or script reach; each has an inventory that would have to
+carry it.
