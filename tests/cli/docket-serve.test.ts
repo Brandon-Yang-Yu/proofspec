@@ -128,6 +128,11 @@ it('runs until stopped, and stopping releases the port', async () => {
 
   await served.stop()
   await expect(request('/docket', port)).rejects.toThrow()
+
+  // Released for whoever needs it next: a refusal alone could be a socket held and not
+  // listening, so the proof is a next listener taking the port and answering on it.
+  const next = await serveOver(FILES, { port })
+  expect((await request('/docket', port)).status).toBe(200)
 })
 
 // Requirement: A command serves the docket as a page
