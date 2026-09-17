@@ -5,7 +5,7 @@ import type { Finding, FindingSeverity } from './types.ts'
 /**
  * The findings that warn rather than fail — both states the tool already handles and the
  * reader is left to judge. A `no-steps` site is co-location in name only: a tag with no
- * claim to judge the test against (design.md §7 rule 7). A `duplicate-requirement` file
+ * claim to judge the test against (`specs/guard.md`). A `duplicate-requirement` file
  * records the same entries under both headings and nothing downstream reads them wrong, so
  * which heading is meant to survive is the author's call, not the build's. A `term-near-form`
  * definition paraphrases an edge the machine still believes in; whether the paraphrase cost

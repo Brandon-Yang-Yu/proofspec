@@ -76,7 +76,7 @@ type TaggedStatement = {
 }
 
 /**
- * A test is a proof site two ways (§13). A tag pair directly above it makes the whole
+ * A test is a proof site two ways (`specs/test-scan.md`). A tag pair directly above it makes the whole
  * test one site (Layout A). A tag pair on a statement inside it opens a block site
  * (Layout B). Using both at once is an error, because the sites could be counted two ways.
  */
