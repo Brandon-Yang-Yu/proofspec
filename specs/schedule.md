@@ -39,38 +39,49 @@ both this capability and `inflight` read it the same way.
 
 ### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
 
-A scheduling pass SHALL rewrite a TASK's state file to `merged` when both hold: the TASK's
-current state word is `mergeable`, and its MANIFEST's `branch` is an ancestor of `main` —
-checked fresh from git on each pass, never from bookkeeping of its own. A TASK failing
-either condition SHALL keep its state word exactly as it stands. The same pass SHALL
-remove that TASK's worktree at its conventional path and kill its same-named tmux session
-on the dedicated server, so a TASK the queue has settled leaves nothing checked out behind
-it.
+A scheduling pass SHALL settle a TASK when both conditions hold: the TASK's current state
+word is `mergeable`, and its MANIFEST's `branch` is an ancestor of `main`. A settle SHALL
+rewrite the TASK's state file to `merged`, remove its worktree at its conventional path,
+and kill its same-named tmux session on the dedicated server, in that order — so a TASK the
+queue has settled leaves nothing checked out behind it. Both conditions SHALL be checked
+fresh from git at the moment of the settle, never from bookkeeping. A TASK failing either
+condition SHALL keep its state word exactly as it stands, with nothing removed and nothing
+killed. The settle has two callers: a scheduling pass runs it for every TASK it visits, and
+the `settle_task` tool (`specs/progress.md`) runs the same settle from inside the executor
+session that just merged — the pass is the backstop, not the only hand. The session kill
+SHALL go through a detached reaper process with a short delay, so the settle answers its
+caller before the host session dies.
 
-§39 left "state rewritten to `merged`, never removed" deliberately without a producer, and
-the lack of one stalls the whole queue behind it: every merged TASK sits at `mergeable`
-forever, which holds every TASK based on it — the hold releases only on `merged` or on no
-record at all — and leaves the pruner with nothing ever to prune. The pass is the one
-component that already recomputes everything fresh from git and the queue directory, and
-the executor cannot report `merged` itself — `report_task_state`'s closed set excludes it
-on purpose — because a session that just did the merging is the least impartial judge of
-whether its merge landed.
+The executor is the one party that knows the moment its merge lands; a pass is not,
+because a pass wakes only on events, and the merge lands inside the TASK's own worktree,
+where the queue directory does not live — the event a merge raises fires where nothing
+that could settle is listening. The executor therefore triggers the settle itself, through
+`settle_task`, and the pass keeps running the same check so that a TASK the tool never
+settles — a session that died mid-merge, a merge landed by hand — is settled the next
+time a pass runs. Neither caller is trusted on its word: the settle verifies both
+conditions from git itself, which is also why `merged` never comes from a session's
+report — `report_task_state`'s closed set excludes it on purpose (`specs/progress.md`).
 
 Both conditions are required because each covers the other's blind spot. A branch is an
 ancestor of `main` from the moment it is cut, so ancestry alone would mark a freshly
 queued TASK `merged` before any work happened; the `mergeable` word is the executor's own
-claim the work is done. And `mergeable` alone is only a claim — a pass that lands it in
-git is the proof, which is exactly what the ancestor check supplies.
+claim the work is done. And `mergeable` alone is only a claim — the landing in git is
+the proof, which is exactly what the ancestor check supplies.
 
-The teardown belongs to this same pass, not to the executor, because the executor's own
-session lives inside the very worktree that would be torn down — removing it is not a
-move a process can safely make on the directory it is running in. A worktree left behind
-is not harmless litter, either: it keeps the TASK's branch checked out under its own
-name, which is exactly the collision a later dispatch of that name stumbles over — the
-first unattended dispatch this queue ever ran died precisely there, on a branch held by a
-leftover worktree. The human's two places in this flow — the disposition gate before any
-of it, and a parked `blocked-on-question` during — are both already standing; settling a
-TASK's residue is mechanics, not judgment, and belongs to no one.
+The state word is written first because it is the fact the rest of the queue keys on: a
+hold releases on `merged`, and the pruner below waits for it. The worktree and the session
+are residue, and they go after. Killing the session is the one act here that can bite the
+hand calling it: the caller of `settle_task` is usually the very session being killed, and
+the executor's session lives inside the worktree being removed. Handing the kill to a
+detached reaper process with a short delay is what makes an executor-triggered teardown
+safe — the settle answers its caller first, and the host session dies a moment later, once
+the answer is already out. A worktree left behind is not harmless litter, either: it keeps
+the TASK's branch checked out under its own name, which is exactly the collision a later
+dispatch of that name stumbles over — the first unattended dispatch this queue ever ran
+died precisely there, on a branch held by a leftover worktree. The human's two places in
+this flow — the disposition gate before any of it, and a parked `blocked-on-question`
+during — are both already standing; settling a TASK's residue is mechanics, not judgment,
+and asks nothing of a human.
 
 <!-- scenarios: generated -->
 - "A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it" → tests/schedule/end-to-end.test.ts
