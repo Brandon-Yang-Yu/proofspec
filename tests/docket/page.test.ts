@@ -66,7 +66,24 @@ type PageElement = { innerHTML: string; hidden: boolean }
  * claim about a copy of it, and the inventories are what let a test hold a shape ("nothing
  * but these") instead of a list of spellings a mutant could walk around.
  */
+/** How one page run feeds its fetch: an answer to render, or a network that always
+ *  fails — the refresh's failure branch is shipped code, and its reach belongs in the
+ *  inventories as much as the answering path's does. */
+type PageMode =
+  | { readonly kind: 'answered'; readonly answer: unknown }
+  | { readonly kind: 'offline' }
+
 async function renderPageWith(answer: unknown) {
+  return await runPage({ kind: 'answered', answer })
+}
+
+/** The page run against a fetch that always fails: the catch branch runs, nothing
+ *  renders, and whatever that branch reaches for still lands in the inventories. */
+async function renderPageOffline() {
+  return await runPage({ kind: 'offline' })
+}
+
+async function runPage(mode: PageMode) {
   const elements = new Map<string, PageElement>()
   const elementReads = new Set<string>()
   const elementWrites = new Set<string>()
@@ -113,7 +130,8 @@ async function renderPageWith(answer: unknown) {
     }),
     fetch: async (url: string) => {
       fetched.push(url)
-      return { json: async () => answer }
+      if (mode.kind === 'offline') throw new Error('the network is down')
+      return { json: async () => mode.answer }
     },
     setInterval: (renew: () => void, every: number) => {
       timers.push(every)
@@ -232,12 +250,13 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and an answer that walks every rendering branch it holds
-// WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with, reads nothing off the document but the element lookup, nothing off an element at all, and writes nothing to one but the text and visibility it renders
+// WHEN it is read as the HTML it is, and its script is run the way a browser runs it — against an answer, and against a network that fails
+// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with — whether the fetch answers or fails — reads nothing off the document but the element lookup, nothing off an element at all, and writes nothing to one but the text and visibility it renders
 it('offers no control that runs anything', async () => {
   const page = docketPage()
   const run = await renderPageWith(ANSWER)
   const rendered = [...run.elements.values()].map(element => element.innerHTML).join('')
+  const offline = await renderPageOffline()
 
   // The whole inventory of the markup it ships: every element name and every valued
   // attribute the page was written with, before and after its script alike. A control, a
@@ -270,4 +289,13 @@ it('offers no control that runs anything', async () => {
     'rulings-heading.hidden',
     'rulings.innerHTML',
   ])
+  // The failed fetch runs the refresh's catch branch — shipped code with a reach of its
+  // own. Nothing renders there, and the branch still touches nothing but the fetch and
+  // the timer: no retry machinery of its own, no door the answering path keeps closed.
+  expect(offline.fetched).toEqual(['/docket'])
+  expect([...offline.touched].sort()).toEqual(['fetch', 'setInterval'])
+  expect([...offline.documentReads]).toEqual([])
+  expect([...offline.documentWrites]).toEqual([])
+  expect(offline.elementReads).toEqual([])
+  expect([...offline.elementWrites]).toEqual([])
 })
