@@ -73,12 +73,12 @@ export async function serveDocket(options: ServeOptions): Promise<StandingServe 
   // Stopping twice is one stop: a caller that stops by hand and again on teardown would
   // otherwise read a refusal from a server already down.
   let stopped = false
-  // The URL names an address that answers: `localhost` is the spelling a person opens when
-  // no interface was named; a named one is spelled as the caller named it.
-  const url = options.host === undefined ? `http://localhost:${listening.port}/` : `http://${options.host}:${listening.port}/`
+  // The URL names an address that answers: `localhost` is the spelling a person opens for
+  // the loopback, and an interface a caller named is spelled as they named it.
+  const forABrowser = host === LOOPBACK ? 'localhost' : host
   return {
     ok: true,
-    url,
+    url: `http://${forABrowser}:${listening.port}/`,
     host,
     port: listening.port,
     stop: async () => {
@@ -111,7 +111,9 @@ function listen(server: ReturnType<typeof createServer>, port: number, host: str
         ok: false,
         reason: error.code === 'EADDRINUSE'
           ? `port ${port} is already in use`
-          : `could not listen on port ${port}: ${error.message}`,
+          // The interface is named too, because it is as often the part that cannot be
+          // listened on — an address the machine does not hold, say.
+          : `could not listen on ${host} at port ${port}: ${error.message}`,
       })
     }
     server.once('listening', onListening)
