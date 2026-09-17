@@ -61,19 +61,24 @@ type PageElement = { innerHTML: string; hidden: boolean }
 /**
  * Runs the page's own inline script the way a browser runs it, recording its whole reach:
  * every global it touches by name, every property it reads or writes on the document, and
- * every property it writes on any element. Asserting against the page's script — not a
- * reimplementation of it — is what keeps this a proof about the page rather than a claim
- * about a copy of it, and the inventories are what let a test hold a shape ("nothing but
- * these") instead of a list of spellings a mutant could walk around.
+ * every property it reads or writes on any element. Asserting against the page's script —
+ * not a reimplementation of it — is what keeps this a proof about the page rather than a
+ * claim about a copy of it, and the inventories are what let a test hold a shape ("nothing
+ * but these") instead of a list of spellings a mutant could walk around.
  */
 async function renderPageWith(answer: unknown) {
   const elements = new Map<string, PageElement>()
+  const elementReads = new Set<string>()
   const elementWrites = new Set<string>()
   const element = (id: string): PageElement => {
     const found = elements.get(id)
     if (found !== undefined) return found
     const made: PageElement = { innerHTML: '', hidden: false }
     const guarded = new Proxy(made, {
+      get(target, prop) {
+        if (typeof prop === 'string') elementReads.add(`${id}.${prop}`)
+        return Reflect.get(target, prop)
+      },
       set(target, prop, value) {
         if (typeof prop === 'string') elementWrites.add(`${id}.${prop}`)
         return Reflect.set(target, prop, value)
@@ -125,7 +130,10 @@ async function renderPageWith(answer: unknown) {
   runInContext(pageScript(), context)
   // The first refresh is asynchronous; let it land before the assertions read the page.
   await flush()
-  return { elements, elementWrites, documentReads, documentWrites, fetched, timers, renewals, touched, flush }
+  // Snapshotted before anything is handed back: the caller's own reads of an element must
+  // not land in the script's inventory.
+  const scriptElementReads = [...elementReads]
+  return { elements, elementReads: scriptElementReads, elementWrites, documentReads, documentWrites, fetched, timers, renewals, touched, flush }
 }
 
 /** The page's own script, lifted out of the page unchanged. */
@@ -135,12 +143,12 @@ function pageScript(): string {
   return match[1]!
 }
 
-/** The static markup of the page — everything before the script, where an attribute could
- *  point a request. */
-function staticMarkup(): string {
+/** The markup the page ships with its script lifted out — everything a browser parses as
+ *  elements, before and after the script alike. */
+function shippedMarkup(): string {
   const page = docketPage()
-  const upTo = page.indexOf('<script>')
-  return upTo === -1 ? page : page.slice(0, upTo)
+  const script = /<script>[\s\S]*<\/script>/.exec(page)
+  return script === null ? page : page.slice(0, script.index) + page.slice(script.index + script[0].length)
 }
 
 /** The element names a stretch of HTML holds, lowercased as HTML's own case-insensitive
@@ -225,34 +233,35 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and an answer that walks every rendering branch it holds
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, no attribute that carries a value beyond the ones it was written with, no stylesheet import or url and no javascript: scheme anywhere, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
+// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with, reads nothing off the document but the element lookup, nothing off an element at all, and writes nothing to one but the text and visibility it renders
 it('offers no control that runs anything', async () => {
   const page = docketPage()
   const run = await renderPageWith(ANSWER)
   const rendered = [...run.elements.values()].map(element => element.innerHTML).join('')
 
   // The whole inventory of the markup it ships: every element name and every valued
-  // attribute the static page was written with. A control, a request door, or any element
-  // at all, arrives as a name this list would have to carry.
-  expect(elementNames(staticMarkup())).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
-  expect(valuedAttributeNames(staticMarkup())).toEqual(['charset', 'id', 'lang'])
+  // attribute the page was written with, before and after its script alike. A control, a
+  // request door, or any element at all, arrives as a name this list would have to carry.
+  expect(elementNames(shippedMarkup())).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
+  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'id', 'lang'])
   // The same inventory of the HTML its script renders for the branch-walking answer —
   // nothing the page can build carries an element or a valued attribute beyond these.
   expect(elementNames(rendered)).toEqual(['br', 'code', 'li', 'span', 'td', 'tr'])
   expect(valuedAttributeNames(rendered)).toEqual(['class'])
   // Content-level targets, in the shipped markup and the rendered HTML alike.
-  holdsNoContentTarget(page)
+  holdsNoContentTarget(shippedMarkup())
   holdsNoContentTarget(rendered)
   // The one request the page makes here is its first refresh, and it makes it to /docket —
   // the page's requests are its refreshes, nothing else.
   expect(run.fetched).toEqual(['/docket'])
   // The script's whole reach: every global it touches by name, every document property it
-  // reads or writes, and every element property it writes. A control wired in script — a
-  // handler set on the document or an element, a request by any other means — is a touch
-  // this inventory would have to carry, and the claim above with it.
+  // reads or writes, and every element property it reads or writes. A control wired in
+  // script — a handler read off an element, a request by any other means — is a touch this
+  // inventory would have to carry, and the claim above with it.
   expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
   expect([...run.documentReads]).toEqual(['getElementById'])
   expect([...run.documentWrites]).toEqual([])
+  expect(run.elementReads).toEqual([])
   expect([...run.elementWrites].sort()).toEqual([
     'empty.hidden',
     'problems-heading.hidden',
