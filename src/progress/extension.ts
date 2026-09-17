@@ -31,7 +31,8 @@ function resolveReportEnv(env: Readonly<Record<string, string | undefined>>): Re
 }
 
 /** The closed set of state words an executor may report on itself. `queued` belongs to
- *  `enqueue`'s own initial write; `merged` has no producer yet (docs/design.md §49). `BUILDING`
+ *  `enqueue`'s own initial write; `merged` is written only by the settle, never by the session
+ *  that did the merging (docs/design.md, "Docket"). `BUILDING`
  *  is reused, not copied, since `leaseDecision` (`src/schedule/lease.ts`) already compares a
  *  TASK's own state word against that exact constant. */
 export const REPORTABLE_STATES = [BUILDING, 'mergeable', 'blocked-on-question'] as const

@@ -125,7 +125,7 @@ new entered the queue, so there is nothing for a pass to react to.
 
 `specs/schedule.md` already requires that "a scheduling pass is triggered by events... a TASK
 enqueued... and SHALL NOT run inside a resident process or on a timer" — the domain rule has
-stood since §41, but nothing has ever called `schedule()` when that event actually happens.
+stood since the scheduling capability landed, but nothing has ever called `schedule()` when that event actually happens.
 Today a human hands a TASK to `enqueue_task` and then has to separately remember to run
 `proofspec schedule` for anything to happen; investigator only owns intent and hand-off, and
 the human's own attention is the one thing this whole pipeline exists to spend on judgment,

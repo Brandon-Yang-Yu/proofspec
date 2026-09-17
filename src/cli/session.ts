@@ -5,7 +5,7 @@ import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
 
 /**
- * The real `startSession` action design.md left for an embedder to supply: a headed,
+ * The real `startSession` action: a headed,
  * interactive `pi` executor, started in the TASK's own worktree. `schedule`'s own core
  * never starts one itself (see its tests) — this is the one place that actually does, using
  * tmux as the one thing on this machine that can hand a real pty to a human without taking

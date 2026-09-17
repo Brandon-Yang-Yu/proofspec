@@ -3,7 +3,7 @@ import type { TaskRecord } from '../inflight/index.ts'
 /**
  * Requirement: A merged TASK's queue entry is pruned once nothing still names it
  *
- * The criterion recorded in docs/design.md §39: a merged entry stays as long as some in-flight
+ * The reason behind the requirement above: a merged entry stays as long as some in-flight
  * TASK's `base.task` might still name it — removing it early is what would turn a graceful
  * "based on a TASK that merged" into a false "based on a TASK the queue holds no record of at
  * all." Answerable from the same records `inflight` already reads; pruning keeps no ledger of

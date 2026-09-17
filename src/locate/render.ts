@@ -8,7 +8,7 @@ import { firstSiteByIdentity } from './locate.ts'
 
 /**
  * Renders the tree as the readable site a person reads — the delivery view of the
- * storage/delivery split (`docs/design.md` §4). The committed files hold only titles and
+ * storage/delivery split (docs/design.md, "Storage vs delivery"). The committed files hold only titles and
  * locations; this joins them back to the tests, so each requirement shows its description
  * (from the file) and each scenario its Gherkin and current position (from the test).
  *

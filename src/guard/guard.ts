@@ -24,7 +24,7 @@ export const VOCABULARY_HOME = 'glossary'
 
 /**
  * Decides whether a build can proceed. It rebuilds the tree from the tests, compares it
- * against the committed capability files, and applies the rules of `docs/design.md` §7.
+ * against the committed capability files, and applies the rules of `specs/guard.md`.
  *
  * It reads no files itself: `test-scan` supplies the scans, `spec-file` the committed tree.
  * Deciding is the only thing that happens here.
