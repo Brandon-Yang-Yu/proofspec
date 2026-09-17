@@ -125,6 +125,20 @@ function staticMarkup(): string {
   return upTo === -1 ? page : page.slice(0, upTo)
 }
 
+/** The shapes a control or a request door takes, held identically against the static page
+ *  and against every run of HTML the page's script renders — HTML's parser is
+ *  case-insensitive, so the shapes are too. */
+function holdsNoControl(html: string): void {
+  // A control element of any name on the list, whatever case it is spelled in.
+  expect(html).not.toMatch(/<(button|form|input|select|textarea|a)\b/i)
+  // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
+  expect(html).not.toMatch(/\son[a-z]+\s*=/i)
+  // An attribute that names a target, or a stylesheet url(): a request by markup is a door
+  // only one of these opens.
+  expect(html).not.toMatch(/\s(src|href|action)\s*=|url\(/i)
+  expect(html).not.toMatch(/javascript:/i)
+}
+
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
 // Scenario: The page asks the server for the docket again on its own, on a short interval
 // GIVEN the docket's page
@@ -187,24 +201,24 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, no attribute on the static markup but the four it was written with, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
+// THEN it offers no control that runs anything — no control element whatever its case, neither in the markup it ships nor in the HTML it renders, no handler attribute whatever event it names, no request-pointing attribute or stylesheet url anywhere, no element or valued attribute on the static markup beyond the ones it was written with, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
 it('offers no control that runs anything', async () => {
   const page = docketPage()
   const run = await renderPageWith(ANSWER)
 
-  for (const control of ['<button', '<form', '<input', '<select', '<textarea', '<a ', 'javascript:']) {
-    expect(page).not.toContain(control)
-  }
-  // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
-  expect(page).not.toMatch(/\son[a-z]+\s*=/i)
-  // The stylesheet may hold no url: a request by markup is a door only an attribute or a
-  // stylesheet url can open, and the attribute door is closed by the inventory below.
-  expect(page).not.toContain('url(')
-  // The static markup carries no attribute but the ones this page was written with — any
-  // door markup can point (src, href, action, srcset, data, http-equiv, ...) is an
-  // attribute, and a name off this list is how it would have to arrive.
-  const attributes = [...staticMarkup().matchAll(/\s([a-zA-Z-]+)=/g)].map(match => match[1]!)
-  expect([...new Set(attributes)].sort()).toEqual(['charset', 'id', 'lang'])
+  holdsNoControl(page)
+  for (const element of run.elements.values()) holdsNoControl(element.innerHTML)
+
+  // The static markup's whole inventory of elements and valued attributes: every name the
+  // page was written with, and nothing a mutant could add — a control, a request door, or
+  // any element at all, arrives as a name this list would have to carry.
+  const tags = [...new Set([...staticMarkup().matchAll(/<\/?([a-zA-Z][a-zA-Z0-9-]*)/g)].map(match => match[1]!.toLowerCase()))]
+  expect([...tags].sort()).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
+  const attributes = [...new Set([...staticMarkup().matchAll(/\s([a-zA-Z-]+)=/g)].map(match => match[1]!))]
+  expect([...attributes].sort()).toEqual(['charset', 'id', 'lang'])
+  // The one request the page makes here is its first refresh, and it makes it to /docket —
+  // the page's requests are its refreshes, nothing else.
+  expect(run.fetched).toEqual(['/docket'])
   // The script's whole reach: every global it touches by name, every document property it
   // reads or writes, and every element property it writes. A control wired in script — a
   // handler set on the document or an element, a request by any other means — is a touch
