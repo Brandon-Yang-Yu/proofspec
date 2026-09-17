@@ -96,7 +96,7 @@ export async function check(options: RunOptions): Promise<Outcome> {
 
 /**
  * Records what the tests prove in the committed files, and changes nothing else — the
- * write-back of design.md §6, run on purpose. Each capability file gets the scenarios its
+ * write-back `specs/cli.md` requires, run on purpose. Each capability file gets the scenarios its
  * tests prove; a file whose bytes would not change is left untouched, so the changed list
  * says exactly what moved.
  */
@@ -128,7 +128,7 @@ export async function write(options: RunOptions): Promise<Outcome> {
 }
 
 /**
- * Writes the readable spec site — the delivery view of design.md §4 — as one page per
+ * Writes the readable spec site — the delivery view of the storage/delivery split — as one page per
  * capability plus an index, under the output directory. It scans the tests for the Gherkin
  * and positions and reads the committed files for the descriptions, joins them, and writes
  * the pages. They are an output a person reads, never an input the tool reads back, so unlike

@@ -41,7 +41,7 @@ export async function readCensus(cwd: string, specsDir: string = DEFAULT_SPECS_D
 
 /**
  * One in-flight TASK's changed capability files, read at both ends of its own basis. The
- * changed-paths call is the cheap filter §42 asks for before the expensive read: it names
+ * changed-paths call is the cheap filter before the expensive read: it names
  * only the capability files this TASK actually edited, so a file nobody touched is never
  * parsed at either end.
  */

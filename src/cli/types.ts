@@ -2,7 +2,7 @@
  * What running a command produces, and what a run is given. `cli` is the one capability
  * that owns the filesystem and the process, so this is where a verdict finally becomes an
  * exit code — but not here in the type. `guard` returns a verdict rather than an exit code
- * (design.md §18), and `cli` keeps that boundary: the command produces an `Outcome`, and
+ * (`specs/cli.md`, "The exit code says what happened"), and `cli` keeps that boundary: the command produces an `Outcome`, and
  * turning it into a number a process exits with is `render`'s job.
  */
 

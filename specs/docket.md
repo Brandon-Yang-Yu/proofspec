@@ -8,7 +8,7 @@ gathers what a person actually wants while ten executor sessions run: each TASK'
 whether its session is still there to attach to, how long it has stood where it stands,
 when it last moved, and which rulings are still outstanding.
 
-The pipeline this queue belongs to is named Docket (docs/design.md §53); this capability is
+The pipeline this queue belongs to is named Docket (docs/design.md, "Docket"); this capability is
 that word doing its most literal work — showing what is on the docket.
 
 Every fact it answers is read fresh from where some other capability already wrote it: the

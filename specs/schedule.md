@@ -303,7 +303,7 @@ tmux-socket handling above.
 `pi` without a seeded prompt is just the generic coding-assistant default; nothing tells the
 session it is the executor, that its scope starts only after the disposition review, or that
 a wrong judged standard — never a wrong implementation — is the one thing it should park on
-and ask about (docs/design.md §37, §49). `.pi/agents/executor.md` already carries that persona
+and ask about. `.pi/agents/executor.md` already carries that persona
 in the same shape as this tool's other agent files, written for the `subagent` spawn tool's
 own frontmatter convention; a session `startSession` opens is never spawned that way; it is
 the top-level `pi` process tmux starts directly. Stripping the frontmatter before handing the

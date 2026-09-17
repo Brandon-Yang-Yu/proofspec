@@ -1,6 +1,6 @@
 /**
  * What locate delivers. This is the delivery half of the storage/delivery split
- * (`docs/design.md` §4): a scenario's position moves on every edit, so it is computed on
+ * (docs/design.md, "Storage vs delivery"): a scenario's position moves on every edit, so it is computed on
  * demand here and never written to the committed files.
  */
 

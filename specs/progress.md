@@ -1,8 +1,8 @@
 # progress
 
 Lets a running executor session report its own state word back into
-`.proofspec/dispatch/<task>/`, the one act `docs/design.md` §49 named as an open gap when it
-split personas: `startSession` (`specs/schedule.md`) starts a headed `pi` process in the
+`.proofspec/dispatch/<task>/` — the one gap the persona split left open:
+`startSession` (`specs/schedule.md`) starts a headed `pi` process in the
 TASK's own worktree, and nothing after that point ever writes back to the queue entry that
 started it. `writeState(cwd, task, word)` (`src/cli/queue.ts`) already overwrites a TASK's
 `state` file with exactly the word it is given, with no notion of who is calling it or from
@@ -160,7 +160,7 @@ The heartbeat is a fact, not a word, and the difference is who can lie: a state 
 claim that stays put until something rewrites it, while a heartbeat refreshed on every move
 goes stale on its own the moment the moves stop — nobody has to remember to say so. That is
 what lets it carry "how long since the last move" honestly where a `running` state word
-would go silently false the moment the session hung after writing it (docs/design.md §55).
+would go silently false the moment the session hung after writing it.
 A subagent is a tool call on this session's own surface: its steps arrive as tool updates,
 so a subagent at work refreshes the heartbeat and one that has stopped does not — while the
 refresh grain stays per move, not per token, because a session cannot observe inside a child

@@ -26,7 +26,7 @@ import type {
  * Turns an `Outcome` into the things the process boundary needs: an exit code, a line for a
  * person, a line for a program — and, when the caller named no format, the choice of which of
  * those two an answer is given in. This is where a verdict becomes a number — the boundary
- * `guard` deliberately stopped short of (design.md §18).
+ * `guard` deliberately stopped short of.
  */
 
 const EXIT_OK = 0
