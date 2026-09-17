@@ -68,8 +68,10 @@ park — the word alone is the signal; the human reads the actual question by at
 this session (`tmux attach`), not from anything the report itself carries.
 
 ## Do
-- Read the MANIFEST's intent (`intentRef`, on this branch) and the settled `specs/*.md`
-  before writing a single test.
+- Read the MANIFEST's intent and the settled `specs/*.md` before writing a single test —
+  the `intentRef` resolves one way: the reserved name `INTENT` names the TASK's own queue
+  entry file `.proofspec/dispatch/<task>/INTENT` in the main checkout, and any other value
+  names a file on this branch.
 - Run tests-red, build-to-green, and the review gates with the same discipline `/ship`
   already documents (`.claude/skills/ship/SKILL.md`) — spawn the **implementer** persona
   for the coding steps, fresh reviewers for guideline/completion, same as that pipeline.

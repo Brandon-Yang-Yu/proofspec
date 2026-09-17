@@ -38,7 +38,7 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, takeLease, writeState, writeTimes } from './queue.ts'
+import { readIntentDoc, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeState, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
 import { commandLine, listTmuxSessions, teardownTask, tmuxAttachCommand } from './session.ts'
 import { appendReview, readReviews } from './reviews.ts'
@@ -1360,9 +1360,12 @@ async function raiseRelationships(
   return { ok: true, raised: toNotify }
 }
 
-/** Both TASKs' own intent, read from each MANIFEST's `intentRef` on the TASK's own branch. A
- * TASK whose intent could not be read is simply absent — the fresh agent judges with what it
- * has, the same way a TASK's own MANIFEST failure elsewhere is a failure, not a fabricated intent. */
+/** Both TASKs' own intent, each read by the one rule its own MANIFEST's `intentRef` sets:
+ * the reserved name `INTENT` from the TASK's own queue entry — a TASK whose intent travels as
+ * a dedicated document may carry zero commits on its branch, so no file on that branch can
+ * hold its intent — and any other value from the TASK's own branch. A TASK whose intent could
+ * not be read is simply absent — the fresh agent judges with what it has, the same way a
+ * TASK's own MANIFEST failure elsewhere is a failure, not a fabricated intent. */
 async function intentsFor(
   cwd: string,
   tasks: readonly string[],
@@ -1373,7 +1376,9 @@ async function intentsFor(
   for (const task of tasks) {
     const record = byTask.get(task)
     if (record === undefined) continue
-    const content = await readFileAt({ cwd, rev: record.manifest.branch, path: record.manifest.intentRef })
+    const content = record.manifest.intentRef === RESERVED_INTENT_REF
+      ? await readIntentDoc(cwd, task)
+      : await readFileAt({ cwd, rev: record.manifest.branch, path: record.manifest.intentRef })
     if (content !== undefined) intents[task] = content
   }
   return intents

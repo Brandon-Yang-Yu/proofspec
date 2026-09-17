@@ -143,7 +143,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
         '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
         'pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts',
         '--append-system-prompt', 'you are the executor',
-        'Begin: work your TASK a now - read the MANIFEST\'s intentRef on this branch, then run the full pipeline through to merge.',
+        'Begin: work your TASK a now - read the MANIFEST\'s intentRef (the reserved name INTENT names the TASK\'s own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.',
       ],
     },
   ])

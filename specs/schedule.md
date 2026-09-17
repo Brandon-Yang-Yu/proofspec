@@ -398,6 +398,7 @@ same way.
 - "An intent past the length cap is truncated rather than left to overflow the process's argument list" → tests/schedule/judge.test.ts
 - "The composed judge factory hands its runner the real process and reads its answer through the real parser" → tests/schedule/judge.test.ts
 - "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
+- "The reserved INTENT name reads the TASK's intent from its own queue entry, a path value from the branch" → tests/schedule/end-to-end.test.ts
 - "The same relationship asks the same question regardless of which TASK's intent arrived first" → tests/schedule/judge.test.ts
 <!-- /scenarios -->
 
