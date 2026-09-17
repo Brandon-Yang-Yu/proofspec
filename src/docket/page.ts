@@ -209,9 +209,9 @@ function pageScript(): string {
   }
 
   function render(docket) {
-    // A copy in progress holds the whole answer for this round, not just the element it
-    // sits inside: the visibility flags and the content they describe must never drift
-    // apart mid-render, and the next refresh is two seconds away.
+    // A copy in progress holds the whole answer — for as long as the selection stands, not
+    // just one round: the visibility flags and the content they describe must never drift
+    // apart mid-render, and holding costs nothing the next cleared refresh does not pay.
     if (selectionLives()) return
     document.getElementById('empty').hidden = docket.rows.length > 0
     document.getElementById('rows').innerHTML = docket.rows.map(rowHtml).join('')
