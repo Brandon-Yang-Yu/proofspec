@@ -15,13 +15,17 @@ queue lives under.
 `leaseDecision` (`src/schedule/lease.ts`) already treats the literal word `building` as proof
 a session is live; before this capability, nothing running inside a session ever produced that
 word. `report_task_state` closes exactly that gap: it does not decide when a TASK is actually
-done, does not carry the text of a parked question, and does not add a `merged` state — those
-remain other capabilities', or a future round's, to build. The capability carries a second
-limb, the heartbeat: the same extension refreshes a timestamp in the same queue entry on
+done, and does not carry the text of a parked question. `merged` is not a word a session
+reports at all — a running session is the least impartial judge of its own merge — so the
+capability carries a second limb for it, the settle: `settle_task`, the tool an executor
+calls the moment its own merge lands, which re-verifies the landing from git itself before
+it rewrites the state word and tears the TASK's worktree and session down. The third limb
+is the heartbeat: the same extension refreshes a timestamp in the same queue entry on
 every move the session makes, so that a view reading the entry can tell a working session
-from a silent one without asking either. Neither limb decides anything — the words and the
-timestamps are facts a session leaves behind, and what anything makes of them belongs to
-whoever reads them.
+from a silent one without asking either. The words and the timestamps are facts a session
+leaves behind, and what anything makes of them belongs to whoever reads them; the settle is
+the one act among the three, and every question it answers it answers from git, never from
+its caller's word.
 
 ### Requirement: report_task_state accepts only a closed set of state words
 
@@ -36,8 +40,9 @@ report has to live in the one caller that knows what an executor's own lifecycle
 be in: building while it works, mergeable once every gate is clean, or blocked-on-question
 when it parks (`.pi/agents/executor.md`). `queued` is deliberately excluded — that word
 belongs to `enqueue`'s own initial write, never to a running session reporting on itself — and
-`merged` is left out on purpose too: §39's "a merged entry is rewritten to `merged`, never
-removed" still has no producer, and building one is next round's work, not this one's.
+`merged` is left out on purpose too: a running session is the least impartial judge of its own
+merge, and `merged` is written only by a settle that verified the landing from git itself
+(`settle_task`, below; the scheduling pass's backstop, `specs/schedule.md`).
 `BUILDING` (`src/schedule/types.ts`) is reused rather than copied, since `leaseDecision`
 already compares a TASK's own state word against that exact constant; `mergeable` and
 `blocked-on-question` join it there so the queue's vocabulary of state words keeps one home.
@@ -96,6 +101,46 @@ exactly that failure at the boundary and answers it as a value instead, the same
 - "A reported state is written to the queue entry at the given queueRoot" → tests/progress/extension.test.ts
 - "Reporting a state for a TASK whose queue entry has been pruned is refused as a value, never thrown" → tests/progress/extension.test.ts
 - "Reporting a state leaves the entry's MANIFEST and LEASE exactly as they were" → tests/progress/extension.test.ts
+<!-- /scenarios -->
+
+### Requirement: settle_task settles a TASK only after re-verifying its landing from git
+
+`settle_task` (`src/progress/extension.ts`) SHALL resolve the queue it writes into and the
+TASK it settles the same way `report_task_state` does — from `PROOFSPEC_QUEUE_ROOT` and
+`PROOFSPEC_TASK`, never from `ExtensionContext.cwd` — refusing when either is unset. It
+SHALL never take its caller's word for the settle conditions: on every call it SHALL read
+the TASK's current state word from the queue, and check its MANIFEST's `branch` is an
+ancestor of `main`, fresh from git. Either condition failing, it SHALL refuse as a value —
+`{ok: false, reason}` naming which condition failed — touching nothing: the state word, the
+worktree, and the session stand exactly as they were. Both holding, it SHALL perform the
+settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its
+conventional path, kill its same-named tmux session on the dedicated server — the same
+settle a scheduling pass runs as its backstop (`specs/schedule.md`). The session kill SHALL
+go through a detached reaper process with a short delay, so the tool returns its result
+before the host session dies. The tool SHALL NOT prune the TASK's queue entry: pruning
+waits until no in-flight TASK's `base` still names it, a fact about the whole queue that
+one session cannot answer, and it stays the scheduling pass's.
+
+The executor is the one party that knows the moment its merge lands, so it is the one that
+calls: the merge happens inside the TASK's own worktree, and the event it raises fires
+there, where the queue directory does not live, so no scheduling pass reliably hears it.
+But a session that just did the merging is also the least impartial judge of whether the
+merge landed — the same reason `report_task_state`'s closed set has no `merged` to report —
+so the tool checks git itself instead of trusting the call, the identical check the pass
+runs: one settle, two callers, neither trusted. The reaper is what makes an
+executor-triggered teardown safe at all. The session being killed is the very process
+whose tool call this is, and a kill that took effect at once would cut the answer off
+before the caller ever saw whether the settle succeeded.
+
+<!-- scenarios: generated -->
+- "A settle for a TASK whose branch has not landed in main is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
+- "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
+- "A settle for a mergeable TASK whose branch has landed in main rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
+- "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
+- "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
+- "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
+- "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never ExtensionContext.cwd" → tests/progress/settle.test.ts
+- "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The extension refreshes a heartbeat on every move the session makes

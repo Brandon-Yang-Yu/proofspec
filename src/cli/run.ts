@@ -38,9 +38,10 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { readIntentDoc, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeState, writeTimes } from './queue.ts'
+import { readIntentDoc, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
-import { commandLine, listTmuxSessions, teardownTask, tmuxAttachCommand } from './session.ts'
+import { commandLine, listTmuxSessions, tmuxAttachCommand } from './session.ts'
+import { settleTask } from './settle.ts'
 import { appendReview, readReviews } from './reviews.ts'
 import type {
   DescriptionChange,
@@ -1290,15 +1291,14 @@ function now(options: RunOptions): string {
  * Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch
  * has landed in main
  *
- * The one place a TASK's state is ever written to `merged`. The executor cannot report the
- * word itself — `report_task_state`'s closed set excludes it on purpose, because a session
- * that just did the merging is the least impartial judge of whether its merge landed — so the
- * pass answers the ancestry question itself, fresh from git, for every candidate on every
- * pass. A git that cannot answer reads as not-landed, which leaves the word standing — the
- * safe side of a rule whose every failure mode costs a look, never a lost TASK. Each settle
- * tears down the TASK's worktree and tmux session in the same breath; that is this pass's
- * move for the same reason — the executor's own session lives inside the very worktree being
- * removed, so nothing running there can be the one to remove it.
+ * The pass's half of the settle: name the TASKs the pure rule settles, then run each through
+ * the one shared settle (`src/cli/settle.ts`) the `settle_task` tool also runs — the pass is
+ * the backstop here, not a second implementation. Naming and settling are separate because
+ * they answer different questions: `tasksToMerge` is the pass's own plan, built from the
+ * queue as this pass gathered it, while the settle re-reads the word and re-asks git at the
+ * moment it acts — so a TASK another pass or the tool settled mid-flight reads here as
+ * already done rather than being settled twice, and the plan's `merged` list names only the
+ * settles this pass itself performed.
  */
 async function settleMergedStates(
   options: RunOptions,
@@ -1308,13 +1308,14 @@ async function settleMergedStates(
   const candidates: readonly MergeCandidate[] = [...gathered.words]
     .map(([task, word]) => ({ task, word, branch: branches.get(task) }))
     .filter((one): one is MergeCandidate => one.branch !== undefined)
-  const settled = await tasksToMerge(candidates, async branch => {
+  const named = await tasksToMerge(candidates, async branch => {
     const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: 'main' })
     return answer.ok && answer.isAncestor
   })
-  for (const task of settled) {
-    await writeState(options.cwd, task, 'merged')
-    await teardownTask(options.cwd, task)
+  const settled: string[] = []
+  for (const task of named) {
+    const result = await settleTask({ queueRoot: options.cwd, task })
+    if (result.ok) settled.push(task)
   }
   return settled
 }

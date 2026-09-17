@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { liveSessionCount, promptBodyFrom, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 const execFileAsync = promisify(execFile)
@@ -118,13 +118,40 @@ it('removes the settled TASK\'s worktree and frees its branch for a later dispat
 // GIVEN a TASK the queue has settled, and a tmux session still carrying its name
 // WHEN the settled TASK's teardown runs
 // THEN the kill reaches the dedicated server by its -L socket, never the default one, and names the TASK's session
-it('kills the settled TASK\'s tmux session on the dedicated server', () => {
+// The kill a teardown runs is the reaper's now, so the proof holds the reaper to account
+// twice: by plan (which server, which session, both socket states) and by landing (a real
+// session on a throwaway server dies within the reaper's delay of the teardown).
+it('kills the settled TASK\'s tmux session on the dedicated server', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
-  expect(tmuxKillSessionCommand('a')).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] })
+  expect(reaperFor('a').reapEnv).toEqual({
+    PROOFSPEC_REAP_SECONDS: '2',
+    PROOFSPEC_REAP_SOCKET: 'proofspec',
+    PROOFSPEC_REAP_TASK: 'a',
+  })
+  expect(reaperFor('a').args).toEqual(['-c', expect.stringContaining('tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"')])
 
-  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
-  expect(tmuxKillSessionCommand('a')).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'kill-session', '-t', 'a'] })
-})
+  const socket = 'proofspec-test-run-42'
+  process.env.PROOFSPEC_TMUX_SOCKET = socket
+  expect(reaperFor('a').reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socket)
+
+  const repo = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repo, 'settled-gone', { edit: 'a.txt' })
+  await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'settled-gone'), 'work/settled-gone'])
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', socket, ...args])
+  await tmux(['new-session', '-d', '-s', 'settled-gone', 'sleep', '60'])
+  const hasSession = () => tmux(['has-session', '-t', 'settled-gone']).then(() => true, () => false)
+  try {
+    await teardownTask(repo.root, 'settled-gone')
+    await expect(hasSession()).resolves.toBe(true)
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline && (await hasSession())) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    await expect(hasSession()).resolves.toBe(false)
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+  }
+}, 10000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi

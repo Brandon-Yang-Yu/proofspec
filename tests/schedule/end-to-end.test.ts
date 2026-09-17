@@ -239,6 +239,37 @@ it('keeps a landed TASK\'s state word when it is not mergeable', async () => {
 })
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Scenario: The pass's settle kills the TASK's session through the reaper, so the pass has already answered when the kill lands
+// GIVEN a mergeable TASK whose branch has landed in main, with a live tmux session carrying its name on the dedicated server
+// WHEN a scheduling pass runs and answers
+// THEN the session is still live at the moment the pass answers, and is gone within a few seconds after
+// The task name is unique in this suite because the reaper kills by that name: a shared name
+// would let another test's reaper kill this test's fresh session inside the reaper's delay.
+it('kills the settled TASK\'s session through the reaper, after the pass has answered', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'pass-reaped', { edit: 'specs/cli.md' })
+  await repo.git(['merge', 'work/pass-reaped'])
+  await repo.write('.proofspec/dispatch/pass-reaped/state', 'mergeable')
+  await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'pass-reaped'), 'work/pass-reaped'])
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', 'proofspec-test-run', ...args])
+  await tmux(['new-session', '-d', '-s', 'pass-reaped', 'sleep', '60'])
+  const hasSession = () => tmux(['has-session', '-t', 'pass-reaped']).then(() => true, () => false)
+  try {
+    const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
+
+    expect(plan.merged).toEqual(['pass-reaped'])
+    await expect(hasSession()).resolves.toBe(true)
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline && (await hasSession())) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    await expect(hasSession()).resolves.toBe(false)
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+  }
+}, 10000)
+
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
 // Scenario: The landed-in-main check is made fresh from git on each pass, never from bookkeeping
 // GIVEN a TASK whose state word is mergeable, whose branch has not yet landed in main
 // WHEN a first pass runs, then the branch is merged into main, then a second pass runs

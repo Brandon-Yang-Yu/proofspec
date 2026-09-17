@@ -24,7 +24,8 @@ it('names a mergeable TASK whose branch has landed in main for settling', async 
 // Scenario: A mergeable TASK whose branch has not landed in main is not named for settling
 // GIVEN a TASK whose state word is mergeable, but whose branch is not an ancestor of main
 // WHEN the pass decides which TASKs it settles this pass
-// THEN that TASK is not named, and its state word is left to keep standing
+// THEN that TASK is not named — the state word the settle never reached is the end-to-end
+//      scenario's own to pin, not this pure rule's
 it('does not name a mergeable TASK whose branch has not landed in main', async () => {
   const settled = await tasksToMerge([{ task: 'a', word: 'mergeable', branch: 'work/a' }], landed(['work/a']))
 

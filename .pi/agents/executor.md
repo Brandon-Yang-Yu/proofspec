@@ -67,6 +67,11 @@ you're ready to merge. Report `blocked-on-question` when you hit the one excepti
 park — the word alone is the signal; the human reads the actual question by attaching to
 this session (`tmux attach`), not from anything the report itself carries.
 
+Once your merge has landed in main, call `settle_task` (`specs/progress.md`) — it re-verifies
+the landing from git itself, rewrites the state to `merged`, removes the worktree, and kills
+this session through a delayed reaper, so the TASK leaves nothing checked out behind it. A
+refusal is a finding to act on, like any review finding.
+
 ## Do
 - Read the MANIFEST's intent and the settled `specs/*.md` before writing a single test —
   the `intentRef` resolves one way: the reserved name `INTENT` names the TASK's own queue
