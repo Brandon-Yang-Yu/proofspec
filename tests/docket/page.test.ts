@@ -4,7 +4,10 @@ import { createContext, runInContext } from 'node:vm'
 import { expect, it } from 'vitest'
 import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
 
-/** An answer worth a second screen: a working TASK with a session, a problem, and a debt. */
+/** An answer worth a second screen, walking every rendering branch the page holds: a
+ *  working TASK with a session, a merged TASK with no heartbeat, a TASK stacked on another,
+ * a problem, a debt with its named node, and one whose key names no node at all — so no
+ *  literal the script could emit goes unrendered. */
 const ANSWER = {
   rows: [
     {
@@ -25,6 +28,15 @@ const ANSWER = {
       heartbeatAgeSeconds: null,
       session: { listed: false },
     },
+    {
+      task: 'stacked',
+      state: 'queued',
+      branch: 'work/stacked',
+      base: { kind: 'task', task: 'other-task', reason: 'stacked on it' },
+      stateAgeSeconds: 300,
+      heartbeatAgeSeconds: 12,
+      session: { listed: false },
+    },
   ],
   problems: [{ task: 'broken', reason: 'task broken has no MANIFEST' }],
   outstanding: [
@@ -33,6 +45,12 @@ const ANSWER = {
       tasks: ['alpha', 'beta'],
       key: 'capability:spec-tree:alpha,beta',
       answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
+    },
+    {
+      node: null,
+      tasks: [],
+      key: 'odd:shape',
+      answerWith: `proofspec schedule --ruling "<your ruling>" 'odd:shape'`,
     },
   ],
 }
@@ -125,18 +143,24 @@ function staticMarkup(): string {
   return upTo === -1 ? page : page.slice(0, upTo)
 }
 
-/** The shapes a control or a request door takes, held identically against the static page
- *  and against every run of HTML the page's script renders — HTML's parser is
- *  case-insensitive, so the shapes are too. */
-function holdsNoControl(html: string): void {
-  // A control element of any name on the list, whatever case it is spelled in.
-  expect(html).not.toMatch(/<(button|form|input|select|textarea|a)\b/i)
-  // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
-  expect(html).not.toMatch(/\son[a-z]+\s*=/i)
-  // An attribute that names a target, or a stylesheet url(): a request by markup is a door
-  // only one of these opens.
-  expect(html).not.toMatch(/\s(src|href|action)\s*=|url\(/i)
-  expect(html).not.toMatch(/javascript:/i)
+/** The element names a stretch of HTML holds, lowercased as HTML's own case-insensitive
+ *  parser reads them. */
+function elementNames(html: string): readonly string[] {
+  return [...new Set([...html.matchAll(/<\/?([a-zA-Z][a-zA-Z0-9-]*)/g)].map(match => match[1]!.toLowerCase()))].sort()
+}
+
+/** The attribute names that carry values, lowercased. A request door in markup is an
+ *  attribute with a value to point somewhere (src, href, srcset, data, ...) or content a
+ *  stylesheet can name a target with — and these inventories hold the whole family by
+ *  holding every name, not some of them by naming a few. */
+function valuedAttributeNames(html: string): readonly string[] {
+  return [...new Set([...html.matchAll(/\s([a-zA-Z-]+)\s*=/g)].map(match => match[1]!.toLowerCase()))].sort()
+}
+
+/** Content-level targets — the two ways markup content itself names a target without an
+ *  attribute carrying it. */
+function holdsNoContentTarget(html: string): void {
+  expect(html).not.toMatch(/url\(|@import|javascript:/i)
 }
 
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
@@ -199,23 +223,26 @@ it('shows the attach command and the ruling command as copyable text', async () 
 
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
-// GIVEN the docket's page
+// GIVEN the docket's page, and an answer that walks every rendering branch it holds
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN it offers no control that runs anything — no control element whatever its case, neither in the markup it ships nor in the HTML it renders, no handler attribute whatever event it names, no request-pointing attribute or stylesheet url anywhere, no element or valued attribute on the static markup beyond the ones it was written with, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
+// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, no attribute that carries a value beyond the ones it was written with, no stylesheet import or url and no javascript: scheme anywhere, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
 it('offers no control that runs anything', async () => {
   const page = docketPage()
   const run = await renderPageWith(ANSWER)
+  const rendered = [...run.elements.values()].map(element => element.innerHTML).join('')
 
-  holdsNoControl(page)
-  for (const element of run.elements.values()) holdsNoControl(element.innerHTML)
-
-  // The static markup's whole inventory of elements and valued attributes: every name the
-  // page was written with, and nothing a mutant could add — a control, a request door, or
-  // any element at all, arrives as a name this list would have to carry.
-  const tags = [...new Set([...staticMarkup().matchAll(/<\/?([a-zA-Z][a-zA-Z0-9-]*)/g)].map(match => match[1]!.toLowerCase()))]
-  expect([...tags].sort()).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
-  const attributes = [...new Set([...staticMarkup().matchAll(/\s([a-zA-Z-]+)=/g)].map(match => match[1]!))]
-  expect([...attributes].sort()).toEqual(['charset', 'id', 'lang'])
+  // The whole inventory of the markup it ships: every element name and every valued
+  // attribute the static page was written with. A control, a request door, or any element
+  // at all, arrives as a name this list would have to carry.
+  expect(elementNames(staticMarkup())).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
+  expect(valuedAttributeNames(staticMarkup())).toEqual(['charset', 'id', 'lang'])
+  // The same inventory of the HTML its script renders for the branch-walking answer —
+  // nothing the page can build carries an element or a valued attribute beyond these.
+  expect(elementNames(rendered)).toEqual(['br', 'code', 'li', 'span', 'td', 'tr'])
+  expect(valuedAttributeNames(rendered)).toEqual(['class'])
+  // Content-level targets, in the shipped markup and the rendered HTML alike.
+  holdsNoContentTarget(page)
+  holdsNoContentTarget(rendered)
   // The one request the page makes here is its first refresh, and it makes it to /docket —
   // the page's requests are its refreshes, nothing else.
   expect(run.fetched).toEqual(['/docket'])
