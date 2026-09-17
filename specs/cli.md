@@ -450,6 +450,7 @@ other command's does.
 - "The docket command answers as JSON on request, carrying the same content" → tests/cli/docket.test.ts
 - "The docket command answers as text for a person by default" → tests/cli/docket.test.ts
 - "The docket command exits its ok code whatever it finds" → tests/cli/docket.test.ts
+- "The text answer carries the TASK's phase word and its round on its row" → tests/cli/docket.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A command serves the docket as a page

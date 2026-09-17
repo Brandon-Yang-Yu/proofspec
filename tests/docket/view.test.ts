@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { afterEach, expect, it } from 'vitest'
 import { docket, exitCodeOf } from '../../src/cli/index.ts'
+import { writePhase } from '../../src/cli/queue.ts'
 import type { Docket } from '../../src/docket/index.ts'
 import type { Outcome } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
@@ -149,6 +150,96 @@ it('carries no heartbeat as absent, never as a repeat of the word\'s own age', a
   const row = reportOf(outcome).rows[0]
   expect(row?.stateAgeSeconds).toBe(600)
   expect(row?.heartbeatAgeSeconds).toBeNull()
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A row carries the TASK's phase word and round exactly as its phase file holds them
+// GIVEN a queue holding one TASK whose phase file holds the word test-review at round 2
+// WHEN the docket is answered
+// THEN that row carries phase test-review and round 2 exactly as the file holds them
+// The phase file is written through the same writer the extension tool uses, so the test pins
+// the read against the real bytes, not a fixture's guess at them.
+it('carries the phase word and round exactly as the phase file holds them', async () => {
+  const repo = await makeRepo({ ...queueEntry('phased', { state: 'building' }) })
+  await writePhase(repo.root, 'phased', 'test-review', 2)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phase).toBe('test-review')
+  expect(row?.round).toBe(2)
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A TASK with no phase file carries the phase word and its round both as absent, never invented
+// GIVEN a queue holding one TASK with a phase file and one without
+// WHEN the docket is answered
+// THEN the first row carries its word and round, and the second carries both as absent — never a word guessed, never a round defaulted
+it('carries the phase word and round both as absent when there is no phase file', async () => {
+  const repo = await makeRepo({
+    ...queueEntry('phased', { state: 'building' }),
+    ...queueEntry('plain', { state: 'queued' }),
+  })
+  await writePhase(repo.root, 'phased', 'test-review', 2)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const rows = reportOf(outcome).rows
+  expect(rows.map(row => [row.task, row.phase, row.round])).toEqual([
+    ['phased', 'test-review', 2],
+    ['plain', null, null],
+  ])
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A phase word the docket has never met is shown as it stands, not translated
+// GIVEN a TASK whose phase file holds a word no capability this view knows has ever produced
+// WHEN the docket is answered
+// THEN the row carries the word exactly as the phase file holds it
+it('shows a phase word it has never met as it stands', async () => {
+  const repo = await makeRepo({ ...queueEntry('odd', { state: 'building' }) })
+  await writePhase(repo.root, 'odd', 'warping', 4)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  // The round rides with the word — asserted here at a value no other test writes, so a
+  // row that invented or froze its round fails this test, not only the ones that wrote 2.
+  expect(reportOf(outcome).rows[0]?.phase).toBe('warping')
+  expect(reportOf(outcome).rows[0]?.round).toBe(4)
+})
+
+// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
+// Scenario: A row carries how long it has been since the phase file was last written
+// GIVEN a TASK whose state file was last written 600 seconds ago and whose phase file 240 seconds ago
+// WHEN the docket is answered
+// THEN its row carries 240 as the time since the phase was written — its own file's age, not a repeat of the word's
+it('carries the time since the phase file was last written', async () => {
+  const repo = await makeRepo(queueEntry('a', { state: 'building' }))
+  await writePhase(repo.root, 'a', 'test-review', 2)
+  await writtenAgo(repo, '.proofspec/dispatch/a/state', 600)
+  await writtenAgo(repo, '.proofspec/dispatch/a/phase', 240)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phaseAgeSeconds).toBe(240)
+  expect(row?.stateAgeSeconds).toBe(600)
+})
+
+// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
+// Scenario: A TASK with no phase file carries the third number as absent, never as a repeat of another
+// GIVEN a TASK with a state file 600 seconds old and no phase file at all
+// WHEN the docket is answered
+// THEN its row carries 600 for the word and absent for the phase age — never another number's age dressed up as the phase's
+it('carries no phase file as an absent third number, never as a repeat of another', async () => {
+  const repo = await makeRepo(queueEntry('plain', { state: 'queued' }))
+  await writtenAgo(repo, '.proofspec/dispatch/plain/state', 600)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.stateAgeSeconds).toBe(600)
+  expect(row?.phaseAgeSeconds).toBeNull()
 })
 
 // Requirement: The answer names every relationship raised but not yet ruled

@@ -9,9 +9,8 @@ metadata:
 # /killworktree — land the work and tear down
 
 Close out the worktree you have been working in: deliver its commits to `main`, then
-remove the worktree and its branch. This is the teardown step that used to live at the
-end of `/ship`. Run it once, after all the slices you meant to build in this worktree
-are committed.
+remove the worktree and its branch. Run it once, after all the slices you meant to build
+in this worktree are committed.
 
 ## 1. Check it is safe to close
 

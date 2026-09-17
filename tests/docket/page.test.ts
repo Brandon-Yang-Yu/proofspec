@@ -3,6 +3,7 @@
 import { createContext, runInContext } from 'node:vm'
 import { expect, it } from 'vitest'
 import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
+import type { Docket, OutstandingRuling } from '../../src/docket/index.ts'
 
 /** An answer worth a second screen, walking every rendering branch the page holds: a
  *  working TASK with a session, a merged TASK with no heartbeat, a TASK stacked on another,
@@ -13,40 +14,49 @@ import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts
 const ATTACH = 'tmux -L proofspec attach-session -t alpha'
 
 /** The one debt worth a second screen, with the exact command that pays it. */
-const RULING = {
+const RULING: OutstandingRuling = {
   node: { kind: 'capability', name: 'spec-tree' },
   tasks: ['alpha', 'beta'],
   key: 'capability:spec-tree:alpha,beta',
   answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
 }
 
-const ANSWER = {
+const ANSWER: Docket = {
   rows: [
     {
       task: 'alpha',
       state: 'building',
+      phase: 'test-review',
+      round: 2,
       branch: 'work/alpha',
       base: { kind: 'main' },
       stateAgeSeconds: 7541,
       heartbeatAgeSeconds: 90,
+      phaseAgeSeconds: 6000,
       session: { listed: true, attach: ATTACH },
     },
     {
       task: 'settled',
       state: 'merged',
+      phase: null,
+      round: null,
       branch: 'work/settled',
       base: { kind: 'main' },
       stateAgeSeconds: 45,
       heartbeatAgeSeconds: null,
+      phaseAgeSeconds: null,
       session: { listed: false },
     },
     {
       task: 'stacked',
       state: 'queued',
+      phase: 'plan',
+      round: 1,
       branch: 'work/stacked',
       base: { kind: 'task', task: 'other-task', reason: 'stacked on it' },
       stateAgeSeconds: 300,
       heartbeatAgeSeconds: 12,
+      phaseAgeSeconds: 250,
       session: { listed: false },
     },
   ],
@@ -63,7 +73,7 @@ const ANSWER = {
 }
 
 /** One element the page's script renders into, as the script itself sees it. */
-type PageElement = { innerHTML: string; hidden: boolean }
+type PageElement = { innerHTML: string; hidden: boolean; parentNode: PageElement | null }
 
 /**
  * Runs the page's own inline script the way a browser runs it, recording its whole reach:
@@ -94,10 +104,13 @@ async function runPage(mode: PageMode) {
   const elements = new Map<string, PageElement>()
   const elementReads = new Set<string>()
   const elementWrites = new Set<string>()
+  // The page's elements as the browser nests them: everything the script can hold a
+  // selection inside hangs off the body, so the selection guard's walk up the tree arrives.
+  const bodyElement: PageElement = { innerHTML: '', hidden: false, parentNode: null }
   const element = (id: string): PageElement => {
     const found = elements.get(id)
     if (found !== undefined) return found
-    const made: PageElement = { innerHTML: '', hidden: false }
+    const made: PageElement = { innerHTML: '', hidden: false, parentNode: bodyElement }
     const guarded = new Proxy(made, {
       get(target, prop) {
         if (typeof prop === 'string') elementReads.add(`${id}.${prop}`)
@@ -113,6 +126,12 @@ async function runPage(mode: PageMode) {
   }
   const documentReads = new Set<string>()
   const documentWrites = new Set<string>()
+  // The selection the page's guard asks about: collapsed (no copy in progress) until a test
+  // opens one, the browser's own ordinary state on load.
+  let selection: { isCollapsed: boolean; anchorNode: unknown } = { isCollapsed: true, anchorNode: null }
+  // The answer the next fetch returns — held in a box so a test can move the queue between
+  // refreshes, the way a real queue moves under a page left open.
+  let current = mode
   const fetched: string[] = []
   const timers: number[] = []
   const renewals: Array<() => void> = []
@@ -125,7 +144,7 @@ async function runPage(mode: PageMode) {
   // while the inventory holds what the page can reach for.
   const touched = new Set<string>()
   const globals: Record<string, unknown> = {
-    document: new Proxy({ getElementById: element }, {
+    document: new Proxy({ getElementById: element, getSelection: () => selection, body: bodyElement }, {
       get(target, prop) {
         if (typeof prop === 'string') documentReads.add(prop)
         return Reflect.get(target, prop)
@@ -137,10 +156,10 @@ async function runPage(mode: PageMode) {
     }),
     fetch: async (url: string) => {
       fetched.push(url)
-      if (mode.kind === 'offline') throw new Error('the network is down')
-      return { json: async () => mode.answer }
-    },
-    setInterval: (renew: () => void, every: number) => {
+      const modeNow = current
+      if (modeNow.kind === 'offline') throw new Error('the network is down')
+      return { json: async () => modeNow.answer }
+    },    setInterval: (renew: () => void, every: number) => {
       timers.push(every)
       renewals.push(renew)
     },
@@ -158,22 +177,52 @@ async function runPage(mode: PageMode) {
   // Snapshotted before anything is handed back: the caller's own reads of an element must
   // not land in the script's inventory.
   const scriptElementReads = [...elementReads]
-  return { elements, elementReads: scriptElementReads, elementWrites, documentReads, documentWrites, fetched, timers, renewals, touched, flush }
+  return {
+    elements,
+    elementReads: scriptElementReads,
+    elementWrites,
+    documentReads,
+    documentWrites,
+    fetched,
+    timers,
+    renewals,
+    touched,
+    flush,
+    selectWithin(id: string): void {
+      selection = { isCollapsed: false, anchorNode: elements.get(id) }
+    },
+    clearSelection(): void {
+      selection = { isCollapsed: true, anchorNode: null }
+    },
+    setAnswer(answer: unknown): void {
+      current = { kind: 'answered', answer }
+    },
+  }
 }
 
 /** The page's own script, lifted out of the page unchanged. */
 function pageScript(): string {
-  const match = /<script>([\s\S]*)<\/script>/.exec(docketPage())
+  const match = /<script>([\s\S]*)<\/script>/.exec(docketPage(ANSWER))
   if (match === null) throw new Error('the docket page holds no inline script')
   return match[1]!
 }
 
 /** The markup the page ships with its script lifted out — everything a browser parses as
  *  elements, before and after the script alike. */
-function shippedMarkup(): string {
-  const page = docketPage()
+function shippedMarkup(report: Docket = ANSWER): string {
+  const page = docketPage(report)
   const script = /<script>[\s\S]*<\/script>/.exec(page)
   return script === null ? page : page.slice(0, script.index) + page.slice(script.index + script[0].length)
+}
+
+/** The content shipped inside the element with the given id, up to that element's own
+ *  closing tag — what a browser shows of it before any script runs. The element's own tag
+ *  names the closer because the content itself holds no element of the same kind: rows live
+ *  in the one tbody, problems and rulings in their own ul. */
+function shippedInner(html: string, id: string, tag: string): string {
+  const match = new RegExp(`<${tag} id="${id}">([\\s\\S]*?)</${tag}>`).exec(html)
+  if (match === null) throw new Error(`the shipped markup holds no element #${id}`)
+  return match[1]!
 }
 
 /** The element names a stretch of HTML holds, lowercased as HTML's own case-insensitive
@@ -215,9 +264,9 @@ it('asks for the docket again on its own, on a short interval', async () => {
 
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
 // Scenario: Every age is shown exactly as the last answer held it, never advanced in the browser
-// GIVEN an answer whose TASK has stood in its word for 7541 seconds and last moved 90 seconds ago, and a second TASK 45 seconds into its word with no heartbeat
+// GIVEN an answer whose TASK has stood in its word for 7541 seconds, last moved 90 seconds ago, and stood in its phase for 6000 seconds, and a second TASK 45 seconds into its word with no heartbeat and no phase
 // WHEN the page renders it, and its interval fires holding the same answer
-// THEN the row shows each age spelled from the answered numbers — the word's age and the move's age each on their own — and no number moved when the timer fired: the page touches no global that can read a time
+// THEN the row shows each age spelled from the answered numbers — the word's age, the move's age, and the phase's age each on their own — and no number moved when the timer fired: the page touches no global that can read a time
 it('shows every age exactly as the last answer held it', async () => {
   const page = await renderPageWith(ANSWER)
   const rows = page.elements.get('rows')?.innerHTML ?? ''
@@ -227,6 +276,7 @@ it('shows every age exactly as the last answer held it', async () => {
   expect(rows).toContain('1m 30s')
   expect(rows).toContain('45s')
   expect(rows).toContain('no heartbeat')
+  expect(rows).toContain('1h 40m 0s')
 
   page.renewals[0]!()
   await page.flush()
@@ -255,22 +305,126 @@ it('shows the attach command and the ruling command as copyable text', async () 
   expect(elements.get('rulings')?.innerHTML).toContain(`<code>${htmlEscaped(RULING.answerWith)}</code>`)
 })
 
+// Requirement: The docket answers on a page
+// Scenario: The page shows the TASK's phase word, its round, and how long it has stood there
+// GIVEN an answer holding a TASK at phase test-review round 2 for 6000 seconds, and a TASK with no phase file
+// WHEN the page renders it
+// THEN the first row shows the phase word and its round and the phase age spelled from the answered number, and the second spells the absence as an absence — never a word or a number invented for it
+it('shows the phase word, its round, and its age on the row', async () => {
+  const { elements } = await renderPageWith(ANSWER)
+  const rows = elements.get('rows')?.innerHTML ?? ''
+
+  expect(rows).toContain('test-review')
+  expect(rows).toContain('round 2')
+  expect(rows).toContain('1h 40m 0s')
+  expect(rows).toContain('no phase')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: The page a request answers carries the docket's facts as visible content
+// GIVEN a docket answer holding rows, a problem, and an outstanding ruling
+// WHEN the page is written with it
+// THEN its markup carries every fact as content a browser shows before any script runs — the page is the view asked again, not an empty shell around a script
+it('carries the docket\'s facts as visible content in the markup it ships', () => {
+  const markup = shippedMarkup()
+
+  expect(markup).toContain(htmlEscaped(ATTACH))
+  expect(markup).toContain('test-review')
+  expect(markup).toContain('round 2')
+  expect(markup).toContain(htmlEscaped('task broken has no MANIFEST'))
+  expect(markup).toContain(htmlEscaped(RULING.answerWith))
+  // Rows stand, so the empty note is hidden and the problem and ruling sections stand open —
+  // the same visibility the script would set, already true in the markup itself.
+  expect(markup).toContain('<p id="empty" hidden>')
+  expect(markup).toContain('id="problems-heading">')
+  expect(markup).toContain('id="rulings-heading">')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: The rows the page ships and the rows its script renders are the same HTML for the same answer
+// GIVEN one docket answer
+// WHEN the page is written with it, and its script renders the same answer the way a browser runs it
+// THEN the shipped rows, problems, and rulings are byte for byte the HTML the script renders — two renderers, one shape, so the page the server answers and the page the refresh draws cannot drift apart
+it('ships the same rows its script renders for the same answer', async () => {
+  const markup = shippedMarkup()
+  const page = await renderPageWith(ANSWER)
+
+  expect(shippedInner(markup, 'rows', 'tbody')).toBe(page.elements.get('rows')?.innerHTML)
+  expect(shippedInner(markup, 'problems', 'ul')).toBe(page.elements.get('problems')?.innerHTML)
+  expect(shippedInner(markup, 'rulings', 'ul')).toBe(page.elements.get('rulings')?.innerHTML)
+})
+
+// Requirement: The docket answers on a page
+// Scenario: The page ships the same shape for an empty docket, its absences spelled as absences
+// GIVEN a docket answer holding no row, no problem, and no outstanding ruling
+// WHEN the page is written with it, and its script renders the same answer
+// THEN the empty note stands open, the problem and ruling sections stand hidden, and the rows the script renders are the same none the page shipped
+// The empty branch is the one the branch-walking answer never reaches; an inverted visibility
+// in either renderer would ship silently without a fixture that walks it.
+it('ships an empty docket with its absences spelled as absences', async () => {
+  const empty: Docket = { rows: [], problems: [], outstanding: [] }
+  const markup = shippedMarkup(empty)
+  const page = await renderPageWith(empty)
+
+  expect(markup).toContain('<p id="empty">')
+  expect(markup).toContain('<h2 id="problems-heading" hidden>')
+  expect(markup).toContain('<h2 id="rulings-heading" hidden>')
+  expect(shippedInner(markup, 'rows', 'tbody')).toBe(page.elements.get('rows')?.innerHTML)
+  expect(page.elements.get('rows')?.innerHTML).toBe('')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: Every column the header names is a cell every row carries
+// GIVEN the page shipped over a branch-walking answer
+// WHEN its header is read against the first row it shipped
+// THEN the row carries exactly one cell per header column — the header and the two renderers cannot drift apart end to end
+it('carries one cell per column the header names', () => {
+  const markup = shippedMarkup()
+  const headerCells = (markup.match(/<th scope="col">/g) ?? []).length
+  const firstRow = /<tr>[\s\S]*?<\/tr>/.exec(shippedInner(markup, 'rows', 'tbody'))?.[0] ?? ''
+
+  expect(headerCells).toBeGreaterThan(0)
+  expect((firstRow.match(/<td>/g) ?? []).length).toBe(headerCells)
+})
+
+// Requirement: The page shows commands and offers no control that runs them
+// Scenario: A live text selection inside the rows holds the refresh's swap, so a copy in progress survives
+// GIVEN a page rendered over one answer, and a non-collapsed text selection inside its rows — a copy of the attach command in progress
+// WHEN the refresh lands a different answer, and then another lands with no selection live
+// THEN the rows stand as the copied answer held them through the first refresh, and the second swaps them — the page's own refresh never defeats the page's copy affordance
+it('holds the rows while a selection lives inside them', async () => {
+  const page = await renderPageWith(ANSWER)
+  const copied = page.elements.get('rows')?.innerHTML
+  page.selectWithin('rows')
+  page.setAnswer({ ...ANSWER, rows: ANSWER.rows.map(row => ({ ...row, state: 'mergeable' })) })
+
+  page.renewals[0]!()
+  await page.flush()
+  expect(page.elements.get('rows')?.innerHTML).toBe(copied)
+
+  page.clearSelection()
+  page.renewals[0]!()
+  await page.flush()
+  expect(page.elements.get('rows')?.innerHTML).toContain('mergeable')
+})
+
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and an answer that walks every rendering branch it holds
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it — against an answer, and against a network that fails
 // THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with — whether the fetch answers or fails — reads nothing off the document but the element lookup, nothing off an element at all, and writes nothing to one but the text and visibility it renders
 it('offers no control that runs anything', async () => {
-  const page = docketPage()
+  const page = docketPage(ANSWER)
   const run = await renderPageWith(ANSWER)
   const rendered = [...run.elements.values()].map(element => element.innerHTML).join('')
   const offline = await renderPageOffline()
 
   // The whole inventory of the markup it ships: every element name and every valued
   // attribute the page was written with, before and after its script alike. A control, a
-  // request door, or any element at all, arrives as a name this list would have to carry.
-  expect(elementNames(shippedMarkup())).toEqual(['body', 'h1', 'h2', 'head', 'html', 'meta', 'p', 'style', 'table', 'tbody', 'th', 'thead', 'title', 'tr', 'ul'])
-  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'id', 'lang'])
+  // request door, or any element at all, arrives as a name this list would have to carry —
+  // the shipped rows, problems, and rulings included, for they are content, not controls.
+  expect(elementNames(shippedMarkup())).toEqual(['body', 'br', 'code', 'h1', 'h2', 'head', 'html', 'li', 'meta', 'p', 'span', 'style', 'table', 'tbody', 'td', 'th', 'thead', 'title', 'tr', 'ul'])
+  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'class', 'id', 'lang', 'scope'])
   // The same inventory of the HTML its script renders for the branch-walking answer —
   // nothing the page can build carries an element or a valued attribute beyond these.
   expect(elementNames(rendered)).toEqual(['br', 'code', 'li', 'span', 'td', 'tr'])
@@ -285,8 +439,10 @@ it('offers no control that runs anything', async () => {
   // reads or writes, and every element property it reads or writes. A control wired in
   // script — a handler read off an element, a request by any other means — is a touch this
   // inventory would have to carry, and the claim above with it.
+  // 'body' joins this inventory only while a selection is live — the guard's walk up the
+  // tree reads it, the collapsed check before it does not.
   expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
-  expect([...run.documentReads]).toEqual(['getElementById'])
+  expect([...run.documentReads].sort()).toEqual(['getElementById', 'getSelection'])
   expect([...run.documentWrites]).toEqual([])
   expect(run.elementReads).toEqual([])
   expect([...run.elementWrites].sort()).toEqual([

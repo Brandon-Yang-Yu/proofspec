@@ -141,17 +141,18 @@ async function answer(request: IncomingMessage, response: ServerResponse, ask: A
     response.end('not found')
     return
   }
-  if (path === '/') {
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    response.end(docketPage())
+  // The same read the one-shot command makes, made again for this request — for the JSON the
+  // page reads and for the page itself alike: the page ships with the docket already in it,
+  // so even a browser that never runs its script reads the queue as this moment holds it.
+  const outcome = await docket({ cwd: ask.options.cwd, docket: ask.options.docket, now: ask.clock() })
+  if (outcome.kind !== 'docket') {
+    response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end(outcome.kind === 'cannot-run' ? outcome.reason : 'the docket could not be answered')
     return
   }
-  // The same read the one-shot command makes, made again for this request: the JSON the
-  // page reads is that command's own JSON form, not a dialect of it.
-  const outcome = await docket({ cwd: ask.options.cwd, docket: ask.options.docket, now: ask.clock() })
-  if (outcome.kind === 'cannot-run') {
-    response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
-    response.end(outcome.reason)
+  if (path === '/') {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    response.end(docketPage(outcome.report))
     return
   }
   response.writeHead(200, { 'content-type': 'application/json' })
