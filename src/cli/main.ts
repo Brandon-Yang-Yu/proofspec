@@ -56,8 +56,8 @@ Commands:
            yet ruled, each with the exact command that records a ruling. Text by default,
            JSON with --format json. Reports only: writes nothing, judges nothing, always ok.
            With --serve it answers the same docket as a page over HTTP: the page at /, the
-           JSON the page reads at /docket, on the loopback at port 4567 (--port to override),
-           refreshing itself, until stopped.
+           JSON the page reads at /docket, on the loopback at port 4567 (--host and --port to
+           override), refreshing itself, until stopped.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -84,6 +84,7 @@ Options:
   --serve         The docket command answers the page over HTTP instead of printing an
                   answer, and runs until stopped (docket only)
   --port <n>      The port docket --serve listens on (default: 4567)
+  --host <addr>   The interface docket --serve listens on (default: the loopback)
   --json          The legacy spelling of --format json; touched answers that way anyway
   --pretty        Lay the JSON answer out over indented lines for a person to read. Without
                   it the JSON is the one line a program parses, unchanged.
@@ -108,6 +109,7 @@ try {
       unmatched: { type: 'boolean', default: false },
       serve: { type: 'boolean', default: false },
       port: { type: 'string' },
+      host: { type: 'string' },
       verdict: { type: 'string' },
       proves: { type: 'string' },
       note: { type: 'string' },
@@ -181,7 +183,7 @@ const options: RunOptions = {
 // stopped. It branches before the answer flow, and the listener itself is what keeps the
 // process alive after it — Ctrl-C ends the process, and the port goes back with it.
 if (positionals[0] === 'docket' && values.serve) {
-  await serveUntilStopped(values.port)
+  await serveUntilStopped(values.port, values.host)
 } else {
   const outcome = await runCommand(positionals[0], options)
 
@@ -200,16 +202,16 @@ function portNumber(raw: string): number | undefined {
   return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : undefined
 }
 
-/** Serves the docket and returns only when serving is over: either the port could not be
- *  listened on (a refusal, exit 2), or the process is stopped by hand and never returns
- *  here at all. */
-async function serveUntilStopped(rawPort: string | undefined): Promise<void> {
+/** Serves the docket and returns only when serving is over: either the interface or port
+ *  it was asked for could not be listened on (a refusal, exit 2), or the process is stopped
+ *  by hand and never returns here at all. */
+async function serveUntilStopped(rawPort: string | undefined, rawHost: string | undefined): Promise<void> {
   const port = rawPort === undefined ? undefined : portNumber(rawPort)
   if (rawPort !== undefined && port === undefined) {
     process.stderr.write(`--port needs a port number, got "${rawPort}".\n\n${USAGE}\n`)
     process.exit(2)
   }
-  const served = await serveDocket({ cwd: process.cwd(), port, docket: { listSessions: listTmuxSessions } })
+  const served = await serveDocket({ cwd: process.cwd(), port, host: rawHost, docket: { listSessions: listTmuxSessions } })
   if (!served.ok) {
     process.stderr.write(`${served.reason}\n`)
     process.exit(2)
