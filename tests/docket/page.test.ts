@@ -3,6 +3,7 @@
 import { createContext, runInContext } from 'node:vm'
 import { expect, it } from 'vitest'
 import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
+import type { Docket, OutstandingRuling } from '../../src/docket/index.ts'
 
 /** An answer worth a second screen, walking every rendering branch the page holds: a
  *  working TASK with a session, a merged TASK with no heartbeat, a TASK stacked on another,
@@ -13,14 +14,14 @@ import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts
 const ATTACH = 'tmux -L proofspec attach-session -t alpha'
 
 /** The one debt worth a second screen, with the exact command that pays it. */
-const RULING = {
+const RULING: OutstandingRuling = {
   node: { kind: 'capability', name: 'spec-tree' },
   tasks: ['alpha', 'beta'],
   key: 'capability:spec-tree:alpha,beta',
   answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
 }
 
-const ANSWER = {
+const ANSWER: Docket = {
   rows: [
     {
       task: 'alpha',
@@ -185,10 +186,12 @@ function shippedMarkup(): string {
   return script === null ? page : page.slice(0, script.index) + page.slice(script.index + script[0].length)
 }
 
-/** The content shipped inside the element with the given id — what a browser shows of it
- *  before any script runs. */
-function shippedInner(html: string, id: string): string {
-  const match = new RegExp(`<[^>]*id="${id}"[^>]*>([\s\S]*?)<\/`, 'i').exec(html)
+/** The content shipped inside the element with the given id, up to that element's own
+ *  closing tag — what a browser shows of it before any script runs. The element's own tag
+ *  names the closer because the content itself holds no element of the same kind: rows live
+ *  in the one tbody, problems and rulings in their own ul. */
+function shippedInner(html: string, id: string, tag: string): string {
+  const match = new RegExp(`<${tag} id="${id}">([\\s\\S]*?)</${tag}>`).exec(html)
   if (match === null) throw new Error(`the shipped markup holds no element #${id}`)
   return match[1]!
 }
@@ -317,9 +320,9 @@ it('ships the same rows its script renders for the same answer', async () => {
   const markup = shippedMarkup()
   const page = await renderPageWith(ANSWER)
 
-  expect(shippedInner(markup, 'rows')).toBe(page.elements.get('rows')?.innerHTML)
-  expect(shippedInner(markup, 'problems')).toBe(page.elements.get('problems')?.innerHTML)
-  expect(shippedInner(markup, 'rulings')).toBe(page.elements.get('rulings')?.innerHTML)
+  expect(shippedInner(markup, 'rows', 'tbody')).toBe(page.elements.get('rows')?.innerHTML)
+  expect(shippedInner(markup, 'problems', 'ul')).toBe(page.elements.get('problems')?.innerHTML)
+  expect(shippedInner(markup, 'rulings', 'ul')).toBe(page.elements.get('rulings')?.innerHTML)
 })
 
 // Requirement: The page shows commands and offers no control that runs them

@@ -473,9 +473,11 @@ function renderDocket(report: Docket): string {
 }
 
 function renderDocketRow(row: DocketRow): string {
+  const pace = row.phase === null ? 'no phase' : `${row.phase} (round ${row.round})`
   const sinceMove = row.heartbeatAgeSeconds === null ? 'no heartbeat' : `moved ${humanAge(row.heartbeatAgeSeconds)} ago`
+  const inPhase = row.phaseAgeSeconds === null ? 'no phase' : `in phase ${humanAge(row.phaseAgeSeconds)}`
   const session = row.session.listed ? row.session.attach : 'no session'
-  return `  ${row.task}  ${row.state}  on ${row.branch} from ${baseLabel(row.base)}  in word ${humanAge(row.stateAgeSeconds)}  ${sinceMove}  ${session}`
+  return `  ${row.task}  ${row.state}  ${pace}  on ${row.branch} from ${baseLabel(row.base)}  in word ${humanAge(row.stateAgeSeconds)}  ${sinceMove}  ${inPhase}  ${session}`
 }
 
 function renderOutstanding(ruling: OutstandingRuling): string {

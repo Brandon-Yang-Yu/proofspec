@@ -7,7 +7,7 @@ export type { AnswerShape, Format, Layout } from './render.ts'
 export type { Step } from '../test-scan/index.ts'
 export type { ProvingLines } from '../review/index.ts'
 export type { JudgeVerdict, RaisedEntry, RelationshipJudgeInput, ScheduleActions, SchedulePlan } from '../schedule/index.ts'
-export type { Docket, DocketActions, DocketProblem, DocketRow, OutstandingRuling, QueueEntryRead, SessionWhereabouts, TaskTimes } from '../docket/index.ts'
+export type { Docket, DocketActions, DocketProblem, DocketRow, OutstandingRuling, QueueEntryRead, SessionWhereabouts, TaskPhase, TaskTimes } from '../docket/index.ts'
 export type {
   GoneScenario,
   ImpactReport,

@@ -28,6 +28,17 @@ export type TaskTimes = {
   readonly heartbeatWrittenAt: number | undefined
 }
 
+/** A TASK's pace word as one fact-cluster: the word and its round as the `phase` file holds
+ *  them, and the moment that file was last written — present only for a TASK whose phase file
+ *  reads, so presence in the list is the whole difference between a row that carries a phase
+ *  and a row that carries three absences. */
+export type TaskPhase = {
+  readonly task: string
+  readonly phase: string
+  readonly round: number
+  readonly writtenAt: number
+}
+
 /** Whether the dedicated tmux server still holds a session named for the TASK. A listed
  * session carries its exact attach command; an absent one carries nothing, because there is
  * nothing further to ask about it. */
@@ -36,18 +47,27 @@ export type SessionWhereabouts =
   | { readonly listed: false }
 
 /** One queue entry as the docket answers it: the TASK's name, its state word exactly as its
- * `state` file holds it, the branch and base its MANIFEST records, how long it has stood in
- * its word, how long since its session last moved, and whether its session is still there
- * to attach to. */
+ * `state` file holds it, its phase word and round exactly as its `phase` file holds them, the
+ * branch and base its MANIFEST records, how long it has stood in its word, how long since its
+ * session last moved, how long since its phase was written, and whether its session is still
+ * there to attach to. */
 export type DocketRow = {
   readonly task: string
   readonly state: string
+  /** The literal phase word, never translated — an unknown word on a docket is a signal to
+ *  look, not an error to hide. */
+  readonly phase: string | null
+  /** The round the phase file holds — absent exactly when the word is, never defaulted. */
+  readonly round: number | null
   readonly branch: string
   readonly base: ManifestBase
   readonly stateAgeSeconds: number
   /** Absent — `null`, never a repeat of the word's own age — when the TASK has no heartbeat
    * file: the ordinary state of a TASK with no session. */
   readonly heartbeatAgeSeconds: number | null
+  /** Absent the same way when the TASK has no `phase` file — its own number, never a repeat of
+ *  the word's or the heartbeat's. */
+  readonly phaseAgeSeconds: number | null
   readonly session: SessionWhereabouts
 }
 
@@ -91,6 +111,9 @@ export type DocketActions = {
 export function docketView(input: {
   readonly entries: readonly QueueEntryRead[]
   readonly times: readonly TaskTimes[]
+  /** TASK name → its pace word, round, and phase write time, for exactly the TASKs whose
+   *  phase file reads. */
+  readonly phases: ReadonlyMap<string, TaskPhase>
   /** Session name → its exact attach command, for exactly the sessions the server listed. */
   readonly sessions: ReadonlyMap<string, string>
   readonly raised: readonly RaisedEntry[]
@@ -114,15 +137,19 @@ export function docketView(input: {
       problems.push({ task: entry.task, reason: `TASK ${entry.task}'s state file could not be read` })
       continue
     }
+    const phase = input.phases.get(entry.task)
     rows.push({
       task: entry.task,
       // The literal word, never translated: an unknown word on a docket is a signal to look,
       // not an error to hide.
       state: entry.state,
+      phase: phase?.phase ?? null,
+      round: phase?.round ?? null,
       branch: manifest.manifest.branch,
       base: manifest.manifest.base,
       stateAgeSeconds: secondsAgo(input.now, time.stateWrittenAt),
       heartbeatAgeSeconds: time.heartbeatWrittenAt === undefined ? null : secondsAgo(input.now, time.heartbeatWrittenAt),
+      phaseAgeSeconds: phase === undefined ? null : secondsAgo(input.now, phase.writtenAt),
       session: sessionFor(entry.task, input.sessions),
     })
   }

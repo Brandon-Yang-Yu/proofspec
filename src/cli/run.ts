@@ -29,7 +29,7 @@ import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
 import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
 import { docketView } from '../docket/index.ts'
-import type { QueueEntryRead, TaskTimes } from '../docket/index.ts'
+import type { QueueEntryRead, TaskPhase, TaskTimes } from '../docket/index.ts'
 import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, maxSessionsFrom, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
 import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
@@ -38,7 +38,7 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { readIntentDoc, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
+import { readIntentDoc, readPhase, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
 import { commandLine, listTmuxSessions, tmuxAttachCommand } from './session.ts'
 import { settleTask } from './settle.ts'
@@ -1095,6 +1095,7 @@ export async function docket(options: RunOptions): Promise<Outcome> {
 
   const entries: QueueEntryRead[] = []
   const times: TaskTimes[] = []
+  const phases = new Map<string, TaskPhase>()
   for (const entry of queue.tasks) {
     if (!entry.ok) {
       entries.push(entry)
@@ -1105,6 +1106,11 @@ export async function docket(options: RunOptions): Promise<Outcome> {
       entries.push({ ok: false, task: entry.task, reason: `TASK ${entry.task}'s state file could not be read` })
       continue
     }
+    // The pace word reads as one fact-cluster — word, round, and write time together — because
+    // a row that carries one carries all three, and a row that carries none carries three
+    // absences: the same all-or-nothing the entry's own read keeps one line above.
+    const phase = await readPhase(options.cwd, entry.task)
+    if (phase !== undefined) phases.set(entry.task, { ...phase, task: entry.task })
     entries.push(entry)
     times.push({ task: entry.task, ...written })
   }
@@ -1114,6 +1120,7 @@ export async function docket(options: RunOptions): Promise<Outcome> {
     report: docketView({
       entries,
       times,
+      phases,
       sessions,
       raised: await readRaisedLedger(options.cwd),
       now: options.now ?? new Date(),

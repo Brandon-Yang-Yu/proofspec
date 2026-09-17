@@ -8,5 +8,6 @@ export type {
   OutstandingRuling,
   QueueEntryRead,
   SessionWhereabouts,
+  TaskPhase,
   TaskTimes,
 } from './view.ts'

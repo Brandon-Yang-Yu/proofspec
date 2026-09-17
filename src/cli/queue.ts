@@ -19,6 +19,7 @@ const MANIFEST_FILE = 'MANIFEST'
 const STATE_FILE = 'state'
 const LEASE_FILE = 'LEASE'
 const HEARTBEAT_FILE = 'heartbeat'
+const PHASE_FILE = 'phase'
 
 /** The one `intentRef` value that names no file on a TASK's branch: the reserved word that
  *  points at the TASK's own intent document in its queue entry instead. A plain word, not a
@@ -145,6 +146,42 @@ export async function readLease(cwd: string, task: string): Promise<string | und
  *  any caller's bookkeeping of what the word used to be. */
 export async function readState(cwd: string, task: string): Promise<string | undefined> {
   return readOptional(join(cwd, ...QUEUE_DIR, task, STATE_FILE))
+}
+
+/** The pace word and its round as one record: what `report_task_phase` writes and the
+ *  docket reads back. The byte shape is this pair's own — one JSON object holding both
+ *  facts — and nothing outside `writePhase`/`readPhase` may depend on it, so the format
+ *  can change without a single other caller noticing. */
+export type PhaseRecord = { readonly phase: string; readonly round: number }
+
+/** Overwrites a TASK's phase file with its pace word and round. Like `writeState` it judges
+ *  nothing — the queue holds no vocabulary of phase words, and which word an executor
+ *  stands at is the executor's own account (`report_task_phase`, `specs/progress.md`). */
+export async function writePhase(cwd: string, task: string, phase: string, round: number): Promise<void> {
+  await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify({ phase, round }))
+}
+
+/** A TASK's pace word, its round, and the moment its phase file was last written — one
+ *  read answering every phase fact the docket's row carries, or nothing when no readable
+ *  phase file stands. Absent is the ordinary case (a TASK no session has reported a phase
+ *  for), and a file that does not hold the shape `writePhase` writes answers as absent
+ *  too: the docket carries words it has never met as they stand, but it cannot carry a
+ *  word a file never held. */
+export async function readPhase(cwd: string, task: string): Promise<(PhaseRecord & { readonly writtenAt: number }) | undefined> {
+  const path = join(cwd, ...QUEUE_DIR, task, PHASE_FILE)
+  const raw = await readOptional(path)
+  if (raw === undefined) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const { phase, round } = parsed as Record<string, unknown>
+  if (typeof phase !== 'string' || phase.trim() === '' || typeof round !== 'number' || !Number.isInteger(round) || round < 1) return undefined
+  const writtenAt = await mtimeOf(path)
+  return writtenAt === undefined ? undefined : { phase, round, writtenAt }
 }
 
 /**

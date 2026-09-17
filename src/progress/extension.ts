@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { settleTask } from '../cli/settle.ts'
 import type { SettleResult } from '../cli/settle.ts'
-import { writeHeartbeat, writeState } from '../cli/queue.ts'
+import { writeHeartbeat, writePhase, writeState } from '../cli/queue.ts'
 import { BUILDING } from '../schedule/types.ts'
 
 /**
@@ -138,6 +138,78 @@ function toolResultFrom(result: ReportEnvResult | ReportTaskStateResult): Report
   return { content: [{ type: 'text', text }], details: result }
 }
 
+/** What `report_task_phase` may be asked to write: the executor's own word for where
+ *  inside its pipeline the work stands, and which round of it — for the gates that loop. */
+export type ReportTaskPhaseInput = { readonly phase: string; readonly round?: number }
+
+export type ReportTaskPhaseResult =
+  | { readonly ok: true; readonly task: string; readonly phase: string; readonly round: number }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * The pace-word limb's whole job: judge the word is a word (non-empty once trimmed — the
+ * queue enforces no vocabulary of its own, because the vocabulary belongs to the executor
+ * persona and evolves without the queue's permission) and the round an integer of 1 or more
+ * (defaulting to 1, the first pass through any step), then delegate the write itself to
+ * `writePhase`. The pruned-entry refusal keeps the same ENOENT-only boundary
+ * `runReportTaskState` keeps, for the same reason a caller's refusal is answered as a value.
+ */
+export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: number): Promise<ReportTaskPhaseResult> {
+  const word = phase.trim()
+  if (word === '') return { ok: false, reason: 'phase must be a non-empty word, not empty or only whitespace' }
+  const resolvedRound = round ?? 1
+  if (!Number.isInteger(resolvedRound) || resolvedRound < 1) {
+    return { ok: false, reason: `round must be an integer of 1 or more, not ${round}` }
+  }
+  try {
+    await writePhase(env.queueRoot, env.task, word, resolvedRound)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: `TASK ${env.task} has no queue entry to report a phase into` }
+    throw error
+  }
+  return { ok: true, task: env.task, phase: word, round: resolvedRound }
+}
+
+const REPORT_TASK_PHASE_PARAMETERS = {
+  type: 'object',
+  properties: {
+    phase: {
+      type: 'string',
+      description: "This executor session's own word for where inside its pipeline the work stands (the executor persona's vocabulary; the queue enforces none of it)",
+    },
+    round: {
+      type: 'integer',
+      minimum: 1,
+      description: 'Which round of the phase, for the gates that loop (default 1)',
+    },
+  },
+  required: ['phase'],
+} as const
+
+type PhaseToolResult = { content: [{ type: 'text'; text: string }]; details: Refusal | ReportTaskPhaseResult }
+
+function phaseToolResultFrom(result: Refusal | ReportTaskPhaseResult): PhaseToolResult {
+  const text = result.ok
+    ? `Reported phase ${result.phase} (round ${result.round}).`
+    : `Could not report phase: ${result.reason}`
+  return { content: [{ type: 'text', text }], details: result }
+}
+
+/** The phase tool's `execute`, pulled out for the same reason `executeReportTaskState` is: a
+ *  test calls it with a constructed `ExtensionContext` and proves the write lands under
+ *  `PROOFSPEC_QUEUE_ROOT`, never under `ctx.cwd`. */
+export async function executeReportTaskPhase(
+  _toolCallId: string,
+  params: ReportTaskPhaseInput,
+  _signal: AbortSignal | undefined,
+  _onUpdate: unknown,
+  _ctx: ExtensionContext,
+): Promise<PhaseToolResult> {
+  const envResult = resolveReportEnv(process.env)
+  if (!envResult.ok) return phaseToolResultFrom(envResult)
+  return phaseToolResultFrom(await runReportTaskPhase(envResult.env, params.phase, params.round))
+}
+
 /**
  * The tool's actual `execute`, pulled out so a test can call it directly with a constructed
  * `ExtensionContext` — the one way to prove `_ctx` really is ignored, rather than trusting the
@@ -177,9 +249,11 @@ async function refreshHeartbeat(): Promise<void> {
   }
 }
 
-/** The real `pi` extension: registers `report_task_state` so an executor session can tell a
- *  scheduling pass it is live, without ever needing to know where its own worktree sits
- *  relative to the main checkout. */
+/** The real `pi` extension: registers the four limbs `specs/progress.md` names —
+ *  `report_task_state` and `report_task_phase` (the words an executor session reports back),
+ *  `settle_task` (the one act among the four), and the heartbeat (the fact refreshed on every
+ *  move) — so a session tells the queue where it stands without ever needing to know where
+ *  its own worktree sits relative to the main checkout. */
 export default function progressExtension(pi: ExtensionAPI): void {
   // The heartbeat limb: the same zero-argument step subscribed to every move a session can be
   //  seen making — the six events the requirement pins and no others. A function of no
@@ -196,6 +270,17 @@ export default function progressExtension(pi: ExtensionAPI): void {
     description: "Reports this executor session's own state (building, mergeable, or blocked-on-question) back to the queue entry that started it.",
     parameters: REPORT_TASK_STATE_PARAMETERS,
     execute: executeReportTaskState,
+  })
+  // The pace-word limb: the executor's own account of where inside its pipeline the work
+  // stands, beside the round for the gates that loop. The state word is the machine's closed
+  // contract; this one is free on purpose — a closed set here would freeze the persona's
+  // pipeline into the queue.
+  pi.registerTool({
+    name: 'report_task_phase',
+    label: 'Report Task Phase',
+    description: "Reports this executor session's own pace word and round (where inside its pipeline the work stands — test red, build, a review round) back to the queue entry that started it. The vocabulary is the executor persona's own; the queue enforces none of it.",
+    parameters: REPORT_TASK_PHASE_PARAMETERS,
+    execute: executeReportTaskPhase,
   })
   // The settle limb: the one call that finishes a TASK. Registered with no parameters of its
   // own because it takes nothing on trust — the TASK it settles is the one the environment

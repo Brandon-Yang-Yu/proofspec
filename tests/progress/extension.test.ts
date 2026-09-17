@@ -47,6 +47,13 @@ async function heartbeatOf(root: string, task: string): Promise<string> {
   return readFile(join(root, '.proofspec', 'dispatch', task, 'heartbeat'), 'utf8')
 }
 
+/** The word and round a TASK's phase file holds — the two facts a report puts there — read
+ *  back without the file's write time, which is the docket's fact, not this suite's. */
+async function phaseOf(root: string, task: string): Promise<{ phase: string; round: number } | undefined> {
+  const read = await readPhase(root, task)
+  return read === undefined ? undefined : { phase: read.phase, round: read.round }
+}
+
 // --- the pace-word limb ---------------------------------------------------------------
 
 // Requirement: report_task_phase reports the executor's own pace word and round
@@ -61,7 +68,7 @@ it('writes the phase word and round into the TASK\'s phase file, answered as a v
   const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', 2)
 
   expect(result).toEqual({ ok: true, task: 'a', phase: 'test-review', round: 2 })
-  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
+  expect(await phaseOf(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
 })
 
 // Requirement: report_task_phase reports the executor's own pace word and round
@@ -76,7 +83,7 @@ it('defaults the round to 1 when the report gives none', async () => {
   const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'explorer')
 
   expect(result).toEqual({ ok: true, task: 'a', phase: 'explorer', round: 1 })
-  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'explorer', round: 1 })
+  expect(await phaseOf(repo.root, 'a')).toEqual({ phase: 'explorer', round: 1 })
 })
 
 // Requirement: report_task_phase reports the executor's own pace word and round
@@ -91,7 +98,7 @@ it('trims the phase word it is given', async () => {
   const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, '  ui-design  ')
 
   expect(result).toEqual({ ok: true, task: 'a', phase: 'ui-design', round: 1 })
-  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'ui-design', round: 1 })
+  expect(await phaseOf(repo.root, 'a')).toEqual({ phase: 'ui-design', round: 1 })
 })
 
 // Requirement: report_task_phase reports the executor's own pace word and round
@@ -159,7 +166,7 @@ it('overwrites whatever the phase file held before', async () => {
 
   await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', 2)
 
-  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
+  expect(await phaseOf(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
 })
 
 // Requirement: report_task_phase reports the executor's own pace word and round
@@ -227,8 +234,8 @@ it('reports the phase into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd n
   const result = await executeReportTaskPhase('call-1', { phase: 'tests-red', round: 1 }, undefined, undefined, fakeContext)
 
   expect(result.details).toEqual({ ok: true, task: 'a', phase: 'tests-red', round: 1 })
-  expect(await readPhase(queueRoot.root, 'a')).toEqual({ phase: 'tests-red', round: 1 })
-  await expect(readPhase(unrelatedCwd.root, 'a')).resolves.toBeUndefined()
+  expect(await phaseOf(queueRoot.root, 'a')).toEqual({ phase: 'tests-red', round: 1 })
+  await expect(phaseOf(unrelatedCwd.root, 'a')).resolves.toBeUndefined()
 })
 
 // Requirement: report_task_state accepts only a closed set of state words

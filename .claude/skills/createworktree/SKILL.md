@@ -1,6 +1,6 @@
 ---
 name: createworktree
-description: Create an isolated git worktree and switch the session into it, ready to work a task or slice. Use when the user says "/createworktree <name>" or asks to start work in a fresh worktree before shipping.
+description: Create an isolated git worktree and switch the session into it, ready to work a task or slice. Use when the user says "/createworktree <name>" or asks to start work in a fresh worktree.
 metadata:
   author: proofspec
   version: "1.0"
@@ -8,9 +8,9 @@ metadata:
 
 # /createworktree — open an isolated worktree
 
-Set up a fresh, isolated place to work one task or slice, so `main` stays clean and
-`/ship` can run without touching worktree mechanics. This is the setup step that used
-to live inside `/ship`.
+Set up a fresh, isolated place to work one task or slice, so `main` stays clean and the
+work itself never has to touch worktree mechanics. A worktree stands on its own: from
+inside it the human works by hand or dispatches TASKs through the queue.
 
 The argument is the worktree name (`/createworktree <name>`). If no name is given,
 derive a short kebab-case one from the task (e.g. `matter-list-crud`,
@@ -35,5 +35,4 @@ setting; `head` would branch from local HEAD instead).
 ## 3. Confirm and hand off
 
 Report the worktree path, the branch name, and that the session is now working inside
-it. From here the user can run `/ship <slice>` (or work by hand); everything stays in
-this worktree until `/killworktree` closes it out.
+it. Everything stays in this worktree until `/killworktree` closes it out.
