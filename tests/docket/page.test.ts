@@ -8,6 +8,18 @@ import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts
  *  working TASK with a session, a merged TASK with no heartbeat, a TASK stacked on another,
  * a problem, a debt with its named node, and one whose key names no node at all — so no
  *  literal the script could emit goes unrendered. */
+/** The exact attach command one row carries, named once so the answer that carries it and
+ *  the test that reads it back cannot drift apart. */
+const ATTACH = 'tmux -L proofspec attach-session -t alpha'
+
+/** The one debt worth a second screen, with the exact command that pays it. */
+const RULING = {
+  node: { kind: 'capability', name: 'spec-tree' },
+  tasks: ['alpha', 'beta'],
+  key: 'capability:spec-tree:alpha,beta',
+  answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
+}
+
 const ANSWER = {
   rows: [
     {
@@ -17,7 +29,7 @@ const ANSWER = {
       base: { kind: 'main' },
       stateAgeSeconds: 7541,
       heartbeatAgeSeconds: 90,
-      session: { listed: true, attach: 'tmux -L proofspec attach-session -t alpha' },
+      session: { listed: true, attach: ATTACH },
     },
     {
       task: 'settled',
@@ -40,12 +52,7 @@ const ANSWER = {
   ],
   problems: [{ task: 'broken', reason: 'task broken has no MANIFEST' }],
   outstanding: [
-    {
-      node: { kind: 'capability', name: 'spec-tree' },
-      tasks: ['alpha', 'beta'],
-      key: 'capability:spec-tree:alpha,beta',
-      answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
-    },
+    RULING,
     {
       node: null,
       tasks: [],
@@ -230,21 +237,22 @@ it('shows every age exactly as the last answer held it', async () => {
   expect([...page.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
 })
 
+/** The HTML-escaped spelling of a string, as the page's own escaping writes it — the five
+ *  characters HTML gives entities to. */
+function htmlEscaped(text: string): string {
+  return text.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
+}
+
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: The attach command of a listed session and the ruling command of an outstanding relationship are shown as copyable text
 // GIVEN an answer holding a TASK whose session is listed and a ruling still outstanding
 // WHEN the page renders it
-// THEN the attach command and the ruling command stand on the page as text a person can copy
+// THEN the attach command and the ruling command stand on the page as text a person can copy — each one whole, in a single copyable run, exactly as the answer held it
 it('shows the attach command and the ruling command as copyable text', async () => {
   const { elements } = await renderPageWith(ANSWER)
 
-  expect(elements.get('rows')?.innerHTML).toContain('<code>tmux -L proofspec attach-session -t alpha</code>')
-  const rulings = elements.get('rulings')?.innerHTML ?? ''
-  expect(rulings).toContain('proofspec schedule --ruling')
-  // The key rides along escaped — the page is HTML, and the browser reads the command back
-  // exactly as the answer held it once the entities are decoded.
-  expect(rulings).toContain('&#39;capability:spec-tree:alpha,beta&#39;')
-  expect(rulings).toContain('<code>')
+  expect(elements.get('rows')?.innerHTML).toContain(`<code>${htmlEscaped(ATTACH)}</code>`)
+  expect(elements.get('rulings')?.innerHTML).toContain(`<code>${htmlEscaped(RULING.answerWith)}</code>`)
 })
 
 // Requirement: The page shows commands and offers no control that runs them
