@@ -43,6 +43,27 @@ export type ReportTaskStateResult =
   | { readonly ok: true; readonly task: string; readonly state: ReportableState }
   | { readonly ok: false; readonly reason: string }
 
+/** What a settle answers: it happened, or the reason it refused — never a throw. */
+export type SettleTaskResult =
+  | { readonly ok: true; readonly task: string }
+  | { readonly ok: false; readonly reason: string }
+
+/** The settle limb's pure half: STUB, not built yet — tests run red against this shape. */
+export async function runSettleTask(_env: ReportEnv): Promise<SettleTaskResult> {
+  return { ok: false, reason: 'settle_task is not built yet' }
+}
+
+/** The settle tool's `execute`, STUB: same wiring shape as `executeReportTaskState`. */
+export async function executeSettleTask(
+  _toolCallId: string,
+  _params: Record<string, never>,
+  _signal: AbortSignal | undefined,
+  _onUpdate: unknown,
+  _ctx: ExtensionContext,
+): Promise<{ content: [{ type: 'text'; text: string }]; details: SettleTaskResult }> {
+  return { content: [{ type: 'text', text: 'not built yet' }], details: { ok: false, reason: 'settle_task is not built yet' } }
+}
+
 /**
  * The whole of `report_task_state`'s own job: judge the word is one an executor may report,
  * then delegate the write itself entirely to `writeState`, which judges nothing about it. A
