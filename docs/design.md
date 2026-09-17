@@ -1258,6 +1258,9 @@ orchestrating the intent, owning the branch and the commits, running the disposi
 The house prose discipline — a rationale states the current, correct design, never the
 history of how the draft got there — has its single home in the persona that writes under it,
 no longer living only in the legacy `ship` skill the investigator was never pointed at.
+The split is now backed at the tool level as well: the investigator's persona carries no
+`write` or `edit` tool at all, so the rule against drafting prose and the toolbelt it runs
+with say the same thing.
 
 **The register all new spec prose writes at is plain first-read English, and it is stated,
 not inherited.** The persona file's first cut told its reader to write "in the register
