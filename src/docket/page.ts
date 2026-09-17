@@ -13,7 +13,10 @@ import type { Docket, DocketRow, OutstandingRuling } from './view.ts'
  * inflated between answers would be a performance of the fact rather than the fact — and no
  * control that runs anything: every action the queue knows how to take has a command that
  * takes it, and the page shows those commands as text rather than becoming a second place to
- * run them.
+ * run them. The one exception it makes to re-rendering everything: while a person's text
+ * selection lives inside an element, that element is left standing for the round — the
+ * commands this page shows are meant to be copied, and a refresh that tore a selection out
+ * from under the copy would defeat the page's own copy affordance.
  *
  * The shipped rows and the script-rendered rows come from two renderers — one spelled in
  * TypeScript for the markup the server answers, one in JavaScript for the refresh — that
@@ -37,7 +40,9 @@ export function docketPage(report: Docket): string {
   body { font-family: ui-monospace, "SF Mono", Menlo, monospace; margin: 2rem; }
   table { border-collapse: collapse; }
   th, td { padding: 0.3rem 1rem 0.3rem 0; text-align: left; vertical-align: top; }
-  code { background: #f2f2f2; padding: 0.1rem 0.3rem; }
+  td { white-space: nowrap; }
+  thead th { border-bottom: 1px solid #ddd; }
+  code { background: #f2f2f2; padding: 0.1rem 0; }
   .muted { color: #777; }
 </style>
 </head>
@@ -46,7 +51,7 @@ export function docketPage(report: Docket): string {
 <p id="empty"${report.rows.length === 0 ? '' : ' hidden'}>no TASK in the queue</p>
 <table>
   <thead>
-    <tr><th>TASK</th><th>state</th><th>phase</th><th>branch</th><th>in word</th><th>last move</th><th>in phase</th><th>session</th></tr>
+    <tr><th scope="col">TASK</th><th scope="col">state</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in state</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th></tr>
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
 </table>
@@ -91,13 +96,13 @@ function serverBaseLabel(base: DocketRow['base']): string {
 function serverRowHtml(row: DocketRow): string {
   const pace = row.phase === null
     ? '<span class="muted">no phase</span>'
-    : `${serverEscapeHtml(row.phase)} <span class="muted">round ${row.round}</span>`
+    : `${serverEscapeHtml(row.phase)} round ${row.round}`
+  const inPhase = row.phaseAgeSeconds === null
+    ? '<span class="muted">—</span>'
+    : serverAge(row.phaseAgeSeconds)
   const move = row.heartbeatAgeSeconds === null
     ? '<span class="muted">no heartbeat</span>'
     : serverAge(row.heartbeatAgeSeconds)
-  const inPhase = row.phaseAgeSeconds === null
-    ? '<span class="muted">no phase</span>'
-    : serverAge(row.phaseAgeSeconds)
   const session = row.session.listed
     ? `<code>${serverEscapeHtml(row.session.attach)}</code>`
     : '<span class="muted">no session</span>'
@@ -107,8 +112,8 @@ function serverRowHtml(row: DocketRow): string {
     + `<td>${pace}</td>`
     + `<td>${serverEscapeHtml(row.branch)} <span class="muted">from ${serverEscapeHtml(serverBaseLabel(row.base))}</span></td>`
     + `<td>${serverAge(row.stateAgeSeconds)}</td>`
-    + `<td>${move}</td>`
     + `<td>${inPhase}</td>`
+    + `<td>${move}</td>`
     + `<td>${session}</td>`
     + '</tr>'
 }
@@ -158,13 +163,13 @@ function pageScript(): string {
   function rowHtml(row) {
     var pace = row.phase === null
       ? '<span class="muted">no phase</span>'
-      : escapeHtml(row.phase) + ' <span class="muted">round ' + row.round + '</span>'
+      : escapeHtml(row.phase) + ' round ' + row.round
+    var inPhase = row.phaseAgeSeconds === null
+      ? '<span class="muted">—</span>'
+      : age(row.phaseAgeSeconds)
     var move = row.heartbeatAgeSeconds === null
       ? '<span class="muted">no heartbeat</span>'
       : age(row.heartbeatAgeSeconds)
-    var inPhase = row.phaseAgeSeconds === null
-      ? '<span class="muted">no phase</span>'
-      : age(row.phaseAgeSeconds)
     var session = row.session.listed
       ? '<code>' + escapeHtml(row.session.attach) + '</code>'
       : '<span class="muted">no session</span>'
@@ -174,8 +179,8 @@ function pageScript(): string {
       + '<td>' + pace + '</td>'
       + '<td>' + escapeHtml(row.branch) + ' <span class="muted">from ' + escapeHtml(baseLabel(row.base)) + '</span></td>'
       + '<td>' + age(row.stateAgeSeconds) + '</td>'
-      + '<td>' + move + '</td>'
       + '<td>' + inPhase + '</td>'
+      + '<td>' + move + '</td>'
       + '<td>' + session + '</td>'
       + '</tr>'
   }
@@ -190,15 +195,34 @@ function pageScript(): string {
     return '<li>' + shared + tasks + '<br><code>' + escapeHtml(ruling.answerWith) + '</code></li>'
   }
 
+  // Whether a person's text selection lives inside element — the copy in progress the
+  // refresh must not tear down. A collapsed selection (a caret) is no copy at all.
+  function selectionLivesIn(element) {
+    var selection = document.getSelection()
+    if (selection === null || selection.isCollapsed) return false
+    var node = selection.anchorNode
+    while (node !== null) {
+      if (node === element) return true
+      node = node.parentNode
+    }
+    return false
+  }
+
+  function setRowsIfIdle(id, html) {
+    var element = document.getElementById(id)
+    if (element === null || selectionLivesIn(element)) return
+    element.innerHTML = html
+  }
+
   function render(docket) {
     document.getElementById('empty').hidden = docket.rows.length > 0
-    document.getElementById('rows').innerHTML = docket.rows.map(rowHtml).join('')
+    setRowsIfIdle('rows', docket.rows.map(rowHtml).join(''))
     document.getElementById('problems-heading').hidden = docket.problems.length === 0
-    document.getElementById('problems').innerHTML = docket.problems.map(function (problem) {
+    setRowsIfIdle('problems', docket.problems.map(function (problem) {
       return '<li>' + escapeHtml(problem.task) + ': ' + escapeHtml(problem.reason) + '</li>'
-    }).join('')
+    }).join(''))
     document.getElementById('rulings-heading').hidden = docket.outstanding.length === 0
-    document.getElementById('rulings').innerHTML = docket.outstanding.map(rulingHtml).join('')
+    setRowsIfIdle('rulings', docket.outstanding.map(rulingHtml).join(''))
   }
 
   // The page's one request is its refresh. A failed one keeps the last answer standing; the

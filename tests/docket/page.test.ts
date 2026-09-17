@@ -123,6 +123,12 @@ async function runPage(mode: PageMode) {
   }
   const documentReads = new Set<string>()
   const documentWrites = new Set<string>()
+  // The selection the page's guard asks about: collapsed (no copy in progress) until a test
+  // opens one, the browser's own ordinary state on load.
+  let selection: { isCollapsed: boolean; anchorNode: unknown } = { isCollapsed: true, anchorNode: null }
+  // The answer the next fetch returns — held in a box so a test can move the queue between
+  // refreshes, the way a real queue moves under a page left open.
+  let current = mode
   const fetched: string[] = []
   const timers: number[] = []
   const renewals: Array<() => void> = []
@@ -135,7 +141,7 @@ async function runPage(mode: PageMode) {
   // while the inventory holds what the page can reach for.
   const touched = new Set<string>()
   const globals: Record<string, unknown> = {
-    document: new Proxy({ getElementById: element }, {
+    document: new Proxy({ getElementById: element, getSelection: () => selection }, {
       get(target, prop) {
         if (typeof prop === 'string') documentReads.add(prop)
         return Reflect.get(target, prop)
@@ -147,10 +153,10 @@ async function runPage(mode: PageMode) {
     }),
     fetch: async (url: string) => {
       fetched.push(url)
-      if (mode.kind === 'offline') throw new Error('the network is down')
-      return { json: async () => mode.answer }
-    },
-    setInterval: (renew: () => void, every: number) => {
+      const modeNow = current
+      if (modeNow.kind === 'offline') throw new Error('the network is down')
+      return { json: async () => modeNow.answer }
+    },    setInterval: (renew: () => void, every: number) => {
       timers.push(every)
       renewals.push(renew)
     },
@@ -168,7 +174,27 @@ async function runPage(mode: PageMode) {
   // Snapshotted before anything is handed back: the caller's own reads of an element must
   // not land in the script's inventory.
   const scriptElementReads = [...elementReads]
-  return { elements, elementReads: scriptElementReads, elementWrites, documentReads, documentWrites, fetched, timers, renewals, touched, flush }
+  return {
+    elements,
+    elementReads: scriptElementReads,
+    elementWrites,
+    documentReads,
+    documentWrites,
+    fetched,
+    timers,
+    renewals,
+    touched,
+    flush,
+    selectWithin(id: string): void {
+      selection = { isCollapsed: false, anchorNode: elements.get(id) }
+    },
+    clearSelection(): void {
+      selection = { isCollapsed: true, anchorNode: null }
+    },
+    setAnswer(answer: unknown): void {
+      current = { kind: 'answered', answer }
+    },
+  }
 }
 
 /** The page's own script, lifted out of the page unchanged. */
@@ -180,8 +206,8 @@ function pageScript(): string {
 
 /** The markup the page ships with its script lifted out — everything a browser parses as
  *  elements, before and after the script alike. */
-function shippedMarkup(): string {
-  const page = docketPage(ANSWER)
+function shippedMarkup(report: Docket = ANSWER): string {
+  const page = docketPage(report)
   const script = /<script>[\s\S]*<\/script>/.exec(page)
   return script === null ? page : page.slice(0, script.index) + page.slice(script.index + script[0].length)
 }
@@ -325,6 +351,60 @@ it('ships the same rows its script renders for the same answer', async () => {
   expect(shippedInner(markup, 'rulings', 'ul')).toBe(page.elements.get('rulings')?.innerHTML)
 })
 
+// Requirement: The docket answers on a page
+// Scenario: The page ships the same shape for an empty docket, its absences spelled as absences
+// GIVEN a docket answer holding no row, no problem, and no outstanding ruling
+// WHEN the page is written with it, and its script renders the same answer
+// THEN the empty note stands open, the problem and ruling sections stand hidden, and the rows the script renders are the same none the page shipped
+// The empty branch is the one the branch-walking answer never reaches; an inverted visibility
+// in either renderer would ship silently without a fixture that walks it.
+it('ships an empty docket with its absences spelled as absences', async () => {
+  const empty: Docket = { rows: [], problems: [], outstanding: [] }
+  const markup = shippedMarkup(empty)
+  const page = await renderPageWith(empty)
+
+  expect(markup).toContain('<p id="empty">')
+  expect(markup).toContain('<h2 id="problems-heading" hidden>')
+  expect(markup).toContain('<h2 id="rulings-heading" hidden>')
+  expect(shippedInner(markup, 'rows', 'tbody')).toBe(page.elements.get('rows')?.innerHTML)
+  expect(page.elements.get('rows')?.innerHTML).toBe('')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: Every column the header names is a cell every row carries
+// GIVEN the page shipped over a branch-walking answer
+// WHEN its header is read against the first row it shipped
+// THEN the row carries exactly one cell per header column — the header and the two renderers cannot drift apart end to end
+it('carries one cell per column the header names', () => {
+  const markup = shippedMarkup()
+  const headerCells = (markup.match(/<th scope="col">/g) ?? []).length
+  const firstRow = /<tr>[\s\S]*?<\/tr>/.exec(shippedInner(markup, 'rows', 'tbody'))?.[0] ?? ''
+
+  expect(headerCells).toBeGreaterThan(0)
+  expect((firstRow.match(/<td>/g) ?? []).length).toBe(headerCells)
+})
+
+// Requirement: The page shows commands and offers no control that runs them
+// Scenario: A live text selection inside the rows holds the refresh's swap, so a copy in progress survives
+// GIVEN a page rendered over one answer, and a non-collapsed text selection inside its rows — a copy of the attach command in progress
+// WHEN the refresh lands a different answer, and then another lands with no selection live
+// THEN the rows stand as the copied answer held them through the first refresh, and the second swaps them — the page's own refresh never defeats the page's copy affordance
+it('holds the rows while a selection lives inside them', async () => {
+  const page = await renderPageWith(ANSWER)
+  const copied = page.elements.get('rows')?.innerHTML
+  page.selectWithin('rows')
+  page.setAnswer({ ...ANSWER, rows: ANSWER.rows.map(row => ({ ...row, state: 'mergeable' })) })
+
+  page.renewals[0]!()
+  await page.flush()
+  expect(page.elements.get('rows')?.innerHTML).toBe(copied)
+
+  page.clearSelection()
+  page.renewals[0]!()
+  await page.flush()
+  expect(page.elements.get('rows')?.innerHTML).toContain('mergeable')
+})
+
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and an answer that walks every rendering branch it holds
@@ -341,7 +421,7 @@ it('offers no control that runs anything', async () => {
   // request door, or any element at all, arrives as a name this list would have to carry —
   // the shipped rows, problems, and rulings included, for they are content, not controls.
   expect(elementNames(shippedMarkup())).toEqual(['body', 'br', 'code', 'h1', 'h2', 'head', 'html', 'li', 'meta', 'p', 'span', 'style', 'table', 'tbody', 'td', 'th', 'thead', 'title', 'tr', 'ul'])
-  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'class', 'id', 'lang'])
+  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'class', 'id', 'lang', 'scope'])
   // The same inventory of the HTML its script renders for the branch-walking answer —
   // nothing the page can build carries an element or a valued attribute beyond these.
   expect(elementNames(rendered)).toEqual(['br', 'code', 'li', 'span', 'td', 'tr'])
@@ -357,7 +437,7 @@ it('offers no control that runs anything', async () => {
   // script — a handler read off an element, a request by any other means — is a touch this
   // inventory would have to carry, and the claim above with it.
   expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
-  expect([...run.documentReads]).toEqual(['getElementById'])
+  expect([...run.documentReads].sort()).toEqual(['getElementById', 'getSelection'])
   expect([...run.documentWrites]).toEqual([])
   expect(run.elementReads).toEqual([])
   expect([...run.elementWrites].sort()).toEqual([

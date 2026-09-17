@@ -174,9 +174,11 @@ second capability beside the view; it is the view, asked more than once.
 <!-- scenarios: generated -->
 - "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
 - "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
+- "Every column the header names is a cell every row carries" → tests/docket/page.test.ts
 - "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
 - "The page a request answers carries the docket's facts as visible content" → tests/docket/page.test.ts
 - "The page answered at / carries the docket computed at that moment" → tests/docket/serve.test.ts
+- "The page ships the same shape for an empty docket, its absences spelled as absences" → tests/docket/page.test.ts
 - "The page shows the TASK's phase word, its round, and how long it has stood there" → tests/docket/page.test.ts
 - "The rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
 <!-- /scenarios -->
@@ -214,6 +216,7 @@ and its failure are readable, and `schedule` keeps every one of those decisions 
 The page's requests are its refreshes, nothing else.
 
 <!-- scenarios: generated -->
+- "A live text selection inside the rows holds the refresh's swap, so a copy in progress survives" → tests/docket/page.test.ts
 - "No control on the page attaches, rules, holds, or starts anything" → tests/docket/page.test.ts
 - "The attach command of a listed session and the ruling command of an outstanding relationship are shown as copyable text" → tests/docket/page.test.ts
 <!-- /scenarios -->
