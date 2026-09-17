@@ -219,6 +219,13 @@ it('hands pi one positional kickoff message telling the session to begin working
   expect(kickoff).not.toMatch(/^-/)
   expect(kickoff).toMatch(/begin/i)
   expect(kickoff).toContain('dispatch-me')
+  // The message carries the intentRef's one resolution rule, both shapes: the reserved name
+  // INTENT read from the TASK's own queue entry, and any other value read from the branch —
+  // an executor whose TASK's intent stands only in its queue entry would otherwise be sent
+  // looking for a file its branch does not hold.
+  expect(kickoff).toContain('INTENT')
+  expect(kickoff).toMatch(/queue entry/)
+  expect(kickoff).toMatch(/branch/)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

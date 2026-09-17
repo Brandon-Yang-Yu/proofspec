@@ -378,6 +378,35 @@ it("hands the judge both TASKs' real intent", async () => {
 })
 
 // Requirement: A relationship is judged by a fresh agent before a human is asked
+// Scenario: The reserved INTENT name reads the TASK's intent from its own queue entry, a path value from the branch
+// GIVEN two TASK sharing a capability file, one whose MANIFEST's intentRef is the reserved
+//       name INTENT with its intent standing in its queue entry's INTENT file, the other
+//       whose intentRef names a file on its own branch
+// WHEN a scheduling pass runs
+// THEN the judge is handed the queue entry's intent text and the branch file's intent text,
+//      each exactly as written
+it("reads a reserved INTENT intentRef from the queue entry and a path value from the branch", async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md' })
+  await withIntent(repo, 'work/a', 'rewrites the glossary term')
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'INTENT', branch: 'work/b', base: { kind: 'main' } }))
+  await repo.write('.proofspec/dispatch/b/INTENT', 'rewrites the executor persona')
+  const seen: RelationshipJudgeInput[] = []
+  const actions = fakeActions({
+    judge: async input => {
+      seen.push(input)
+      return { kind: 'resolved' }
+    },
+  })
+
+  await schedule({ cwd: repo.root, schedule: actions })
+
+  expect(seen).toHaveLength(1)
+  expect(seen[0]?.intents).toEqual({ a: 'rewrites the glossary term', b: 'rewrites the executor persona' })
+})
+
+// Requirement: A relationship is judged by a fresh agent before a human is asked
 // Scenario: A scheduling pass built from the composed judge factory raises what it judges unresolved
 // GIVEN two TASK sharing a capability file, and a judge built from the composed judge factory
 //       over a stand-in runner that answers unresolved
