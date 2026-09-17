@@ -20,6 +20,15 @@ const STATE_FILE = 'state'
 const LEASE_FILE = 'LEASE'
 const HEARTBEAT_FILE = 'heartbeat'
 
+/** The one `intentRef` value that names no file on a TASK's branch: the reserved word that
+ *  points at the TASK's own intent document in its queue entry instead. A plain word, not a
+ *  path — it shares the queue entry's conventional file family with `MANIFEST`, `state`,
+ *  `LEASE`, and `heartbeat`, so a TASK whose intent travels as a dedicated document (never
+ *  committed anywhere) still has exactly one place a reader can find it. */
+export const RESERVED_INTENT_REF = 'INTENT'
+
+const INTENT_FILE = 'INTENT'
+
 /** One task's MANIFEST and state as read, or the reason that task alone could not be read. */
 export type QueueEntry =
   | { readonly ok: true; readonly task: string; readonly manifest: string; readonly state: string }
@@ -64,6 +73,13 @@ async function readTask(dir: string, task: string): Promise<QueueEntry> {
   const state = await readOptional(statePath)
   if (state === undefined) return { ok: false, task, reason: `task ${task} has no ${STATE_FILE} at ${statePath}` }
   return { ok: true, task, manifest, state }
+}
+
+/** The TASK's own intent document from its queue entry — the file the reserved `intentRef`
+ *  word names — or `undefined` when no such file stands there, the same read shape a file
+ *  on the branch already answers with. */
+export async function readIntentDoc(cwd: string, task: string): Promise<string | undefined> {
+  return await readOptional(join(cwd, ...QUEUE_DIR, task, INTENT_FILE))
 }
 
 async function readOptional(path: string): Promise<string | undefined> {

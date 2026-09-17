@@ -102,9 +102,12 @@ const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
  * unattended session with no first message sits at `pi`'s input box indefinitely, loaded and
  * healthy but doing nothing, because `--append-system-prompt` changes who the model is,
  * never that it should act. Naming the TASK keeps the message self-contained rather than
- * leaning on the `PROOFSPEC_TASK` environment variable alone. */
+ * leaning on the `PROOFSPEC_TASK` environment variable alone, and naming the `intentRef`'s
+ * one resolution rule — the reserved name `INTENT` from the TASK's own queue entry, any
+ * other value from the branch — keeps an executor whose intent stands only in its queue
+ * entry from being sent to look for a file its branch does not hold. */
 function kickoffFor(task: string): string {
-  return `Begin: work your TASK ${task} now - read the MANIFEST's intentRef on this branch, then run the full pipeline through to merge.`
+  return `Begin: work your TASK ${task} now - read the MANIFEST's intentRef (the reserved name INTENT names the TASK's own queue entry file .proofspec/dispatch/${task}/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.`
 }
 
 /** The tmux command that kills a TASK's session on the dedicated server. Built for two

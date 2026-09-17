@@ -143,7 +143,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
         '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
         'pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts',
         '--append-system-prompt', 'you are the executor',
-        'Begin: work your TASK a now - read the MANIFEST\'s intentRef on this branch, then run the full pipeline through to merge.',
+        'Begin: work your TASK a now - read the MANIFEST\'s intentRef (the reserved name INTENT names the TASK\'s own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.',
       ],
     },
   ])
@@ -219,6 +219,13 @@ it('hands pi one positional kickoff message telling the session to begin working
   expect(kickoff).not.toMatch(/^-/)
   expect(kickoff).toMatch(/begin/i)
   expect(kickoff).toContain('dispatch-me')
+  // The message carries the intentRef's one resolution rule, both shapes: the reserved name
+  // INTENT read from the TASK's own queue entry, and any other value read from the branch —
+  // an executor whose TASK's intent stands only in its queue entry would otherwise be sent
+  // looking for a file its branch does not hold.
+  expect(kickoff).toContain('INTENT')
+  expect(kickoff).toMatch(/queue entry/)
+  expect(kickoff).toMatch(/branch/)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

@@ -60,15 +60,32 @@ their lines.
 ### Term: MANIFEST
 
 The JSON hand-off a TASK's own worktree carries: an `intentRef` saying where the change
-intent is written, a `branch` on which an investigation agent committed the real spec and
-TERM text (the MANIFEST does not restate that text, because a description of an edit can
-disagree with the edit and the branch is the record), and a `base` naming what this TASK's
-worktree was built on — always one of two shapes: `{kind: 'main'}`, or `{kind: 'task', task,
-reason}` when this TASK's worktree was deliberately built on another in-flight TASK's own
-worktree instead. The `task` shape carries the reason argued because choosing to build on
-another TASK instead of `main` is an intent a git fact alone cannot express; the `main`
-shape needs nothing more, because building on `main` is the default course, and the default
-course is the one with nothing to argue.
+intent is written, a `branch` on which the TASK's work is built, and a `base` naming
+what this TASK's worktree was built on — always one of two shapes: `{kind: 'main'}`, or
+`{kind: 'task', task, reason}` when this TASK's worktree was deliberately built on
+another in-flight TASK's own worktree instead. The `task` shape carries the reason
+argued because choosing to build on another TASK instead of `main` is an intent a git
+fact alone cannot express; the `main` shape needs nothing more, because building on
+`main` is the default course, and the default course is the one with nothing to argue.
+
+The `intentRef` is read by one rule with two shapes. The reserved name `INTENT` names
+the TASK's own queue entry's `INTENT` file — `.proofspec/dispatch/<task>/INTENT`, a
+conventional file name in the family of `MANIFEST`, `state`, `LEASE`, and `heartbeat`.
+Any other value names a file on the TASK's `branch`. A TASK whose intent is the settled
+spec file itself — the normal case — writes no extra document at all: its `intentRef`
+names that file on the branch, where the investigation agent committed the real spec
+and TERM text. A TASK whose intent does not fit in `specs/*.md` — a persona, a docs
+page, a change spanning several files — keeps its intent document as the queue entry's
+own `INTENT` file, committed nowhere, so its branch may reach `enqueue_task` carrying
+zero commits. The MANIFEST does not restate the intent's text either way, because a
+description of an edit can disagree with the edit: the branch is the record for a file
+named on it, and the queue entry's `INTENT` file is the record for the reserved name.
+An untracked record can be rewritten with no trace, so an executor reads what the file
+says now, not the text a commit pins; and once the TASK merges and its queue entry is
+pruned, the per-TASK record of what was settled goes with it, while `docs/design.md`
+keeps the mechanism's principles, not the per-TASK decisions. Both are accepted costs
+of keeping a TASK's intent where the queue already keeps its state, on a single-machine
+tool.
 
 ### Term: PROMISE
 

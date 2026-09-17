@@ -1531,3 +1531,37 @@ in the `PROOFSPEC_TMUX_SOCKET` paragraph; the other in `src/cli/session.ts`, on 
 `tmuxSocket` comment. Both describe running the bare CLI against a real tmux binary. This
 mechanism does not touch them: it checks a TASK's outcome through its own checker persona,
 not the CLI against tmux.
+
+## 59. The dedicated intent document — the queue entry's own `INTENT` file
+
+A TASK's MANIFEST names its intent with one field, `intentRef`, read by one rule with two
+shapes: the reserved name `INTENT` names the TASK's own queue entry file
+`.proofspec/dispatch/<task>/INTENT`, a conventional file name in the same family as
+`MANIFEST`, `state`, `LEASE`, and `heartbeat`; any other value names a file on the TASK's
+branch, read from it exactly as before. One rule covers both shapes so every reader — the
+judge in a scheduling pass, an executor cold-reading its own TASK — resolves the same
+`intentRef` the same way.
+
+Two classes of TASK fall out of that one rule. The spec class — a TASK whose intent is the
+settled spec file itself, the normal case — writes no extra document at all: its
+`intentRef` names the capability file on the branch, where the investigation agent
+committed the real prose. The dedicated-doc class — a persona rewrite, a docs page, a
+change spanning several files, nothing that fits `specs/*.md` — keeps its intent document
+as the queue entry's own `INTENT` file: drafted there by the intent writer, read back from
+there by the investigator and presented to the human in the disposition review, committed
+nowhere. A dedicated-doc TASK's branch may therefore reach `enqueue_task` carrying zero
+commits — there is nothing left that has to be committed before the work starts.
+
+Two costs come with keeping the per-TASK record where the queue already keeps the TASK's
+state, and both are accepted as design decisions. First, the judged document is no longer
+pinned to a commit: a file in the queue entry can be rewritten with no trace, so an
+executor reads what the file says now, not the hash a human judged — accepted for this
+single-machine tool. Second, once the TASK merges and its queue entry is pruned (§39), the
+per-TASK record of what was settled goes with it, while this design record keeps the
+mechanism's principles, not the per-TASK decisions — the same trade §58 already made for
+the acceptance script.
+
+The TASK that shipped this rule is itself the transition: at its own enqueue time the rule
+did not exist yet, so its own intent document is committed to its branch as
+`docs/intent/dispatch-intent.md`, under the rules in force then. TASKs after it use the
+`INTENT` file; the past `docs/intent/*.md` on `main` stay untouched.

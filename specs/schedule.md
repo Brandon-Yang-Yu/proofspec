@@ -362,22 +362,31 @@ never started, or is running on a machine nobody watching has ever heard of.
 
 ### Requirement: A relationship is judged by a fresh agent before a human is asked
 
-For every relationship the graph reports, a scheduling pass SHALL hand a fresh agent — one
-that authored neither TASK's work, and that runs as a single tool-less, session-less process
-naming the model it answers as — both TASKs' intent, read from each MANIFEST's `intentRef`,
-and ask it whether the relationship is a real conflict, before any human is asked anything
-about it. A TASK whose intent could not be read SHALL be named as missing in that ask, not
+For every relationship the graph reports, a scheduling pass SHALL hand a fresh agent —
+one that authored neither TASK's work, and that runs as a single tool-less,
+session-less process naming the model it answers as — both TASKs' intent, each read by
+the one rule its own MANIFEST's `intentRef` sets: the reserved name `INTENT` from the
+TASK's own queue entry, and any other value from the TASK's `branch` — and ask it
+whether the relationship is a real conflict, before any human is asked anything about
+it. A TASK whose intent could not be read SHALL be named as missing in that ask, not
 silently dropped, and the same relationship SHALL ask the same question however its two
 TASKs arrive.
 
-`inflight` reports a relationship without judging it by design — it never reads intent, only
-edges over files a graph can see. Most shared ground between two TASKs is coincidence, not
-conflict, and reading both intents is cheap enough to run on every relationship the graph
-finds, which is what keeps a human's attention for the ones that actually need it. A process
-with no tools and no saved session is what makes "authored neither TASK's work" a fact about
-the call, not an assumption about who happens to be running it — it cannot have touched
-either TASK's branch, and it remembers nothing from one relationship to the next, so the
-same two TASKs get the same question wherever in the queue's pass order they happen to fall.
+`inflight` reports a relationship without judging it by design — it never reads intent,
+only edges over files a graph can see. Most shared ground between two TASKs is
+coincidence, not conflict, and reading both intents is cheap enough to run on every
+relationship the graph finds, which is what keeps a human's attention for the ones that
+actually need it. A process with no tools and no saved session is what makes "authored
+neither TASK's work" a fact about the call, not an assumption about who happens to be
+running it — it cannot have touched either TASK's branch, and it remembers nothing from
+one relationship to the next, so the same two TASKs get the same question wherever in
+the queue's pass order they happen to fall. The reserved name exists because a TASK
+whose intent document is its queue entry's `INTENT` file may carry zero commits on its
+branch, so no file on that branch can hold its intent; the queue entry's own directory
+is the one place left to read, and `INTENT` sits there in the family of `MANIFEST`,
+`state`, `LEASE`, and `heartbeat`. One rule covers both shapes so every reader — the
+judge here, an executor cold-reading its own TASK — resolves the same `intentRef` the
+same way.
 
 <!-- scenarios: generated -->
 - "A TASK whose intent could not be read is named as missing in the question, not silently dropped" → tests/schedule/judge.test.ts
@@ -389,6 +398,7 @@ same two TASKs get the same question wherever in the queue's pass order they hap
 - "An intent past the length cap is truncated rather than left to overflow the process's argument list" → tests/schedule/judge.test.ts
 - "The composed judge factory hands its runner the real process and reads its answer through the real parser" → tests/schedule/judge.test.ts
 - "The fresh agent is handed both TASKs' real intent" → tests/schedule/end-to-end.test.ts
+- "The reserved INTENT name reads the TASK's intent from its own queue entry, a path value from the branch" → tests/schedule/end-to-end.test.ts
 - "The same relationship asks the same question regardless of which TASK's intent arrived first" → tests/schedule/judge.test.ts
 <!-- /scenarios -->
 
