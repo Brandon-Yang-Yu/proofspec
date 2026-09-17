@@ -158,18 +158,36 @@ opinion about them.
 ### Requirement: The docket answers on a page
 
 The docket SHALL be answerable as a page a browser shows, served over HTTP on the machine
-the command runs on, carrying exactly the content the JSON form carries: one row per queue
-entry with every fact the row holds, every problem, and every outstanding ruling with the
+the command runs on. The JSON the page reads at `/docket` SHALL carry exactly the content
+the one-shot JSON form carries: one row per queue entry with every fact the row holds, the
+state word and its age among them, every problem, and every outstanding ruling with the
 command that records a ruling on it. Each request the server answers SHALL compute the
-docket fresh — reading the queue directory, the heartbeat files, the raised-relationships
-record, and the session list as that moment holds them — so a page held open shows the
-docket as it stood at its last request, never as it stood when the server started.
+docket fresh — reading the queue directory, the phase files, the heartbeat files, the
+raised-relationships record, and the session list as that moment holds them — so a page
+held open shows the docket as it stood at its last request, never as it stood when the
+server started.
 
-The server owns no facts of its own. It is the same read the one-shot command makes, made
-again each time it is asked, and a queue that has not moved between two requests answers
-those two requests identically — which is the honesty this page is built on: nothing on it
-is a cache, a prediction, or the residue of an earlier glance. Serving a page is not a
-second capability beside the view; it is the view, asked more than once.
+The rendered page SHALL show everything the JSON carries except the state word and the
+state word's age. The phase word and its round SHALL stand where the state word stood. The
+round SHALL always show beside the phase word, round 1 included. The page's two ages SHALL
+be the phase age and the heartbeat age. For a TASK with no phase file — queued before any
+session, or anything else — the page SHALL show the word's absence as absent, the same way
+it shows a missing heartbeat, and SHALL never show the state word standing in for it.
+
+The page drops the state word because the state word is the machine's closed contract — a
+few fixed words the machine acts on — and it says `building` for almost the whole life of
+a TASK. The phase word is the executor's own account of where the work stands
+(`report_task_phase`, `specs/progress.md`), and the page is for the human watching. The
+round shows even on round 1 because some steps of the executor's work happen more than
+once. A bare phase word does not say whether the work is on its first `test-review` or its
+third.
+
+The state word stays in the JSON because the page's JSON is the same read the one-shot
+command makes, not a second answer. The server owns no facts of its own; it makes that
+read again each time it is asked, and a queue that has not moved between two requests
+answers those two requests identically — which is the honesty this page is built on:
+nothing on it is a cache, a prediction, or the residue of an earlier glance. Serving a
+page is not a second capability beside the view; it is the view, asked more than once.
 
 <!-- scenarios: generated -->
 - "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
@@ -186,8 +204,8 @@ second capability beside the view; it is the view, asked more than once.
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does
 
 The page SHALL ask the server for the docket again on its own, on a short interval of its
-own, and SHALL show every age exactly as the answer it last received held it — never
-advancing a number in the browser between answers.
+own, and SHALL show the phase age and the heartbeat age exactly as the answer it last
+received held them — never advancing a number in the browser between answers.
 
 A person watching ten executor sessions wants the page to move without being told to ask,
 so the refresh is the page's job and not the reader's. The ages stand still between answers
