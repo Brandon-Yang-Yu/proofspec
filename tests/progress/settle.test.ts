@@ -61,12 +61,12 @@ async function worktreeStands(root: string, task: string): Promise<boolean> {
   )
 }
 
-/** One TASK ready to be settled — or refused: a landed or unlanded branch, a state word of
+/** One TASK positioned to be settled — or refused: a landed or unlanded branch, a state word of
  *  the caller's choosing, a worktree at the conventional path, and a live session carrying
  *  the TASK's name on the throwaway socket. The task name is unique per test because the
  *  reaper kills by that name: a shared name would let one test's reaper kill the next
  *  test's fresh session inside the reaper's delay. */
-async function settledWorld(options: { readonly task: string; readonly landed: boolean; readonly word: string }): Promise<GitRepo> {
+async function makeSettlableTask(options: { readonly task: string; readonly landed: boolean; readonly word: string }): Promise<GitRepo> {
   const repo = await makeGitRepo({ 'a.txt': 'a' })
   await enterTask(repo, options.task, { edit: 'a.txt' })
   if (options.landed) await repo.git(['merge', `work/${options.task}`])
@@ -82,7 +82,7 @@ async function settledWorld(options: { readonly task: string; readonly landed: b
 // WHEN the registered settle tool's execute runs
 // THEN it refuses naming PROOFSPEC_QUEUE_ROOT, and the entry's state still reads mergeable
 it('refuses to settle when PROOFSPEC_QUEUE_ROOT is not set, writing nothing', async () => {
-  const repo = await settledWorld({ task: 'no-root', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'no-root', landed: true, word: 'mergeable' })
   delete process.env.PROOFSPEC_QUEUE_ROOT
   process.env.PROOFSPEC_TASK = 'no-root'
   const fakeContext = { cwd: repo.root } as unknown as ExtensionContext
@@ -99,7 +99,7 @@ it('refuses to settle when PROOFSPEC_QUEUE_ROOT is not set, writing nothing', as
 // WHEN the registered settle tool's execute runs
 // THEN it refuses naming PROOFSPEC_TASK, and the entry's state still reads mergeable
 it('refuses to settle when PROOFSPEC_TASK is not set, writing nothing', async () => {
-  const repo = await settledWorld({ task: 'no-task', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'no-task', landed: true, word: 'mergeable' })
   process.env.PROOFSPEC_QUEUE_ROOT = repo.root
   delete process.env.PROOFSPEC_TASK
   const fakeContext = { cwd: repo.root } as unknown as ExtensionContext
@@ -116,7 +116,7 @@ it('refuses to settle when PROOFSPEC_TASK is not set, writing nothing', async ()
 // WHEN the settle runs
 // THEN it refuses naming the word building, and the state still reads building, the worktree still stands, and the session is still live
 it('refuses a TASK whose state word is not mergeable, leaving everything standing', async () => {
-  const repo = await settledWorld({ task: 'still-building', landed: true, word: 'building' })
+  const repo = await makeSettlableTask({ task: 'still-building', landed: true, word: 'building' })
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'still-building' })
 
@@ -132,7 +132,7 @@ it('refuses a TASK whose state word is not mergeable, leaving everything standin
 // WHEN the settle runs
 // THEN it refuses naming the branch, and the state still reads mergeable, the worktree still stands, and the session is still live
 it('refuses a TASK whose branch has not landed in main, leaving everything standing', async () => {
-  const repo = await settledWorld({ task: 'never-landed', landed: false, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'never-landed', landed: false, word: 'mergeable' })
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'never-landed' })
 
@@ -150,7 +150,7 @@ it('refuses a TASK whose branch has not landed in main, leaving everything stand
 // WHEN the settle runs
 // THEN the entry's state file reads merged, and nothing stands at the worktree's conventional path
 it('settles a mergeable TASK whose branch has landed, rewriting the state and removing the worktree', async () => {
-  const repo = await settledWorld({ task: 'settled', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'settled', landed: true, word: 'mergeable' })
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'settled' })
 
@@ -165,7 +165,7 @@ it('settles a mergeable TASK whose branch has landed, rewriting the state and re
 // WHEN the registered settle tool's execute runs
 // THEN the TASK named by the environment is settled, and nothing was written under the unrelated directory
 it('settles the TASK named by the environment, never ExtensionContext.cwd', async () => {
-  const repo = await settledWorld({ task: 'registered', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'registered', landed: true, word: 'mergeable' })
   const unrelated = await makeRepo({})
   process.env.PROOFSPEC_QUEUE_ROOT = repo.root
   process.env.PROOFSPEC_TASK = 'registered'
@@ -185,7 +185,7 @@ it('settles the TASK named by the environment, never ExtensionContext.cwd', asyn
 // WHEN the settle runs
 // THEN the queue entry still stands, holding its MANIFEST and its state word rewritten to merged
 it('never prunes the TASK\'s queue entry', async () => {
-  const repo = await settledWorld({ task: 'unpruned', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'unpruned', landed: true, word: 'mergeable' })
 
   await runSettleTask({ queueRoot: repo.root, task: 'unpruned' })
 
@@ -199,7 +199,7 @@ it('never prunes the TASK\'s queue entry', async () => {
 // WHEN the settle runs and answers
 // THEN the session is still live at the moment the settle answers, and is gone within a few seconds after
 it('kills the session through a detached reaper, answering while the session still stands', async () => {
-  const repo = await settledWorld({ task: 'reaped', landed: true, word: 'mergeable' })
+  const repo = await makeSettlableTask({ task: 'reaped', landed: true, word: 'mergeable' })
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'reaped' })
 

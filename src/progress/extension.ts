@@ -45,9 +45,10 @@ export type ReportTaskStateResult =
   | { readonly ok: true; readonly task: string; readonly state: ReportableState }
   | { readonly ok: false; readonly reason: string }
 
-/** What a settle answers: it happened, or the reason it refused — never a throw. Reused from
- *  the shared settle rather than restated here: one result shape, two callers. */
-export type { SettleResult }
+/** What a settle refuses with — the failure limb both the env resolution and the settle
+ *  itself answer with, named once so the boundary below can say what it takes without
+ *  spelling the shape out a second time. */
+type Refusal = { readonly ok: false; readonly reason: string }
 
 /**
  * The settle limb's pure half: the shared settle (`src/cli/settle.ts`) pointed at the queue
@@ -67,7 +68,7 @@ const SETTLE_TASK_PARAMETERS = {
 
 /** The answer a settle gives the model that called it — the same shape the report tool's
  *  boundary answers in, so a caller reads either tool's outcome the same way. */
-export type SettleToolResult = {
+type SettleToolResult = {
   readonly content: [{ readonly type: 'text'; readonly text: string }]
   readonly details: SettleResult
 }
@@ -90,7 +91,7 @@ export async function executeSettleTask(
   return settleToolResultFrom(await runSettleTask(envResult.env))
 }
 
-function settleToolResultFrom(result: SettleResult | { readonly ok: false; readonly reason: string }): SettleToolResult {
+function settleToolResultFrom(result: SettleResult | Refusal): SettleToolResult {
   const text = result.ok
     ? `Settled TASK ${result.task}: state rewritten to merged, worktree removed, session kill scheduled through the reaper.`
     : `Could not settle: ${result.reason}`
