@@ -1608,7 +1608,7 @@ run and for a network that fails, because the refresh's catch branch is shipped 
 A control is markup, a handler, or script reach; each has an inventory that would have to
 carry it.
 
-## 61. `settle_task` — the event the pass could never hear
+## 62. `settle_task` — the event the pass could never hear
 
 TASKs merged and the cleanup after them never ran: the executor's tmux session stayed open,
 its worktree stayed checked out, and the docket kept showing a TASK long finished. The
