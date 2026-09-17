@@ -41,33 +41,53 @@ const ANSWER = {
 type PageElement = { innerHTML: string; hidden: boolean }
 
 /**
- * Runs the page's own inline script the way a browser runs it: a document to render into, a
- * `fetch` that answers the fixture, and a timer list that records what the page asked to
- * repeat. Asserting against the page's script — not a reimplementation of it — is what keeps
- * this a proof about the page rather than a claim about a copy of it.
+ * Runs the page's own inline script the way a browser runs it, recording its whole reach:
+ * every global it touches by name, every property it reads or writes on the document, and
+ * every property it writes on any element. Asserting against the page's script — not a
+ * reimplementation of it — is what keeps this a proof about the page rather than a claim
+ * about a copy of it, and the inventories are what let a test hold a shape ("nothing but
+ * these") instead of a list of spellings a mutant could walk around.
  */
 async function renderPageWith(answer: unknown) {
   const elements = new Map<string, PageElement>()
+  const elementWrites = new Set<string>()
   const element = (id: string): PageElement => {
     const found = elements.get(id)
     if (found !== undefined) return found
     const made: PageElement = { innerHTML: '', hidden: false }
-    elements.set(id, made)
-    return made
+    const guarded = new Proxy(made, {
+      set(target, prop, value) {
+        if (typeof prop === 'string') elementWrites.add(`${id}.${prop}`)
+        return Reflect.set(target, prop, value)
+      },
+    })
+    elements.set(id, guarded)
+    return guarded
   }
+  const documentReads = new Set<string>()
+  const documentWrites = new Set<string>()
   const fetched: string[] = []
   const timers: number[] = []
   const renewals: Array<() => void> = []
   const flush = async (): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  // The page's whole reach, recorded: every global its script touches by name routes
-  // through this proxy, so a test can hold the inventory. "The page's requests are its
-  // refreshes" is then a fact about what the script can reach for — no list of API
-  // spellings to walk around.
+  // The page's whole reach, recorded: every global its script touches by name routes through
+  // this proxy, then is answered — from the stubs when the harness holds one, from the
+  // language's own when it is an intrinsic — so the run proceeds exactly as in a browser
+  // while the inventory holds what the page can reach for.
   const touched = new Set<string>()
   const globals: Record<string, unknown> = {
-    document: { getElementById: element },
+    document: new Proxy({ getElementById: element }, {
+      get(target, prop) {
+        if (typeof prop === 'string') documentReads.add(prop)
+        return Reflect.get(target, prop)
+      },
+      set(target, prop, value) {
+        if (typeof prop === 'string') documentWrites.add(prop)
+        return Reflect.set(target, prop, value)
+      },
+    }),
     fetch: async (url: string) => {
       fetched.push(url)
       return { json: async () => answer }
@@ -79,9 +99,6 @@ async function renderPageWith(answer: unknown) {
   }
   const context = new Proxy(globals, {
     get(target, name) {
-      // Every global the script reaches for is recorded, then answered: from the stubs when
-      // the harness holds one, from the language's own when it is an intrinsic — so the run
-      // proceeds exactly as in a browser while the inventory holds the page's whole reach.
       if (typeof name === 'string') touched.add(name)
       return name in target ? Reflect.get(target, name) : Reflect.get(globalThis, name)
     },
@@ -90,7 +107,7 @@ async function renderPageWith(answer: unknown) {
   runInContext(pageScript(), context)
   // The first refresh is asynchronous; let it land before the assertions read the page.
   await flush()
-  return { elements, fetched, timers, renewals, touched, flush }
+  return { elements, elementWrites, documentReads, documentWrites, fetched, timers, renewals, touched, flush }
 }
 
 /** The page's own script, lifted out of the page unchanged. */
@@ -98,6 +115,14 @@ function pageScript(): string {
   const match = /<script>([\s\S]*)<\/script>/.exec(docketPage())
   if (match === null) throw new Error('the docket page holds no inline script')
   return match[1]!
+}
+
+/** The static markup of the page — everything before the script, where an attribute could
+ *  point a request. */
+function staticMarkup(): string {
+  const page = docketPage()
+  const upTo = page.indexOf('<script>')
+  return upTo === -1 ? page : page.slice(0, upTo)
 }
 
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
@@ -119,21 +144,26 @@ it('asks for the docket again on its own, on a short interval', async () => {
 
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
 // Scenario: Every age is shown exactly as the last answer held it, never advanced in the browser
-// GIVEN an answer whose TASK has stood in its word for 7541 seconds and last moved 90 seconds ago
-// WHEN the page renders it
-// THEN the row shows each of the two ages spelled from the answered numbers — the word's age and the move's age each on their own — and the page holds no clock of its own that could advance a number between answers
+// GIVEN an answer whose TASK has stood in its word for 7541 seconds and last moved 90 seconds ago, and a second TASK 45 seconds into its word with no heartbeat
+// WHEN the page renders it, and its interval fires holding the same answer
+// THEN the row shows each age spelled from the answered numbers — the word's age and the move's age each on their own — and no number moved when the timer fired: the page touches no global that can read a time
 it('shows every age exactly as the last answer held it', async () => {
-  const { elements } = await renderPageWith(ANSWER)
-  const rows = elements.get('rows')?.innerHTML ?? ''
+  const page = await renderPageWith(ANSWER)
+  const rows = page.elements.get('rows')?.innerHTML ?? ''
 
-  // Two spellings that cannot be substrings of one another, so each age is pinned on its own.
+  // Spellings that cannot be substrings of one another, so each age is pinned on its own.
   expect(rows).toContain('2h 5m 41s')
   expect(rows).toContain('1m 30s')
   expect(rows).toContain('45s')
   expect(rows).toContain('no heartbeat')
-  expect(docketPage()).not.toContain('Date.now')
-  expect(docketPage()).not.toContain('new Date')
-  expect(docketPage()).not.toContain('performance.now')
+
+  page.renewals[0]!()
+  await page.flush()
+  expect(page.elements.get('rows')?.innerHTML).toBe(rows)
+
+  // No clock of its own is a fact about what the script can reach: arithmetic, the
+  // document, the fetch, the timer — nothing in that inventory reads a time.
+  expect([...page.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
 })
 
 // Requirement: The page shows commands and offers no control that runs them
@@ -157,21 +187,37 @@ it('shows the attach command and the ruling command as copyable text', async () 
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, no markup that points a request anywhere, and its script touches no global but the document, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
+// THEN it offers no control that runs anything — no control element, no handler attribute whatever event it names, no attribute on the static markup but the four it was written with, and its script reaches nowhere but the element lookup, the text and visibility it renders, the one fetch of /docket, the timer that renews it, and the arithmetic it spells ages with
 it('offers no control that runs anything', async () => {
   const page = docketPage()
-  const { touched } = await renderPageWith(ANSWER)
+  const run = await renderPageWith(ANSWER)
 
   for (const control of ['<button', '<form', '<input', '<select', '<textarea', '<a ', 'javascript:']) {
     expect(page).not.toContain(control)
   }
   // A handler attribute of any name — a shape, not a list of spellings a mutant could walk around.
   expect(page).not.toMatch(/\son[a-z]+\s*=/i)
-  // Markup that could point a request: any element attribute that names a target, or a
-  // stylesheet url(). The page holds none; a request by markup is a door only these open.
-  expect(page).not.toMatch(/\s(src|href|action)\s*=|url\(/i)
-  // The script's whole reach: every global it touches by name, recorded by the harness.
-  // Anything else a page could ask through — location, XMLHttpRequest, a window it opens —
-  // is a global this inventory would have to carry, and the claim above with it.
-  expect([...touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
+  // The stylesheet may hold no url: a request by markup is a door only an attribute or a
+  // stylesheet url can open, and the attribute door is closed by the inventory below.
+  expect(page).not.toContain('url(')
+  // The static markup carries no attribute but the ones this page was written with — any
+  // door markup can point (src, href, action, srcset, data, http-equiv, ...) is an
+  // attribute, and a name off this list is how it would have to arrive.
+  const attributes = [...staticMarkup().matchAll(/\s([a-zA-Z-]+)=/g)].map(match => match[1]!)
+  expect([...new Set(attributes)].sort()).toEqual(['charset', 'id', 'lang'])
+  // The script's whole reach: every global it touches by name, every document property it
+  // reads or writes, and every element property it writes. A control wired in script — a
+  // handler set on the document or an element, a request by any other means — is a touch
+  // this inventory would have to carry, and the claim above with it.
+  expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
+  expect([...run.documentReads]).toEqual(['getElementById'])
+  expect([...run.documentWrites]).toEqual([])
+  expect([...run.elementWrites].sort()).toEqual([
+    'empty.hidden',
+    'problems-heading.hidden',
+    'problems.innerHTML',
+    'rows.innerHTML',
+    'rulings-heading.hidden',
+    'rulings.innerHTML',
+  ])
 })
