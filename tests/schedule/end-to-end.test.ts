@@ -259,7 +259,7 @@ it('kills the settled TASK\'s session through the reaper, after the pass has ans
 
     expect(plan.merged).toEqual(['pass-reaped'])
     await expect(hasSession()).resolves.toBe(true)
-    const deadline = Date.now() + 8000
+    const deadline = Date.now() + 5000
     while (Date.now() < deadline && (await hasSession())) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
@@ -267,7 +267,7 @@ it('kills the settled TASK\'s session through the reaper, after the pass has ans
   } finally {
     await tmux(['kill-server']).catch(() => {})
   }
-}, 15000)
+}, 10000)
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
 // Scenario: The landed-in-main check is made fresh from git on each pass, never from bookkeeping

@@ -143,7 +143,7 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   try {
     await teardownTask(repo.root, 'settled-gone')
     await expect(hasSession()).resolves.toBe(true)
-    const deadline = Date.now() + 8000
+    const deadline = Date.now() + 5000
     while (Date.now() < deadline && (await hasSession())) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
@@ -151,7 +151,7 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   } finally {
     await tmux(['kill-server']).catch(() => {})
   }
-}, 15000)
+}, 10000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi

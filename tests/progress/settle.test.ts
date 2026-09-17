@@ -1,6 +1,6 @@
 // Capability: progress
 
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -42,8 +42,9 @@ function hasSession(task: string): Promise<boolean> {
 }
 
 /** Waits until no session with the TASK's name stands, answering false if one still does
- *  after the deadline — the reaper's delay is short, so anything close to this bound is a
- *  failure worth seeing rather than a timing corner to widen. */
+ *  after the deadline — the bound is a few times the reaper's two-second delay, so a kill
+ *  landing anywhere near it is a failure worth seeing rather than a timing corner to
+ *  widen. */
 async function sessionGoneWithin(task: string, ms: number): Promise<boolean> {
   const deadline = Date.now() + ms
   while (Date.now() < deadline) {
@@ -176,7 +177,9 @@ it('settles the TASK named by the environment, never ExtensionContext.cwd', asyn
   expect(result.details).toEqual({ ok: true, task: 'registered' })
   expect(await stateOf(repo.root, 'registered')).toBe('merged')
   expect(await worktreeStands(repo.root, 'registered')).toBe(false)
-  await expect(stateOf(unrelated.root, 'registered')).rejects.toThrow()
+  // The whole unrelated root, not one path inside it: the claim is that nothing at all was
+  // written there, and checking a single file would not hold the tool to that.
+  await expect(stat(join(unrelated.root, '.proofspec'))).rejects.toThrow()
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
@@ -196,14 +199,36 @@ it('never prunes the TASK\'s queue entry', async () => {
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
 // Scenario: The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay
 // GIVEN a mergeable, landed TASK with a live tmux session carrying its name on the dedicated server
-// WHEN the settle runs and answers
-// THEN the session is still live at the moment the settle answers, and is gone within a few seconds after
+// WHEN the settle runs in a process of its own, which answers and exits before any kill lands
+// THEN the session is still live after that process is gone, and is dead within a few seconds —
+//      a kill that outlives the process that scheduled it can only be a detached reaper's
+// The settle runs in a child process that exits before the kill lands, because that is the
+// one arrangement that tells a detached reaper from an in-process delayed kill: a timer the
+// scheduling process owned would die with it, so a kill that lands after its exit is proven
+// to belong to some other process.
 it('kills the session through a detached reaper, answering while the session still stands', async () => {
   const repo = await makeSettlableTask({ task: 'reaped', landed: true, word: 'mergeable' })
+  const extensionUrl = new URL('../../src/progress/extension.ts', import.meta.url)
+  const child = spawn(
+    process.execPath,
+    [
+      '--experimental-transform-types', '--input-type=module', '--eval',
+      `const mod = await import(${JSON.stringify(extensionUrl.href)})
+       const result = await mod.runSettleTask({ queueRoot: ${JSON.stringify(repo.root)}, task: 'reaped' })
+       console.log(JSON.stringify(result))`,
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  )
+  const answered: string = await new Promise((resolve, reject) => {
+    let out = ''
+    child.stdout.on('data', chunk => {
+      out += chunk
+    })
+    child.once('error', reject)
+    child.once('exit', () => resolve(out.trim()))
+  })
 
-  const result = await runSettleTask({ queueRoot: repo.root, task: 'reaped' })
-
-  expect(result).toEqual({ ok: true, task: 'reaped' })
+  expect(JSON.parse(answered)).toEqual({ ok: true, task: 'reaped' })
   await expect(hasSession('reaped')).resolves.toBe(true)
-  await expect(sessionGoneWithin('reaped', 8000)).resolves.toBe(true)
-}, 15000)
+  await expect(sessionGoneWithin('reaped', 5000)).resolves.toBe(true)
+}, 10000)
