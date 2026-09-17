@@ -202,7 +202,10 @@ it('shows a phase word it has never met as it stands', async () => {
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
+  // The round rides with the word — asserted here at a value no other test writes, so a
+  // row that invented or froze its round fails this test, not only the ones that wrote 2.
   expect(reportOf(outcome).rows[0]?.phase).toBe('warping')
+  expect(reportOf(outcome).rows[0]?.round).toBe(4)
 })
 
 // Requirement: A row carries how long the TASK has stood in its word, and when it last moved
