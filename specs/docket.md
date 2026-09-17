@@ -48,8 +48,11 @@ answers in one stable order.
 
 <!-- scenarios: generated -->
 - "A TASK entry that cannot be read answers a problem naming it, with every other TASK's row still standing" → tests/docket/view.test.ts
+- "A TASK with no phase file carries the phase word and its round both as absent, never invented" → tests/docket/view.test.ts
 - "A merged TASK stays on the docket until a pass prunes its entry" → tests/docket/view.test.ts
+- "A phase word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
 - "A queue directory that does not exist answers an empty docket" → tests/docket/view.test.ts
+- "A row carries the TASK's phase word and round exactly as its phase file holds them" → tests/docket/view.test.ts
 - "A state word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
 - "Rows come back sorted by TASK name" → tests/docket/view.test.ts
 <!-- /scenarios -->
@@ -81,7 +84,9 @@ filesystem already records when each happened.
 
 <!-- scenarios: generated -->
 - "A TASK with no heartbeat file carries the second number as absent, never as a repeat of the first" → tests/docket/view.test.ts
+- "A TASK with no phase file carries the third number as absent, never as a repeat of another" → tests/docket/view.test.ts
 - "A row carries how long it has been since the heartbeat was last refreshed" → tests/docket/view.test.ts
+- "A row carries how long it has been since the phase file was last written" → tests/docket/view.test.ts
 - "A row carries how long it has been since the state file was last written" → tests/docket/view.test.ts
 <!-- /scenarios -->
 
@@ -170,6 +175,10 @@ second capability beside the view; it is the view, asked more than once.
 - "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
 - "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
 - "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
+- "The page a request answers carries the docket's facts as visible content" → tests/docket/page.test.ts
+- "The page answered at / carries the docket computed at that moment" → tests/docket/serve.test.ts
+- "The page shows the TASK's phase word, its round, and how long it has stood there" → tests/docket/page.test.ts
+- "The rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does

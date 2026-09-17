@@ -206,3 +206,17 @@ contract. The round exists because the review gates loop — 「还可以带轮�
 test review」 — and the executor that looped is the one that knows which round it is on.
 Like the state word, the phase word is a fact the session leaves behind for whoever reads
 it; the docket carries it on its row (`specs/docket.md`).
+
+<!-- scenarios: generated -->
+- "A phase report leaves the entry's state, MANIFEST, LEASE, and heartbeat exactly as they were" → tests/progress/extension.test.ts
+- "A phase report overwrites whatever the phase file held before" → tests/progress/extension.test.ts
+- "A phase report trims the word it is given" → tests/progress/extension.test.ts
+- "A phase report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
+- "A phase report with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
+- "A phase report with no round given defaults the round to 1" → tests/progress/extension.test.ts
+- "A phase word and its round are written into the TASK's phase file, answered as a value" → tests/progress/extension.test.ts
+- "A phase word that is empty or only whitespace is refused, naming why, touching nothing" → tests/progress/extension.test.ts
+- "A round below 1, or one that is not an integer, is refused, naming why" → tests/progress/extension.test.ts
+- "Reporting a phase for a TASK whose queue entry has been pruned is refused as a value, never thrown" → tests/progress/extension.test.ts
+- "The registered phase tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
+<!-- /scenarios -->
