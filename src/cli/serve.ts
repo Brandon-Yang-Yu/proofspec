@@ -13,23 +13,24 @@ import { docket } from './run.ts'
  * nothing, which is the honesty the page is built on.
  *
  * Serving runs until `stop` is called: the listener itself is what keeps a process alive,
- * and stopping it ends that. The listener answers the loopback interface only, because the
- * docket names this machine's queue, this machine's sessions, and this machine's ruling
- * debts — facts no other host has any business reading.
+ * and stopping it ends that. The loopback is the default interface — the docket names this
+ * machine's queue, this machine's sessions, and this machine's ruling debts — and a caller
+ * naming an interface with `--host` is choosing who reads.
  */
 
 /** The conventional port, so the URL is memorable. */
 export const DOCKET_SERVE_PORT = 4567
 
-/** The one interface serving answers on: the loopback, never a shared one. */
+/** The interface serving answers on when the caller names none: the loopback. */
 const LOOPBACK = '127.0.0.1'
 
-/** What serving is asked for: where the queue lives, which port to listen on (the
- *  conventional one when left out), the session server to ask, and the clock each request
- *  computes its ages from — read per request, never once at startup. */
+/** What serving is asked for: where the queue lives, which interface and port to listen on
+ *  (the loopback and the conventional one when left out), the session server to ask, and the
+ *  clock each request computes its ages from — read per request, never once at startup. */
 export type ServeOptions = {
   readonly cwd: string
   readonly port?: number
+  readonly host?: string
   readonly docket?: DocketActions
   readonly now?: () => Date
 }
@@ -55,6 +56,7 @@ export type RefusedServe = { readonly ok: false; readonly reason: string }
  */
 export async function serveDocket(options: ServeOptions): Promise<StandingServe | RefusedServe> {
   const port = options.port ?? DOCKET_SERVE_PORT
+  const host = options.host ?? LOOPBACK
   const ask: Answering = { options, clock: options.now ?? (() => new Date()) }
   const server = createServer((request, response) => {
     void answer(request, response, ask).catch(() => {
@@ -66,15 +68,18 @@ export async function serveDocket(options: ServeOptions): Promise<StandingServe 
       }
     })
   })
-  const listening = await listen(server, port)
+  const listening = await listen(server, port, host)
   if (!listening.ok) return listening
   // Stopping twice is one stop: a caller that stops by hand and again on teardown would
   // otherwise read a refusal from a server already down.
   let stopped = false
+  // The URL names an address that answers: `localhost` is the spelling a person opens for
+  // the loopback, and an interface a caller named is spelled as they named it.
+  const forABrowser = host === LOOPBACK ? 'localhost' : host
   return {
     ok: true,
-    url: `http://localhost:${listening.port}/`,
-    host: LOOPBACK,
+    url: `http://${forABrowser}:${listening.port}/`,
+    host,
     port: listening.port,
     stop: async () => {
       if (stopped) return
@@ -89,8 +94,8 @@ export async function serveDocket(options: ServeOptions): Promise<StandingServe 
 
 type Listening = { readonly ok: true; readonly port: number } | RefusedServe
 
-/** Listens on the loopback at the port named, answering the port actually bound. */
-function listen(server: ReturnType<typeof createServer>, port: number): Promise<Listening> {
+/** Listens on the interface and port named, answering the port actually bound. */
+function listen(server: ReturnType<typeof createServer>, port: number, host: string): Promise<Listening> {
   return new Promise(resolve => {
     const onListening = (): void => {
       server.off('error', onError)
@@ -106,12 +111,14 @@ function listen(server: ReturnType<typeof createServer>, port: number): Promise<
         ok: false,
         reason: error.code === 'EADDRINUSE'
           ? `port ${port} is already in use`
-          : `could not listen on port ${port}: ${error.message}`,
+          // The interface is named too, because it is as often the part that cannot be
+          // listened on — an address the machine does not hold, say.
+          : `could not listen on ${host} at port ${port}: ${error.message}`,
       })
     }
     server.once('listening', onListening)
     server.once('error', onError)
-    server.listen(port, LOOPBACK)
+    server.listen(port, host)
   })
 }
 

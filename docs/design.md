@@ -1258,6 +1258,9 @@ orchestrating the intent, owning the branch and the commits, running the disposi
 The house prose discipline — a rationale states the current, correct design, never the
 history of how the draft got there — has its single home in the persona that writes under it,
 no longer living only in the legacy `ship` skill the investigator was never pointed at.
+The split is now backed at the tool level as well: the investigator's persona carries no
+`write` or `edit` tool at all, so the rule against drafting prose and the toolbelt it runs
+with say the same thing.
 
 **The register all new spec prose writes at is plain first-read English, and it is stated,
 not inherited.** The persona file's first cut told its reader to write "in the register
@@ -1593,9 +1596,9 @@ failure are readable, and `schedule` keeps every one of those decisions its own.
 The split the code keeps is the split the tool already keeps: the page is pure content in
 the docket capability (`src/docket/page.ts`, a string — the view reads no files and runs no
 processes), and the socket is `cli`'s (`src/cli/serve.ts`), because `cli` is the one
-capability that owns the process. The listener answers the loopback interface only — the
-docket names this machine's queue, sessions, and ruling debts, facts no other host has any
-business reading — and the port is overridable so a second instance runs beside a first.
+capability that owns the process. The port is overridable so a second instance runs beside
+a first; which interface the listener answers on is §61's question, settled after this
+section shipped.
 
 Proving the third decision is where the branch's tests earned their shape. A no-control
 claim cannot be held by naming what was refused — a list of spellings is exactly the thing
@@ -1607,6 +1610,28 @@ answer that walks every rendering branch, and the one fetch's URL — held for t
 run and for a network that fails, because the refresh's catch branch is shipped code too.
 A control is markup, a handler, or script reach; each has an inventory that would have to
 carry it.
+
+## 61. `--host` — the interface is the caller's to name
+
+§60's page answered the loopback only, which held the reader to the machine the queue lived
+on. The human wanted to watch the docket from another device on the same network while TASKs
+ran on the machine, so `docket --serve` gained `--host`: one more address handed to the
+listener.
+
+Two decisions carry it. First, **the loopback stays the default** — the docket names this
+machine's queue, this machine's sessions, and this machine's ruling debts, and a tool that
+names them does not share them until a caller says to; naming an interface is choosing who
+reads. Second, **an address is an address, not a mode**: `0.0.0.0` is the spelling that
+answers every interface the machine has, and the listener never learns that — it binds
+exactly the interface it was named, no arm of the code special-cases the all-interfaces
+spelling, so the page a tablet reads is the same server, the same answers, as the one the
+loopback reads.
+
+The proofs pin both directions: the default listener refuses the machine's own non-loopback
+address — a refusal, not a timeout, because nothing is listening there — and a named
+interface answers the page and its JSON at exactly that address. The URL a standing serve
+reports names an address that answers: `localhost` for the loopback, the interface spelled
+as the caller named it otherwise.
 
 ## 62. `settle_task` — the event the pass could never hear
 
