@@ -4,7 +4,8 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
-import progressExtension, { executeReportTaskState, runReportTaskState } from '../../src/progress/extension.ts'
+import progressExtension, { executeReportTaskPhase, executeReportTaskState, runReportTaskPhase, runReportTaskState } from '../../src/progress/extension.ts'
+import { readPhase, writePhase } from '../../src/cli/queue.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
@@ -41,6 +42,194 @@ async function manifestOf(root: string, task: string): Promise<string> {
 async function leaseOf(root: string, task: string): Promise<string> {
   return readFile(join(root, '.proofspec', 'dispatch', task, 'LEASE'), 'utf8')
 }
+
+async function heartbeatOf(root: string, task: string): Promise<string> {
+  return readFile(join(root, '.proofspec', 'dispatch', task, 'heartbeat'), 'utf8')
+}
+
+// --- the pace-word limb ---------------------------------------------------------------
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase word and its round are written into the TASK's phase file, answered as a value
+// GIVEN a real queue entry
+// WHEN report_task_phase runs with phase test-review and round 2
+// THEN the entry's phase file holds exactly that word and round, and the answer is {ok, task, phase, round}
+it('writes the phase word and round into the TASK\'s phase file, answered as a value', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+
+  const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', 2)
+
+  expect(result).toEqual({ ok: true, task: 'a', phase: 'test-review', round: 2 })
+  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report with no round given defaults the round to 1
+// GIVEN a real queue entry
+// WHEN report_task_phase runs with a phase word and no round
+// THEN the round is 1 — answered and written alike, the first pass through any step
+it('defaults the round to 1 when the report gives none', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+
+  const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'explorer')
+
+  expect(result).toEqual({ ok: true, task: 'a', phase: 'explorer', round: 1 })
+  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'explorer', round: 1 })
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report trims the word it is given
+// GIVEN a real queue entry
+// WHEN report_task_phase runs with a word carrying surrounding whitespace
+// THEN the word written and answered is the trimmed one — the pace word is a word, not a spacing accident
+it('trims the phase word it is given', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+
+  const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, '  ui-design  ')
+
+  expect(result).toEqual({ ok: true, task: 'a', phase: 'ui-design', round: 1 })
+  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'ui-design', round: 1 })
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase word that is empty or only whitespace is refused, naming why, touching nothing
+// GIVEN a real queue entry holding no phase file
+// WHEN report_task_phase runs with the empty word, then with only whitespace
+// THEN each call refuses, naming the word as the problem, and no phase file ever appears
+it('refuses an empty or whitespace-only phase word, touching nothing', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+
+  for (const word of ['', '   ']) {
+    const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, word)
+    expect(result, `the empty-word report for ${JSON.stringify(word)}`).toEqual({ ok: false, reason: expect.stringContaining('phase') })
+  }
+  expect(await readPhase(repo.root, 'a')).toBeUndefined()
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A round below 1, or one that is not an integer, is refused, naming why
+// GIVEN a real queue entry holding no phase file
+// WHEN report_task_phase runs with round 0, then with round 2.5
+// THEN each call refuses, naming the round as the problem, and no phase file ever appears
+it('refuses a round below 1 or not an integer, touching nothing', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+
+  for (const round of [0, 2.5]) {
+    const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', round)
+    expect(result, `the out-of-range round ${round}`).toEqual({ ok: false, reason: expect.stringContaining('round') })
+  }
+  expect(await readPhase(repo.root, 'a')).toBeUndefined()
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report leaves the entry's state, MANIFEST, LEASE, and heartbeat exactly as they were
+// GIVEN a queue entry carrying a state, a MANIFEST, a LEASE, and a heartbeat
+// WHEN a phase is reported
+// THEN all four read back byte-for-byte as written — the pace word touches nothing but its own file
+it('leaves the entry\'s state, MANIFEST, LEASE, and heartbeat untouched by a phase report', async () => {
+  const repo = await makeRepo({})
+  const manifest = '{"branch":"work/a"}'
+  const state = 'building'
+  const lease = '2026-01-01T00:00:00.000Z'
+  await writeTask(repo.root, 'a', { manifest, state, lease })
+  await writeFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'heartbeat'), '2026-01-01T00:00:05.000Z')
+
+  await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'tests-red', 1)
+
+  expect(await manifestOf(repo.root, 'a')).toBe(manifest)
+  expect(await stateOf(repo.root, 'a')).toBe(state)
+  expect(await leaseOf(repo.root, 'a')).toBe(lease)
+  expect(await heartbeatOf(repo.root, 'a')).toBe('2026-01-01T00:00:05.000Z')
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report overwrites whatever the phase file held before
+// GIVEN a queue entry whose phase file already holds a word and round
+// WHEN a new phase is reported
+// THEN the file holds exactly the new word and round — one phase stands at a time, the earlier one leaves no residue
+it('overwrites whatever the phase file held before', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+  await writePhase(repo.root, 'a', 'tests-red', 1)
+
+  await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', 2)
+
+  expect(await readPhase(repo.root, 'a')).toEqual({ phase: 'test-review', round: 2 })
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: Reporting a phase for a TASK whose queue entry has been pruned is refused as a value, never thrown
+// GIVEN a TASK name with no queue entry at all
+// WHEN a phase is reported for it
+// THEN it refuses as a value naming the TASK, rather than throwing
+it('refuses a phase report as a value, never throwing, when the TASK has no queue entry', async () => {
+  const repo = await makeRepo({})
+
+  const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'never-queued' }, 'build-green', 1)
+
+  expect(result).toEqual({ ok: false, reason: expect.stringContaining('never-queued') })
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written
+// GIVEN a real queue entry, and no PROOFSPEC_QUEUE_ROOT set in the environment
+// WHEN the registered phase tool's execute runs
+// THEN it refuses, naming PROOFSPEC_QUEUE_ROOT, and the entry is left without a phase file
+it('refuses to report a phase when PROOFSPEC_QUEUE_ROOT is not set, writing nothing', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+  delete process.env.PROOFSPEC_QUEUE_ROOT
+  process.env.PROOFSPEC_TASK = 'a'
+  const fakeContext = { cwd: repo.root } as unknown as ExtensionContext
+
+  const result = await executeReportTaskPhase('call-1', { phase: 'explorer' }, undefined, undefined, fakeContext)
+
+  expect(result.details).toEqual({ ok: false, reason: expect.stringContaining('PROOFSPEC_QUEUE_ROOT') })
+  expect(await readPhase(repo.root, 'a')).toBeUndefined()
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: A phase report with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written
+// GIVEN a real queue entry, and no PROOFSPEC_TASK set in the environment
+// WHEN the registered phase tool's execute runs
+// THEN it refuses, naming PROOFSPEC_TASK, and the entry is left without a phase file
+it('refuses to report a phase when PROOFSPEC_TASK is not set, writing nothing', async () => {
+  const repo = await makeRepo({})
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  delete process.env.PROOFSPEC_TASK
+  const fakeContext = { cwd: repo.root } as unknown as ExtensionContext
+
+  const result = await executeReportTaskPhase('call-1', { phase: 'explorer' }, undefined, undefined, fakeContext)
+
+  expect(result.details).toEqual({ ok: false, reason: expect.stringContaining('PROOFSPEC_TASK') })
+  expect(await readPhase(repo.root, 'a')).toBeUndefined()
+})
+
+// Requirement: report_task_phase reports the executor's own pace word and round
+// Scenario: The registered phase tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory
+// GIVEN PROOFSPEC_QUEUE_ROOT/PROOFSPEC_TASK set to a real queue entry, and an ExtensionContext whose cwd names an unrelated directory
+// WHEN the registered phase tool's execute runs
+// THEN the phase is written under PROOFSPEC_QUEUE_ROOT, not under ExtensionContext.cwd
+it('reports the phase into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory', async () => {
+  const queueRoot = await makeRepo({})
+  const unrelatedCwd = await makeRepo({})
+  await writeTask(queueRoot.root, 'a', { manifest: '{}', state: 'building' })
+  process.env.PROOFSPEC_QUEUE_ROOT = queueRoot.root
+  process.env.PROOFSPEC_TASK = 'a'
+  const fakeContext = { cwd: unrelatedCwd.root } as unknown as ExtensionContext
+
+  const result = await executeReportTaskPhase('call-1', { phase: 'tests-red', round: 1 }, undefined, undefined, fakeContext)
+
+  expect(result.details).toEqual({ ok: true, task: 'a', phase: 'tests-red', round: 1 })
+  expect(await readPhase(queueRoot.root, 'a')).toEqual({ phase: 'tests-red', round: 1 })
+  await expect(readPhase(unrelatedCwd.root, 'a')).resolves.toBeUndefined()
+})
 
 // Requirement: report_task_state accepts only a closed set of state words
 // Scenario: A state word outside the reportable set is refused, naming the word, and the entry's state is unchanged

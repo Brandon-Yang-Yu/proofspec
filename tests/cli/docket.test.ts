@@ -2,6 +2,7 @@
 
 import { afterEach, expect, it } from 'vitest'
 import { docket, exitCodeOf, renderAnswer } from '../../src/cli/index.ts'
+import { writePhase } from '../../src/cli/queue.ts'
 import { cleanupRepos, makeRepo } from './support.ts'
 
 afterEach(cleanupRepos)
@@ -50,6 +51,21 @@ it('answers the docket as JSON on request, carrying the same content', async () 
   expect(parsed.rows[0]?.state).toBe('building')
   expect(parsed.problems.map(problem => problem.task)).toEqual(['broken'])
   expect(parsed.outstanding.map(one => one.key)).toEqual(['capability:spec-tree:alpha,beta'])
+})
+
+// Requirement: A command answers the docket, as text for a person by default
+// Scenario: The text answer carries the TASK's phase word and its round on its row
+// GIVEN a queue holding a TASK whose phase file holds the word test-review at round 2
+// WHEN the docket command is run with no format named
+// THEN the TASK's line carries the pace word and its round — the question a watching human actually asks, answered in the text a person reads
+it('carries the phase word and its round on the text row', async () => {
+  const repo = await makeRepo(FILES)
+  await writePhase(repo.root, 'alpha', 'test-review', 2)
+
+  const answer = renderAnswer(await docket({ cwd: repo.root, docket: { listSessions: async () => [] } }))
+
+  expect(answer).toContain('test-review')
+  expect(answer).toContain('round 2')
 })
 
 // Requirement: A command answers the docket, as text for a person by default

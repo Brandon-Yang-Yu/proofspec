@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { docket, renderAnswer, serveDocket } from '../../src/cli/index.ts'
+import { writePhase } from '../../src/cli/queue.ts'
 import type { StandingServe } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
@@ -61,6 +62,26 @@ async function get(path: string, port: number): Promise<string> {
   const response = await fetch(`http://127.0.0.1:${port}${path}`)
   return response.text()
 }
+
+// Requirement: The docket answers on a page
+// Scenario: The page answered at / carries the docket computed at that moment
+// GIVEN a served docket whose queue holds a TASK with a phase file
+// WHEN the page at / is fetched, and the JSON the page reads at /docket
+// THEN the page's markup carries the TASK's phase word and its round as visible content, and the JSON carries the same row with its phase fields — one view, asked twice, answering the same moment
+it('answers the page at / with the docket computed at that moment', async () => {
+  const { repo, served } = await serveOver(FILES)
+  await writePhase(repo.root, 'alpha', 'test-review', 2)
+
+  const page = await get('/', served.port)
+  const json = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; round: number | null; phaseAgeSeconds: number | null }[] }
+
+  expect(page).toContain('test-review')
+  expect(page).toContain('round 2')
+  expect(json.rows).toEqual([
+    expect.objectContaining({ task: 'alpha', phase: 'test-review', round: 2 }),
+  ])
+  expect(typeof json.rows[0]?.phaseAgeSeconds).toBe('number')
+})
 
 // Requirement: The docket answers on a page
 // Scenario: The JSON answered at /docket is the same content the one-shot JSON form gives
