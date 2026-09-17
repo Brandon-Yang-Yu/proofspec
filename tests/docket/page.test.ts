@@ -73,7 +73,7 @@ const ANSWER: Docket = {
 }
 
 /** One element the page's script renders into, as the script itself sees it. */
-type PageElement = { innerHTML: string; hidden: boolean }
+type PageElement = { innerHTML: string; hidden: boolean; parentNode: PageElement | null }
 
 /**
  * Runs the page's own inline script the way a browser runs it, recording its whole reach:
@@ -104,10 +104,13 @@ async function runPage(mode: PageMode) {
   const elements = new Map<string, PageElement>()
   const elementReads = new Set<string>()
   const elementWrites = new Set<string>()
+  // The page's elements as the browser nests them: everything the script can hold a
+  // selection inside hangs off the body, so the selection guard's walk up the tree arrives.
+  const bodyElement: PageElement = { innerHTML: '', hidden: false, parentNode: null }
   const element = (id: string): PageElement => {
     const found = elements.get(id)
     if (found !== undefined) return found
-    const made: PageElement = { innerHTML: '', hidden: false }
+    const made: PageElement = { innerHTML: '', hidden: false, parentNode: bodyElement }
     const guarded = new Proxy(made, {
       get(target, prop) {
         if (typeof prop === 'string') elementReads.add(`${id}.${prop}`)
@@ -141,7 +144,7 @@ async function runPage(mode: PageMode) {
   // while the inventory holds what the page can reach for.
   const touched = new Set<string>()
   const globals: Record<string, unknown> = {
-    document: new Proxy({ getElementById: element, getSelection: () => selection }, {
+    document: new Proxy({ getElementById: element, getSelection: () => selection, body: bodyElement }, {
       get(target, prop) {
         if (typeof prop === 'string') documentReads.add(prop)
         return Reflect.get(target, prop)
@@ -436,6 +439,8 @@ it('offers no control that runs anything', async () => {
   // reads or writes, and every element property it reads or writes. A control wired in
   // script — a handler read off an element, a request by any other means — is a touch this
   // inventory would have to carry, and the claim above with it.
+  // 'body' joins this inventory only while a selection is live — the guard's walk up the
+  // tree reads it, the collapsed check before it does not.
   expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
   expect([...run.documentReads].sort()).toEqual(['getElementById', 'getSelection'])
   expect([...run.documentWrites]).toEqual([])

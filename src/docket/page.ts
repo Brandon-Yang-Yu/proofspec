@@ -14,9 +14,9 @@ import type { Docket, DocketRow, OutstandingRuling } from './view.ts'
  * control that runs anything: every action the queue knows how to take has a command that
  * takes it, and the page shows those commands as text rather than becoming a second place to
  * run them. The one exception it makes to re-rendering everything: while a person's text
- * selection lives inside an element, that element is left standing for the round — the
- * commands this page shows are meant to be copied, and a refresh that tore a selection out
- * from under the copy would defeat the page's own copy affordance.
+ * selection lives anywhere on the page, the whole answer is left standing for that round —
+ * the commands this page shows are meant to be copied, and a refresh that tore a selection
+ * out from under the copy would defeat the page's own copy affordance.
  *
  * The shipped rows and the script-rendered rows come from two renderers — one spelled in
  * TypeScript for the markup the server answers, one in JavaScript for the refresh — that
@@ -195,34 +195,32 @@ function pageScript(): string {
     return '<li>' + shared + tasks + '<br><code>' + escapeHtml(ruling.answerWith) + '</code></li>'
   }
 
-  // Whether a person's text selection lives inside element — the copy in progress the
+  // Whether a person's text selection lives anywhere on the page — a copy in progress the
   // refresh must not tear down. A collapsed selection (a caret) is no copy at all.
-  function selectionLivesIn(element) {
+  function selectionLives() {
     var selection = document.getSelection()
     if (selection === null || selection.isCollapsed) return false
     var node = selection.anchorNode
     while (node !== null) {
-      if (node === element) return true
+      if (node === document.body) return true
       node = node.parentNode
     }
     return false
   }
 
-  function setRowsIfIdle(id, html) {
-    var element = document.getElementById(id)
-    if (element === null || selectionLivesIn(element)) return
-    element.innerHTML = html
-  }
-
   function render(docket) {
+    // A copy in progress holds the whole answer for this round, not just the element it
+    // sits inside: the visibility flags and the content they describe must never drift
+    // apart mid-render, and the next refresh is two seconds away.
+    if (selectionLives()) return
     document.getElementById('empty').hidden = docket.rows.length > 0
-    setRowsIfIdle('rows', docket.rows.map(rowHtml).join(''))
+    document.getElementById('rows').innerHTML = docket.rows.map(rowHtml).join('')
     document.getElementById('problems-heading').hidden = docket.problems.length === 0
-    setRowsIfIdle('problems', docket.problems.map(function (problem) {
+    document.getElementById('problems').innerHTML = docket.problems.map(function (problem) {
       return '<li>' + escapeHtml(problem.task) + ': ' + escapeHtml(problem.reason) + '</li>'
-    }).join(''))
+    }).join('')
     document.getElementById('rulings-heading').hidden = docket.outstanding.length === 0
-    setRowsIfIdle('rulings', docket.outstanding.map(rulingHtml).join(''))
+    document.getElementById('rulings').innerHTML = docket.outstanding.map(rulingHtml).join('')
   }
 
   // The page's one request is its refresh. A failed one keeps the last answer standing; the
