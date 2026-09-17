@@ -30,6 +30,7 @@ const LOOPBACK = '127.0.0.1'
 export type ServeOptions = {
   readonly cwd: string
   readonly port?: number
+  readonly host?: string
   readonly docket?: DocketActions
   readonly now?: () => Date
 }

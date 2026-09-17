@@ -2,6 +2,7 @@
 
 import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
+import { networkInterfaces } from 'node:os'
 import { afterEach, expect, it } from 'vitest'
 import { serveDocket } from '../../src/cli/index.ts'
 import type { StandingServe } from '../../src/cli/index.ts'
@@ -37,17 +38,32 @@ async function freePort(): Promise<number> {
 }
 
 /** Serves the docket over a fixture queue, on the port named (or the default when none is). */
-async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number } = {}) {
+async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number; readonly host?: string } = {}) {
   const repo = await makeRepo(files)
-  const served = await serveDocket({ cwd: repo.root, port: options.port, docket: { listSessions: async () => [] } })
+  const served = await serveDocket({ cwd: repo.root, port: options.port, host: options.host, docket: { listSessions: async () => [] } })
   if (!served.ok) throw new Error(`serving did not start: ${served.reason}`)
   standing.push(served)
   return served
 }
 
+/** This machine's own non-loopback IPv4 address — an interface a caller could name. */
+function ownAddress(): string {
+  for (const nets of Object.values(networkInterfaces())) {
+    for (const net of nets ?? []) {
+      if (net.family === 'IPv4' && !net.internal) return net.address
+    }
+  }
+  throw new Error('this machine has no non-loopback IPv4 address to name')
+}
+
 /** One request, as the page or a curl makes it. */
 async function request(path: string, port: number): Promise<Response> {
   return await fetch(`http://127.0.0.1:${port}${path}`)
+}
+
+/** One request aimed at the interface named, instead of the loopback. */
+async function askAt(host: string, port: number, path: string): Promise<Response> {
+  return await fetch(`http://${host}:${port}${path}`)
 }
 
 // Requirement: A command serves the docket as a page
@@ -112,4 +128,33 @@ it('runs until stopped, and stopping releases the port', async () => {
 
   await served.stop()
   await expect(request('/docket', port)).rejects.toThrow()
+})
+
+// Requirement: A command serves the docket as a page
+// Scenario: The listener answers the loopback interface only
+// GIVEN the command asked to serve with no host named
+// WHEN the page is asked for at this machine's own non-loopback address
+// THEN the connection is refused — the listener answers the loopback interface, never one the caller did not name
+it('answers the loopback interface only, never one the caller did not name', async () => {
+  const served = await serveOver(FILES, { port: await freePort() })
+
+  await expect(askAt(ownAddress(), served.port, '/')).rejects.toThrow()
+})
+
+// Requirement: A command serves the docket as a page
+// Scenario: A named --host is the interface served on
+// GIVEN the command asked to serve, naming this machine's own address as the host on a free port
+// WHEN the page and its JSON are asked for at that address
+// THEN both answer — on the interface the caller named, not only the loopback
+it('serves on the interface a caller names with --host', async () => {
+  const host = ownAddress()
+  const served = await serveOver(FILES, { port: await freePort(), host })
+
+  const page = await askAt(host, served.port, '/')
+  expect(page.status).toBe(200)
+  expect(page.headers.get('content-type')).toContain('text/html')
+
+  const json = await askAt(host, served.port, '/docket')
+  expect(json.status).toBe(200)
+  expect(json.headers.get('content-type')).toContain('application/json')
 })
