@@ -51,7 +51,7 @@ export function docketPage(report: Docket): string {
 <p id="empty"${report.rows.length === 0 ? '' : ' hidden'}>no TASK in the queue</p>
 <table>
   <thead>
-    <tr><th scope="col">TASK</th><th scope="col">state</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in state</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th></tr>
+    <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th></tr>
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
 </table>
@@ -108,10 +108,8 @@ function serverRowHtml(row: DocketRow): string {
     : '<span class="muted">no session</span>'
   return '<tr>'
     + `<td>${serverEscapeHtml(row.task)}</td>`
-    + `<td>${serverEscapeHtml(row.state)}</td>`
     + `<td>${pace}</td>`
     + `<td>${serverEscapeHtml(row.branch)} <span class="muted">from ${serverEscapeHtml(serverBaseLabel(row.base))}</span></td>`
-    + `<td>${serverAge(row.stateAgeSeconds)}</td>`
     + `<td>${inPhase}</td>`
     + `<td>${move}</td>`
     + `<td>${session}</td>`
@@ -175,10 +173,8 @@ function pageScript(): string {
       : '<span class="muted">no session</span>'
     return '<tr>'
       + '<td>' + escapeHtml(row.task) + '</td>'
-      + '<td>' + escapeHtml(row.state) + '</td>'
       + '<td>' + pace + '</td>'
       + '<td>' + escapeHtml(row.branch) + ' <span class="muted">from ' + escapeHtml(baseLabel(row.base)) + '</span></td>'
-      + '<td>' + age(row.stateAgeSeconds) + '</td>'
       + '<td>' + inPhase + '</td>'
       + '<td>' + move + '</td>'
       + '<td>' + session + '</td>'
