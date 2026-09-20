@@ -264,19 +264,23 @@ it('asks for the docket again on its own, on a short interval', async () => {
 
 // Requirement: The page refreshes itself, and its numbers move only when an answer does
 // Scenario: Every age is shown exactly as the last answer held it, never advanced in the browser
-// GIVEN an answer whose TASK has stood in its word for 7541 seconds, last moved 90 seconds ago, and stood in its phase for 6000 seconds, and a second TASK 45 seconds into its word with no heartbeat and no phase
+// GIVEN an answer whose TASK has stood in its phase for 6000 seconds and last moved 90 seconds ago, a TASK 250 seconds into its phase that last moved 12 seconds ago, and a TASK with neither a heartbeat nor a phase
 // WHEN the page renders it, and its interval fires holding the same answer
-// THEN the row shows each age spelled from the answered numbers — the word's age, the move's age, and the phase's age each on their own — and no number moved when the timer fired: the page touches no global that can read a time
+// THEN the rows show the two ages the page carries — the phase age and the heartbeat age, each spelled from its own answered number — and spell the missing heartbeat and the missing phase as absences, and no number moved when the timer fired: the page touches no global that can read a time
 it('shows every age exactly as the last answer held it', async () => {
   const page = await renderPageWith(ANSWER)
   const rows = page.elements.get('rows')?.innerHTML ?? ''
 
   // Spellings that cannot be substrings of one another, so each age is pinned on its own.
-  expect(rows).toContain('2h 5m 41s')
-  expect(rows).toContain('1m 30s')
-  expect(rows).toContain('45s')
-  expect(rows).toContain('no heartbeat')
   expect(rows).toContain('1h 40m 0s')
+  expect(rows).toContain('1m 30s')
+  expect(rows).toContain('4m 10s')
+  expect(rows).toContain('12s')
+  expect(rows).toContain('no heartbeat')
+  // The missing phase age is spelled as its own absence — the dash — never as a repeat of
+  // another number the row carries: the settled row's state age standing in would pass
+  // every other assertion here.
+  expect(rows).toContain('—')
 
   page.renewals[0]!()
   await page.flush()
@@ -307,17 +311,39 @@ it('shows the attach command and the ruling command as copyable text', async () 
 
 // Requirement: The docket answers on a page
 // Scenario: The page shows the TASK's phase word, its round, and how long it has stood there
-// GIVEN an answer holding a TASK at phase test-review round 2 for 6000 seconds, and a TASK with no phase file
+// GIVEN an answer holding a TASK at phase test-review round 2 for 6000 seconds, a TASK at phase plan round 1, and a TASK with no phase file
 // WHEN the page renders it
-// THEN the first row shows the phase word and its round and the phase age spelled from the answered number, and the second spells the absence as an absence — never a word or a number invented for it
+// THEN every phased row shows the phase word with its round beside it — round 1 as much as round 2 — and the phase age spelled from the answered number; the TASK with no phase file spells the absence as an absence, the same way a missing heartbeat is spelled, never the state word or a number standing in for it; and the state word and its age appear nowhere in the rows — the page carries the phase word where the state word stood
 it('shows the phase word, its round, and its age on the row', async () => {
   const { elements } = await renderPageWith(ANSWER)
   const rows = elements.get('rows')?.innerHTML ?? ''
 
-  expect(rows).toContain('test-review')
-  expect(rows).toContain('round 2')
-  expect(rows).toContain('1h 40m 0s')
+  // The phase word stands where the state word stood — the cell right after the TASK's —
+  // with its round on it, and each phased row's age from its own answered number: the
+  // round-1 row's age as much as the round-2 row's.
+  expect(rows).toContain('<td>alpha</td><td>test-review round 2</td>')
+  expect(rows).toContain('<td>stacked</td><td>plan round 1</td>')
+  expect(rows).toContain('<td>1h 40m 0s</td><td>1m 30s</td>')
+  expect(rows).toContain('<td>4m 10s</td><td>12s</td>')
+  // The no-phase TASK's absences are spelled as absences — the word's own absence and
+  // the phase age's dash, the word-spelled way a missing heartbeat is — never the state
+  // word or a number standing in: a renderer standing the row's state age into the open
+  // cell passes every expectation above.
   expect(rows).toContain('no phase')
+  expect(rows).toContain('no heartbeat')
+  expect(rows).toContain('—')
+
+  // The state word and its age are the JSON's facts, not the page's: every state word the
+  // fixture carries and every one of its three state-age spellings is asserted absent —
+  // each row's own age included, so no age can stand in anywhere another cell leaves open.
+  // The same-bytes test equates this half with the shipped one, so one assertion pins both
+  // renderers.
+  expect(rows).not.toContain('building')
+  expect(rows).not.toContain('merged')
+  expect(rows).not.toContain('queued')
+  expect(rows).not.toContain('2h 5m 41s')
+  expect(rows).not.toContain('45s')
+  expect(rows).not.toContain('5m 0s')
 })
 
 // Requirement: The docket answers on a page
@@ -390,13 +416,13 @@ it('carries one cell per column the header names', () => {
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: A live text selection inside the rows holds the refresh's swap, so a copy in progress survives
 // GIVEN a page rendered over one answer, and a non-collapsed text selection inside its rows — a copy of the attach command in progress
-// WHEN the refresh lands a different answer, and then another lands with no selection live
+// WHEN the refresh lands a different answer — the TASKs' branches changed — and then another lands with no selection live
 // THEN the rows stand as the copied answer held them through the first refresh, and the second swaps them — the page's own refresh never defeats the page's copy affordance
 it('holds the rows while a selection lives inside them', async () => {
   const page = await renderPageWith(ANSWER)
   const copied = page.elements.get('rows')?.innerHTML
   page.selectWithin('rows')
-  page.setAnswer({ ...ANSWER, rows: ANSWER.rows.map(row => ({ ...row, state: 'mergeable' })) })
+  page.setAnswer({ ...ANSWER, rows: ANSWER.rows.map(row => ({ ...row, branch: 'work/renamed' })) })
 
   page.renewals[0]!()
   await page.flush()
@@ -405,7 +431,7 @@ it('holds the rows while a selection lives inside them', async () => {
   page.clearSelection()
   page.renewals[0]!()
   await page.flush()
-  expect(page.elements.get('rows')?.innerHTML).toContain('mergeable')
+  expect(page.elements.get('rows')?.innerHTML).toContain('work/renamed')
 })
 
 // Requirement: The page shows commands and offers no control that runs them
