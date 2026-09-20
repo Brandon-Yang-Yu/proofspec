@@ -99,16 +99,30 @@ and asks nothing of a human.
 
 ### Requirement: A merged TASK's queue entry is pruned once nothing still names it
 
-A queue entry whose TASK's state has reached merged SHALL be removed by a scheduling pass
-once no in-flight TASK's `base.task` still names it, and SHALL NOT be removed before that.
+A queue entry whose TASK's state has reached merged SHALL be pruned by a scheduling pass
+once no in-flight TASK's `base.task` still names it, and SHALL NOT be pruned before that.
+Pruning SHALL move the entry whole into the archive directory `.proofspec/archive/<task>/`
+rather than delete it: every file the entry held — its MANIFEST, its `state` file, its LEASE,
+its `INTENT` and `acceptance.md`, its `heartbeat`, its `phase` — arrives in the archive
+exactly as it stood, and nothing of the entry remains in the queue directory. Nothing SHALL
+rewrite an archived entry afterwards.
 
-A merged entry has to keep standing for as long as some other TASK's basedOn claim might
-still ask about it: deleting it early is exactly what would flip a graceful "based on a TASK
-that merged" into a false "based on a TASK the queue holds no record of at all," naming a
-TASK that in fact finished cleanly. Once no in-flight TASK names it any more, that risk is
-gone and nothing is served by keeping it. The criterion is answerable from the same graph
-`inflight` already computes — every in-flight TASK's `base` — so pruning needs no bookkeeping
-of its own to decide when a name has gone quiet.
+The timing criterion is unchanged. A merged entry has to keep standing for as long as some
+other TASK's basedOn claim might still ask about it: pruning early is exactly what would
+flip a graceful "based on a TASK that merged" into a false "based on a TASK the queue holds
+no record of at all," naming a TASK that in fact finished cleanly. Once no in-flight TASK
+names it any more, that risk is gone, and the entry leaves the queue for the archive. The
+criterion is answerable from the same graph `inflight` already computes — every in-flight
+TASK's `base` — so pruning needs no bookkeeping of its own to decide when a name has gone
+quiet.
+
+The archive is the record of finished work, and it is kept rather than cleaned: completed
+TASKs stay readable so the work can be read and analyzed later. Deleting a pruned entry
+would be cleaner, and would leave nothing to analyze. The entry moves as it stands and is
+never rewritten afterwards, so an archived entry is what the TASK's entry held at the
+moment it finished, not a summary written for a later reader. Listing the archive directory
+alone answers which TASKs are done. The word prune keeps its meaning — removal from the
+queue directory — and what changed is where the removed entry goes.
 
 <!-- scenarios: generated -->
 - "A merged TASK an in-flight TASK still names is kept" → tests/schedule/end-to-end.test.ts
@@ -556,17 +570,22 @@ yet needs more than that.
 
 `enqueue(cwd, task, manifest)` (`src/cli/queue.ts`) SHALL create a TASK's queue entry — its
 directory, its `MANIFEST`, and an initial state of `queued` written through `writeState` —
-only when no queue entry of that TASK's name already exists, and SHALL refuse, touching
-nothing, when one does, answering `{ok: false, reason}` rather than overwriting it.
+only when no entry of that TASK's name stands in the queue directory and none stands in the
+archive directory `.proofspec/archive/`, and SHALL refuse, touching nothing, when either
+does, answering `{ok: false, reason}` rather than overwriting anything. A refusal because
+of the archive SHALL name the archive in its reason.
 
-Two callers racing to enqueue the same TASK name is the same shape of problem two scheduling
-passes racing to take the same LEASE already is, and `enqueue` is built on the same answer:
-the same `wx`-flag atomic-write idiom `takeLease` already uses elsewhere in this file, so the
-check-then-create step two racing calls could otherwise land inside of is collapsed to the one
-filesystem call the OS already makes atomic. There is deliberately no new CLI verb for this —
-nothing calls `proofspec enqueue` from a command line, and none is being added here — `enqueue`
-ships as a plain exported function for a future caller, an "investigator" capability not yet
-built, to use.
+A TASK name is spent once. A name a finished TASK already used stays with that TASK in the
+archive, and is never handed to a new one: two TASKs of one name — one finished in the
+archive, one in flight in the queue — would leave every reader that names TASKs unable to
+say which TASK a name means. Two callers racing to enqueue the same TASK name is the same
+shape of problem two scheduling passes racing to take the same LEASE already is, and
+`enqueue` is built on the same answer: the same `wx`-flag atomic-write idiom `takeLease`
+already uses elsewhere in this file, so the check-then-create step two racing calls could
+otherwise land inside of is collapsed to the one filesystem call the OS already makes
+atomic. There is deliberately no new CLI verb for this — nothing calls `proofspec enqueue`
+from a command line, and none is being added here — `enqueue` ships as a plain exported
+function for a future caller, an "investigator" capability not yet built, to use.
 
 <!-- scenarios: generated -->
 - "Two racing enqueue calls on the same TASK name still create exactly one entry" → tests/schedule/queue.test.ts

@@ -81,11 +81,10 @@ zero commits. The MANIFEST does not restate the intent's text either way, becaus
 description of an edit can disagree with the edit: the branch is the record for a file
 named on it, and the queue entry's `INTENT` file is the record for the reserved name.
 An untracked record can be rewritten with no trace, so an executor reads what the file
-says now, not the text a commit pins; and once the TASK merges and its queue entry is
-pruned, the per-TASK record of what was settled goes with it, while `docs/design.md`
-keeps the mechanism's principles, not the per-TASK decisions. Both are accepted costs
-of keeping a TASK's intent where the queue already keeps its state, on a single-machine
-tool.
+says now, not the text a commit pins. Once the TASK merges and a scheduling pass prunes its
+queue entry, the record moves whole into the archive — `.proofspec/archive/<task>/` — with
+the rest of the entry, and stays readable there (`specs/schedule.md`): the per-TASK record
+of what was settled is kept with the finished TASK.
 
 ### Term: PROMISE
 

@@ -12,9 +12,10 @@ The pipeline this queue belongs to is named Docket (docs/design.md, "Docket"); t
 that word doing its most literal work — showing what is on the docket.
 
 Every fact it answers is read fresh from where some other capability already wrote it: the
-queue directory, the raised-relationships record `schedule` keeps, the heartbeat `progress`
-refreshes, the session list of the tmux server `startSession` runs sessions on. It reports
-only — it writes nothing, judges nothing, dispatches nothing.
+queue directory, the archive the scheduling pass keeps, the raised-relationships record
+`schedule` keeps, the heartbeat `progress` refreshes, the session list of the tmux server
+`startSession` runs sessions on. It reports only — it writes nothing, judges nothing,
+dispatches nothing.
 
 The same answer is served as a page a browser keeps current on its own. A person watching
 the queue does not retype a command at every glance; the docket is left open on a second
@@ -218,6 +219,32 @@ move with it — and two people reading the same open page read the same numbers
 - "Every age is shown exactly as the last answer held it, never advanced in the browser" → tests/docket/page.test.ts
 - "The page asks the server for the docket again on its own, on a short interval" → tests/docket/page.test.ts
 <!-- /scenarios -->
+
+### Requirement: The page answers the archive of completed TASKs
+
+The server SHALL answer a second read — a JSON answer at `/archive` — beside the docket's
+own answer, computed fresh on each request from the archive directory
+`.proofspec/archive/`. It SHALL carry one record per archived TASK, each holding: the
+TASK's name; the branch and base its MANIFEST records; when it was enqueued, read from its
+MANIFEST file's write time; when it was settled, read from its `state` file's write time;
+and how long it lived, the difference between those two times, computed on each request
+and tracked nowhere else. Records SHALL come back ordered by each TASK's start time — the
+enqueued moment — earliest first; the live rows keep their own name sort. The page SHALL
+render the records as a completed section beside its live rows. An empty archive SHALL be
+shown as an absence.
+
+The docket's own answer is untouched by this read: the rows, one-shot and at `/docket`,
+still carry exactly what they carried. What stands on the queue now and what has finished
+are two questions, and the archive is the second one — not more rows of the first, because
+a completed TASK is no longer in flight and standing it among the live rows would say it
+was. Ordering by start time rather than by name makes the completed section a chronology:
+the work shows in the order it began, earliest first, and the live rows keep their own name
+sort because theirs is a different read serving a different question. Every number the
+record carries is computed on the request that asks for it, the same way a live row's ages
+are read from its own files' write times: how long a TASK lived is the difference between
+two write times, and no log of durations is kept anywhere. An empty archive shows as an
+absence rather than a hidden section, the same honesty an empty docket already keeps:
+nothing finished is a fact the page says plainly.
 
 ### Requirement: The page shows commands and offers no control that runs them
 
