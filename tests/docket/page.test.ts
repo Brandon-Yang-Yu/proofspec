@@ -819,6 +819,30 @@ it("keeps both chains' expanded disclosures expanded across its own refresh", as
   expect([...page.elementWrites]).toContain('chain-delta.open')
 })
 
+// Requirement: The docket answers on a page
+// Scenario: A chain's disclosure nobody opened stays closed across a refresh that reopens another's
+// GIVEN a page rendered over two chains, its first chain's disclosure standing open — the way a person's click leaves it — and its second standing closed
+// WHEN the page's own refresh lands a different answer holding the same two chains
+// THEN the opened chain's disclosure stands open on the redrawn rows and the closed chain's stands closed still — the refresh reopens what a person left open and nothing beside it, so one chain's open list is not every chain's
+it("keeps a chain's unopened disclosure closed across a refresh that reopens another's", async () => {
+  const page = await renderPageWith(TWO_CHAINS)
+  page.openDisclosure('chain-beta')
+  page.setAnswer({ ...TWO_CHAINS, rows: TWO_CHAINS.rows.map(row => row.task === 'beta' ? { ...row, branch: 'work/beta-moved' } : row) })
+
+  page.renewals[0]!()
+  await page.flush()
+
+  // The refresh landed — the new branch renders — and carried exactly the one disclosure a
+  // person left open: beta's stands open again by the script's own write, while delta's,
+  // never opened, stands closed on the redraw with no write anywhere that opened it.
+  const rowsHtml = page.elements.get('rows')?.innerHTML ?? ''
+  expect(rowsHtml).toContain('work/beta-moved')
+  expect(page.elements.get('chain-beta')?.open).toBe(true)
+  expect([...page.elementWrites]).toContain('chain-beta.open')
+  expect(page.elements.get('chain-delta')?.open).toBe(false)
+  expect([...page.elementWrites]).not.toContain('chain-delta.open')
+})
+
 /** The chain whose whole landing moves its row: a merged at the root, b merged on it, c
  *  building on b — one row at c's place — until c merges too and the row moves to the
  *  root a, the disclosure's id moving with it. */
@@ -976,6 +1000,64 @@ it("renders a chain whose in-progress member is queued at that member's place, u
   // row does not fall back to its place, muted.
   expect(rowsHtml).not.toContain('<td>held-base')
   expect(rowsHtml).not.toContain('<tr class="muted">')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A chain whose in-progress member is blocked on a question renders its row there, not at its merged root
+// GIVEN an answer holding a merged TASK and a blocked-on-question TASK whose base names it — the member nearest main whose state word is not merged is the blocked one
+// WHEN the page renders it
+// THEN the chain answers one row at the blocked member's place, unmuted, its fraction 1/2 and its disclosure naming both members — not at the merged member's place, muted: in progress means any word but merged, the queue's own blocked word among them
+it("renders a chain whose in-progress member is blocked on a question at that member's place, unmuted", async () => {
+  const questioned: Docket = {
+    rows: [
+      fixtureRow('asked-base', { state: 'merged' }),
+      fixtureRow('asked-child', { state: 'blocked-on-question', base: { kind: 'task', task: 'asked-base', reason: 'built on it' } }),
+    ],
+    problems: [],
+    outstanding: [],
+  }
+  const { elements } = await renderPageWith(questioned)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  // The one row stands at the blocked member's place and opens unmuted — the member nearest
+  // main that is not merged, whatever word it carries.
+  expect((rowsHtml.match(/<tr/g) ?? []).length).toBe(1)
+  expect(rowsHtml).toContain('<tr><td>asked-child<details')
+  expect(rowsHtml).toContain('<details id="chain-asked-child"><summary>1/2</summary>')
+  expect(rowsHtml).toContain('<li>asked-base merged</li><li>asked-child blocked-on-question</li>')
+  // The merged root rides the row — its name stands only inside the disclosure — and the
+  // row does not fall back to its place, muted.
+  expect(rowsHtml).not.toContain('<td>asked-base')
+  expect(rowsHtml).not.toContain('<tr class="muted">')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A fork — two TASKs stacked on the same merged base — is one chain answering one row
+// GIVEN an answer holding a merged TASK with two TASKs built on it at once — a fork, not a line — the two children arriving in the name order the rows carry
+// WHEN the page renders it
+// THEN the entries so linked form one chain and answer ONE row, standing at the first tip's place the name-ordered walk reaches — fork-b's, not fork-c's — unmuted, its fraction 1/3, its disclosure listing all three members in walk order, and neither the merged base nor the second tip renders a row of its own
+it('renders a fork on one merged base as one row at the first tip the walk reaches', async () => {
+  const forked: Docket = {
+    rows: [
+      fixtureRow('fork-base', { state: 'merged' }),
+      fixtureRow('fork-b', { phase: 'build-green', round: 1, base: { kind: 'task', task: 'fork-base', reason: 'built on it' } }),
+      fixtureRow('fork-c', { phase: 'build-green', round: 1, base: { kind: 'task', task: 'fork-base', reason: 'built on it too' } }),
+    ],
+    problems: [],
+    outstanding: [],
+  }
+  const { elements } = await renderPageWith(forked)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  // The whole fork answers one row — the three entries one chain — standing at the first
+  // tip the name-ordered walk reaches, unmuted, its fraction counting the landed base over
+  // all three members, its disclosure listing them in walk order: the base, then each tip.
+  expect((rowsHtml.match(/<tr/g) ?? []).length).toBe(1)
+  expect(rowsHtml).toContain('<tr><td>fork-b<details id="chain-fork-b"><summary>1/3</summary><ul><li>fork-base merged</li><li>fork-b building</li><li>fork-c building</li></ul></details>')
+  // Neither the merged base nor the second tip renders a row of its own — a renderer that
+  // answered a row per branch-tip would spell fork-c's name cell here.
+  expect(rowsHtml).not.toContain('<td>fork-base')
+  expect(rowsHtml).not.toContain('<td>fork-c')
 })
 
 // Requirement: The docket answers on a page
