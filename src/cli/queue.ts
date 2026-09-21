@@ -15,6 +15,10 @@ import { compareStrings } from '../order.ts'
  */
 
 const QUEUE_DIR = ['.proofspec', 'dispatch'] as const
+/** Where a pruned queue entry goes: whole, exactly as it stood, never rewritten afterwards.
+ *  A sibling of the queue directory under `.proofspec/` — the same root this tool's own
+ *  conventions already keep — and the one place that answers which TASKs are finished. */
+const ARCHIVE_DIR = ['.proofspec', 'archive'] as const
 const MANIFEST_FILE = 'MANIFEST'
 const STATE_FILE = 'state'
 const LEASE_FILE = 'LEASE'
@@ -309,4 +313,47 @@ export async function enqueue(cwd: string, task: string, manifest: Manifest): Pr
   }
   await writeState(cwd, task, 'queued')
   return { ok: true }
+}
+
+/** The archive as a whole, or the reason the directory itself could not be listed. */
+export type ArchiveRead =
+  | { readonly ok: true; readonly entries: readonly ArchivedEntry[] }
+  | { readonly ok: false; readonly reason: string }
+
+/** One archived TASK's entry as read: its MANIFEST as raw text, plus the two write times the
+ *  docket's completed records read — the MANIFEST's for the enqueued moment, the `state`
+ *  file's for the settled one. Tracked nowhere else, the same way a live row's ages are read
+ *  from its own files' write times. */
+export type ArchivedEntry = {
+  readonly task: string
+  readonly manifest: string
+  readonly manifestWrittenAt: number
+  readonly stateWrittenAt: number
+}
+
+/**
+ * Every archived TASK's entry. A directory that does not exist holds no finished TASK yet —
+ * the ordinary state until the first prune archives — and answers an empty list; one that
+ * exists but cannot be listed is refused, the same refusal `readQueue` answers with.
+ */
+export async function readArchive(cwd: string): Promise<ArchiveRead> {
+  const dir = join(cwd, ...ARCHIVE_DIR)
+  const names = await listTaskDirs(dir)
+  if (names === undefined) return { ok: false, reason: `${dir} could not be read` }
+  const read = await Promise.all(names.map(task => archivedEntry(dir, task)))
+  return { ok: true, entries: read.filter(entry => entry !== undefined) }
+}
+
+/** One archived entry's read, or nothing when it stands without its MANIFEST or its `state`
+ *  file: entries arrive whole by construction (the prune moves them untouched), and one that
+ *  stands damaged was damaged by hand — a fact about that entry, not a reason to hide every
+ *  other finished TASK behind it. */
+async function archivedEntry(dir: string, task: string): Promise<ArchivedEntry | undefined> {
+  const [manifest, manifestWrittenAt, stateWrittenAt] = await Promise.all([
+    readOptional(join(dir, task, MANIFEST_FILE)),
+    mtimeOf(join(dir, task, MANIFEST_FILE)),
+    mtimeOf(join(dir, task, STATE_FILE)),
+  ])
+  if (manifest === undefined || manifestWrittenAt === undefined || stateWrittenAt === undefined) return undefined
+  return { task, manifest, manifestWrittenAt, stateWrittenAt }
 }

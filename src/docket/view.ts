@@ -39,6 +39,31 @@ export type TaskPhase = {
   readonly writtenAt: number
 }
 
+/** One archived TASK's entry as read from the archive directory: its MANIFEST as raw text,
+ *  plus the two write times every number the record carries is read from — the MANIFEST's
+ *  for when the TASK was enqueued, the `state` file's for when it was settled. Tracked
+ *  nowhere else, the same way a live row's ages are read from its own files' write times.
+ *  The same shape `readArchive` (`src/cli/queue.ts`) answers, restated here so this
+ *  capability depends on nothing outside it — the same restatement `QueueEntryRead` makes. */
+export type ArchiveEntryRead = {
+  readonly task: string
+  readonly manifest: string
+  readonly manifestWrittenAt: number
+  readonly stateWrittenAt: number
+}
+
+/** One completed TASK as the archive answers it: the TASK's name, the branch and base its
+ *  MANIFEST records, when it was enqueued, when it was settled, and how long it lived — the
+ *  last three read from the entry's own file write times on the request that asks for them. */
+export type ArchiveRecord = {
+  readonly task: string
+  readonly branch: string
+  readonly base: ManifestBase
+  readonly enqueuedAt: string
+  readonly settledAt: string
+  readonly livedSeconds: number
+}
+
 /** Whether the dedicated tmux server still holds a session named for the TASK. A listed
  * session carries its exact attach command; an absent one carries nothing, because there is
  * nothing further to ask about it. */
@@ -154,6 +179,34 @@ export function docketView(input: {
     })
   }
   return { rows, problems, outstanding: outstandingRulings(input.raised) }
+}
+
+/** The archive over facts already read: one record per archived TASK, ordered by each
+ *  TASK's start time — the enqueued moment — earliest first, so the completed section reads
+ *  as a chronology of the work rather than a second name-sorted list. An entry whose
+ *  MANIFEST cannot be parsed is skipped rather than answered half-invented: entries arrive
+ *  whole by construction (the prune moves them untouched), and a hand-damaged archive is
+ *  outside what this view promises to judge. */
+export function archiveView(entries: readonly ArchiveEntryRead[]): readonly ArchiveRecord[] {
+  const started = [...entries].sort(
+    (a, b) => a.manifestWrittenAt - b.manifestWrittenAt || compareStrings(a.task, b.task),
+  )
+  const records: ArchiveRecord[] = []
+  for (const entry of started) {
+    const manifest = readManifest(entry.manifest)
+    if (!manifest.ok) continue
+    records.push({
+      task: entry.task,
+      branch: manifest.manifest.branch,
+      base: manifest.manifest.base,
+      enqueuedAt: new Date(entry.manifestWrittenAt).toISOString(),
+      settledAt: new Date(entry.stateWrittenAt).toISOString(),
+      // Never negative: a settle that reads before its own enqueue is a clock that moved,
+      // not a TASK that finished before it began — the same floor `secondsAgo` keeps.
+      livedSeconds: Math.max(0, Math.floor((entry.stateWrittenAt - entry.manifestWrittenAt) / 1000)),
+    })
+  }
+  return records
 }
 
 function sessionFor(task: string, sessions: ReadonlyMap<string, string>): SessionWhereabouts {

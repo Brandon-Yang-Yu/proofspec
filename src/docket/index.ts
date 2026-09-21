@@ -1,6 +1,8 @@
-export { docketView, outstandingRulings, relationshipFromKey } from './view.ts'
+export { docketView, outstandingRulings, relationshipFromKey, archiveView } from './view.ts'
 export { docketPage, PAGE_REFRESH_MILLISECONDS } from './page.ts'
 export type {
+  ArchiveEntryRead,
+  ArchiveRecord,
   Docket,
   DocketActions,
   DocketProblem,
