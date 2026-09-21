@@ -1,16 +1,18 @@
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { docketPage } from '../docket/index.ts'
+import { archiveView, docketPage } from '../docket/index.ts'
 import type { DocketActions } from '../docket/index.ts'
+import { readArchive } from './queue.ts'
 import { renderAnswer } from './render.ts'
 import { docket } from './run.ts'
 
 /**
  * The docket served over HTTP. `cli` is the one capability that owns the process, so it owns
- * the socket: this answers the page at `/` and the JSON the page reads at `/docket`, and
- * answers nothing else. Each request runs the same read the one-shot command makes, made
- * again at that moment — the server holds no facts of its own, caches nothing, and predicts
- * nothing, which is the honesty the page is built on.
+ * the socket: this answers the page at `/`, the JSON the page reads at `/docket`, and the
+ * archive's own JSON at `/archive`, and answers nothing else. Each request runs the same
+ * read the one-shot command makes, made again at that moment — the server holds no facts
+ * of its own, caches nothing, and predicts nothing, which is the honesty the page is built
+ * on.
  *
  * Serving runs until `stop` is called: the listener itself is what keeps a process alive,
  * and stopping it ends that. The loopback is the default interface — the docket names this
@@ -130,20 +132,34 @@ type Answering = {
 }
 
 /**
- * The two paths the page needs and nothing more. A request for anything else — or by any
- * method other than GET — is a 404, because the page's requests are its refreshes and a
- * server that answered more would be inviting controls the page refuses to hold.
+ * The paths the page needs and nothing more. A request for anything else — or by any method
+ * other than GET — is a 404, because the page's requests are its refreshes and a server
+ * that answered more would be inviting controls the page refuses to hold.
  */
 async function answer(request: IncomingMessage, response: ServerResponse, ask: Answering): Promise<void> {
   const path = new URL(request.url ?? '/', 'http://localhost').pathname
-  if (request.method !== 'GET' || (path !== '/' && path !== '/docket')) {
+  if (request.method !== 'GET' || (path !== '/' && path !== '/docket' && path !== '/archive')) {
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
     response.end('not found')
     return
   }
-  // The same read the one-shot command makes, made again for this request — for the JSON the
-  // page reads and for the page itself alike: the page ships with the docket already in it,
-  // so even a browser that never runs its script reads the queue as this moment holds it.
+  if (path === '/archive') {
+    // The archive is its own read, made again for this request exactly as the docket's is:
+    // the records' moments are the archived files' own write times, and nothing about them
+    // is held from an earlier answer.
+    const archive = await readArchive(ask.options.cwd)
+    if (!archive.ok) {
+      response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end(archive.reason)
+      return
+    }
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ records: archiveView(archive.entries) }))
+    return
+  }
+  // The same read the one-shot command makes, made again for this request — shared by the
+  // page and the JSON it reads, and kept independent of the archive read below: a `/docket`
+  // request never touches the archive, so it can never die on it.
   const outcome = await docket({ cwd: ask.options.cwd, docket: ask.options.docket, now: ask.clock() })
   if (outcome.kind !== 'docket') {
     response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
@@ -151,8 +167,16 @@ async function answer(request: IncomingMessage, response: ServerResponse, ask: A
     return
   }
   if (path === '/') {
+    // The page carries both reads — the docket above and the archive here — the archive
+    // computed fresh at this request's own moment, exactly as the docket was.
+    const archive = await readArchive(ask.options.cwd)
+    if (!archive.ok) {
+      response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end(archive.reason)
+      return
+    }
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-    response.end(docketPage(outcome.report))
+    response.end(docketPage(outcome.report, archiveView(archive.entries)))
     return
   }
   response.writeHead(200, { 'content-type': 'application/json' })

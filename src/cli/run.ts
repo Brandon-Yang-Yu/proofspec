@@ -38,7 +38,7 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { readIntentDoc, readPhase, reclaimLease, readLease, readQueue, recordsFrom, removeQueueEntry, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
+import { archiveQueueEntry, readIntentDoc, readPhase, reclaimLease, readLease, readQueue, recordsFrom, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
 import { commandLine, listTmuxSessions, tmuxAttachCommand } from './session.ts'
 import { settleTask } from './settle.ts'
@@ -1238,7 +1238,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   }
 
   const pruned = entriesToPrune(gathered.records)
-  for (const task of pruned) await removeQueueEntry(options.cwd, task)
+  for (const task of pruned) await archiveQueueEntry(options.cwd, task)
 
   const started: string[] = []
   const blocked: string[] = []

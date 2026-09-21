@@ -1,6 +1,6 @@
 // Capability: schedule
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { enqueue, writeState } from '../../src/cli/queue.ts'
@@ -24,6 +24,19 @@ async function stateOf(root: string, task: string): Promise<string> {
 
 async function manifestOf(root: string, task: string): Promise<unknown> {
   return JSON.parse(await readFile(join(root, '.proofspec', 'dispatch', task, 'MANIFEST'), 'utf8'))
+}
+
+/** An archived entry as the prune leaves one: the TASK's whole entry standing in
+ *  `.proofspec/archive/<task>/`, its files exactly as they stood. */
+async function writeArchived(root: string, task: string, files: { readonly manifest?: string; readonly state?: string }): Promise<void> {
+  const dir = join(root, '.proofspec', 'archive', task)
+  await mkdir(dir, { recursive: true })
+  if (files.manifest !== undefined) await writeFile(join(dir, 'MANIFEST'), files.manifest)
+  if (files.state !== undefined) await writeFile(join(dir, 'state'), files.state)
+}
+
+async function archivedManifestOf(root: string, task: string): Promise<unknown> {
+  return JSON.parse(await readFile(join(root, '.proofspec', 'archive', task, 'MANIFEST'), 'utf8'))
 }
 
 // Requirement: writeState overwrites a TASK's state file with exactly the word it is given
@@ -73,6 +86,39 @@ it('refuses a TASK name already in the queue, leaving its entry untouched', asyn
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('a') })
   expect(await manifestOf(repo.root, 'a')).toEqual(MANIFEST)
   expect(await stateOf(repo.root, 'a')).toBe('building')
+})
+
+// Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
+// Scenario: A TASK name already standing in the archive is refused, naming the archive
+// GIVEN an archived entry already stands for a TASK name
+// WHEN enqueue is called with that same TASK name
+// THEN it refuses, naming the archive in its reason, and the archived entry is untouched with no queue entry created
+it('refuses a TASK name already standing in the archive, leaving the archive untouched', async () => {
+  const repo = await makeRepo({})
+  await writeArchived(repo.root, 'a', { manifest: JSON.stringify(MANIFEST), state: 'merged' })
+  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2', base: { kind: 'main' } }
+
+  const result = await enqueue(repo.root, 'a', attempted)
+
+  expect(result).toEqual({ ok: false, reason: expect.stringContaining('archive') })
+  expect(await archivedManifestOf(repo.root, 'a')).toEqual(MANIFEST)
+  await expect(access(join(repo.root, '.proofspec', 'dispatch'))).rejects.toThrow()
+})
+
+// Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
+// Scenario: A TASK name no archived entry holds enqueues while the archive stands
+// GIVEN an archive already holding one finished TASK, and a different TASK name not yet in the queue
+// WHEN enqueue is called with that new name
+// THEN it creates the new TASK's entry — the archive's presence alone refuses nothing, only a name it holds is spent
+it('enqueues a fresh name while the archive stands, refusing nothing', async () => {
+  const repo = await makeRepo({})
+  await writeArchived(repo.root, 'old', { manifest: JSON.stringify(MANIFEST), state: 'merged' })
+
+  const result = await enqueue(repo.root, 'new', { ...MANIFEST, branch: 'work/new' })
+
+  expect(result).toEqual({ ok: true })
+  expect(await stateOf(repo.root, 'new')).toBe('queued')
+  expect(await archivedManifestOf(repo.root, 'old')).toEqual(MANIFEST)
 })
 
 // Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there

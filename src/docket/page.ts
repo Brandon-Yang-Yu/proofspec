@@ -1,22 +1,23 @@
-import type { Docket, DocketRow, OutstandingRuling } from './view.ts'
+import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling } from './view.ts'
 
 /**
  * The docket's page: the view's answer spelled for a browser. Pure content — a string, not
  * a server — because the docket reads no files and runs no processes; `cli` owns the socket
  * the page arrives on, the same split the view itself keeps.
  *
- * The page is written with its answer already in it: the rows, the problems, and the rulings
- * ship as content a browser shows before any script runs — the page is the view asked again,
- * not an empty shell around a script. The script inline in the page is the whole of the
- * page's behavior after that: it asks `/docket` again on its own, renders exactly the answer
- * it last received, and does nothing else. It keeps no clock of its own — an age the browser
- * inflated between answers would be a performance of the fact rather than the fact — and no
- * control that runs anything: every action the queue knows how to take has a command that
- * takes it, and the page shows those commands as text rather than becoming a second place to
- * run them. The one exception it makes to re-rendering everything: while a person's text
- * selection lives anywhere on the page, the whole answer is left standing for that round —
- * the commands this page shows are meant to be copied, and a refresh that tore a selection
- * out from under the copy would defeat the page's own copy affordance.
+ * The page is written with its answer already in it: the rows, the completed records, the
+ * problems, and the rulings ship as content a browser shows before any script runs — the
+ * page is the view asked again, not an empty shell around a script. The script inline in
+ * the page is the whole of the page's behavior after that: it asks `/docket` and `/archive`
+ * again on its own, renders exactly the answers it last received, and does nothing else. It
+ * keeps no clock of its own — an age the browser inflated between answers would be a
+ * performance of the fact rather than the fact — and no control that runs anything: every
+ * action the queue knows how to take has a command that takes it, and the page shows those
+ * commands as text rather than becoming a second place to run them. The one exception it
+ * makes to re-rendering everything: while a person's text selection lives anywhere on the
+ * page, the whole answer is left standing for that round — the commands this page shows are
+ * meant to be copied, and a refresh that tore a selection out from under the copy would
+ * defeat the page's own copy affordance.
  *
  * The shipped rows and the script-rendered rows come from two renderers — one spelled in
  * TypeScript for the markup the server answers, one in JavaScript for the refresh — that
@@ -28,9 +29,10 @@ import type { Docket, DocketRow, OutstandingRuling } from './view.ts'
  *  current, long enough that a page left open is a handful of requests a minute. */
 export const PAGE_REFRESH_MILLISECONDS = 2000
 
-/** The page a browser opens: one table of rows, the problems that kept a TASK off the rows,
- *  and the rulings still outstanding with the command that pays each. */
-export function docketPage(report: Docket): string {
+/** The page a browser opens: the queue's rows, the completed TASKs the archive holds beside
+ *  them, the problems that kept a TASK off the rows, and the rulings still outstanding with
+ *  the command that pays each. */
+export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -48,12 +50,21 @@ export function docketPage(report: Docket): string {
 </head>
 <body>
 <h1>Docket</h1>
+<h2>queue</h2>
 <p id="empty"${report.rows.length === 0 ? '' : ' hidden'}>no TASK in the queue</p>
 <table>
   <thead>
     <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th></tr>
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
+</table>
+<h2>completed</h2>
+<p id="archive-empty"${archive.length === 0 ? '' : ' hidden'}>no completed TASK yet</p>
+<table>
+  <thead>
+    <tr><th scope="col">TASK</th><th scope="col">branch</th><th scope="col">enqueued</th><th scope="col">settled</th><th scope="col">lived</th></tr>
+  </thead>
+  <tbody id="archive-rows">${archive.map(serverArchiveRowHtml).join('')}</tbody>
 </table>
 <h2 id="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>problems</h2>
 <ul id="problems">${report.problems.map(serverProblemHtml).join('')}</ul>
@@ -89,6 +100,15 @@ function serverAge(seconds: number): string {
   return `${s}s`
 }
 
+/** A moment as the page spells it: the record's own ISO string with the milliseconds trimmed —
+ *  a precision a person reading the page does not use, kept whole in the JSON a program reads.
+ *  The pattern spells its dot and its digits in character classes on purpose: the script twin
+ *  below lives inside a template literal, where an escaped dot would be eaten as a string
+ *  escape — a backslash-free pattern is the one spelling both halves can share exactly. */
+function serverMoment(iso: string): string {
+  return serverEscapeHtml(iso.replace(/[.][0-9]{3}Z$/, 'Z'))
+}
+
 function serverBaseLabel(base: DocketRow['base']): string {
   return base.kind === 'main' ? 'main' : base.task
 }
@@ -118,6 +138,16 @@ function serverRowHtml(row: DocketRow): string {
 
 function serverProblemHtml(problem: { readonly task: string; readonly reason: string }): string {
   return `<li>${serverEscapeHtml(problem.task)}: ${serverEscapeHtml(problem.reason)}</li>`
+}
+
+function serverArchiveRowHtml(record: ArchiveRecord): string {
+  return '<tr>'
+    + `<td>${serverEscapeHtml(record.task)}</td>`
+    + `<td>${serverEscapeHtml(record.branch)} <span class="muted">from ${serverEscapeHtml(serverBaseLabel(record.base))}</span></td>`
+    + `<td>${serverMoment(record.enqueuedAt)}</td>`
+    + `<td>${serverMoment(record.settledAt)}</td>`
+    + `<td>${serverAge(record.livedSeconds)}</td>`
+    + '</tr>'
 }
 
 function serverRulingHtml(ruling: OutstandingRuling): string {
@@ -158,6 +188,14 @@ function pageScript(): string {
     return base.kind === 'main' ? 'main' : base.task
   }
 
+  // A moment as the page spells it — the record's own ISO string with the milliseconds
+  // trimmed, the same trim the shipped half makes, so the two renderers stay byte for byte.
+  // The character-class pattern matches the shipped half's for the same reason it gives:
+  // this script lives inside a template literal, where an escaped dot would be eaten.
+  function moment(iso) {
+    return escapeHtml(iso.replace(/[.][0-9]{3}Z$/, 'Z'))
+  }
+
   function rowHtml(row) {
     var pace = row.phase === null
       ? '<span class="muted">no phase</span>'
@@ -178,6 +216,16 @@ function pageScript(): string {
       + '<td>' + inPhase + '</td>'
       + '<td>' + move + '</td>'
       + '<td>' + session + '</td>'
+      + '</tr>'
+  }
+
+  function archiveRowHtml(record) {
+    return '<tr>'
+      + '<td>' + escapeHtml(record.task) + '</td>'
+      + '<td>' + escapeHtml(record.branch) + ' <span class="muted">from ' + escapeHtml(baseLabel(record.base)) + '</span></td>'
+      + '<td>' + moment(record.enqueuedAt) + '</td>'
+      + '<td>' + moment(record.settledAt) + '</td>'
+      + '<td>' + age(record.livedSeconds) + '</td>'
       + '</tr>'
   }
 
@@ -219,12 +267,22 @@ function pageScript(): string {
     document.getElementById('rulings').innerHTML = docket.outstanding.map(rulingHtml).join('')
   }
 
-  // The page's one request is its refresh. A failed one keeps the last answer standing; the
-  // next refresh is the retry.
+  function renderArchive(archive) {
+    if (selectionLives()) return
+    document.getElementById('archive-empty').hidden = archive.records.length > 0
+    document.getElementById('archive-rows').innerHTML = archive.records.map(archiveRowHtml).join('')
+  }
+
+  // The page's requests are its refreshes. A failed one keeps the last answer standing; the
+  // next refresh is the retry. The two reads are independent — one failing does not hold the
+  // other's answer back.
   function refresh() {
     fetch('/docket').then(function (response) {
       return response.json()
     }).then(render).catch(function () {})
+    fetch('/archive').then(function (response) {
+      return response.json()
+    }).then(renderArchive).catch(function () {})
   }
 
   refresh()

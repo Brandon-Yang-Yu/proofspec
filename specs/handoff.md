@@ -65,25 +65,30 @@ mapping is total and exact, not an interpretation.
 
 Once its `task` has passed validation, `enqueue_task` SHALL call `enqueue(cwd, task,
 manifest)` (`src/cli/queue.ts`) with the mapped `Manifest` and answer exactly what
-`enqueue()` answers: on a `task` not already in the queue, a queue entry now exists — its
-MANIFEST and a state of `queued` — and `enqueue_task` SHALL report that success; on a `task`
-already in the queue, `enqueue_task` SHALL report `enqueue()`'s own refusal —
-`{ok: false, reason: 'a TASK named <task> is already in the queue'}` — as a value, never as a
-thrown error, and SHALL leave the existing entry untouched.
+`enqueue()` answers. On a `task` whose name neither the queue nor the archive holds, a
+queue entry now exists — its MANIFEST and a state of `queued` — and `enqueue_task` SHALL
+report that success. On a `task` already in the queue, `enqueue_task` SHALL report
+`enqueue()`'s own refusal — `{ok: false, reason: 'a TASK named <task> is already in the
+queue'}` — as a value, never as a thrown error, and SHALL leave the existing entry
+untouched. On a `task` whose name an archived entry already holds, `enqueue_task` SHALL
+report that refusal the same way — a value naming the archive, never a thrown error — with
+the archived entry untouched.
 
 `enqueue_task`'s whole job on top of `enqueue()` is the validation and the flattening above;
 the write outcome itself is `enqueue()`'s to decide, already proven by "enqueue creates a
 queue entry once, and refuses rather than overwrite one already there" in
-`specs/schedule.md`. Re-deciding, retrying, or papering over that refusal here would be a
-second copy of a rule this repo already keeps in one place. A model driving this tool through
-a conversation needs the collision back as an answer it can read and relay to the human, not
-an exception it has to catch — the same reason every other refusal in this tool answers
-`{ok: false, reason}` rather than throwing.
+`specs/schedule.md`, the spent-name refusal included. `enqueue_task` decides nothing
+between the outcomes: it relays `enqueue()`'s answer either way. Re-deciding, retrying, or
+papering over a refusal here would be a second copy of a rule this repo already keeps in
+one place. A model driving this tool through a conversation needs the collision back as an
+answer it can read and relay to the human, not an exception it has to catch — the same
+reason every other refusal in this tool answers `{ok: false, reason}` rather than throwing.
 
 <!-- scenarios: generated -->
 - "A TASK already in the queue is refused, naming the collision, and its existing entry is untouched" → tests/handoff/extension.test.ts
 - "A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued" → tests/handoff/extension.test.ts
 - "A TASK not already in the queue is enqueued with the given base recorded exactly" → tests/handoff/extension.test.ts
+- "A TASK whose name an archived entry already holds is refused as a value naming the archive, with the archived entry untouched" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: census_in_flight answers the queue's census for the repo it runs in, writing nothing

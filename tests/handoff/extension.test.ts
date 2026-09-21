@@ -1,11 +1,11 @@
 // Capability: handoff
 
-import { access, readFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { manifestFrom, runEnqueueTask } from '../../src/handoff/extension.ts'
 import type { EnqueueTaskInput } from '../../src/handoff/extension.ts'
-import { cleanupRepos, makeGitRepo, makeRepo } from '../cli/support.ts'
+import { cleanupRepos, enterTask, makeGitRepo, makeRepo } from '../cli/support.ts'
 import type { ScheduleActions } from '../../src/schedule/index.ts'
 
 afterEach(cleanupRepos)
@@ -27,6 +27,15 @@ async function stateOf(root: string, task: string): Promise<string> {
 
 async function manifestOf(root: string, task: string): Promise<unknown> {
   return JSON.parse(await readFile(join(root, '.proofspec', 'dispatch', task, 'MANIFEST'), 'utf8'))
+}
+
+/** An archived entry as the prune leaves one: the finished TASK's whole entry standing in
+ *  `.proofspec/archive/<task>/`. */
+async function writeArchived(root: string, task: string): Promise<void> {
+  const dir = join(root, '.proofspec', 'archive', task)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'MANIFEST'), JSON.stringify({ intentRef: 'docs/old.md', branch: `work/${task}`, base: { kind: 'main' } }))
+  await writeFile(join(dir, 'state'), 'merged')
 }
 
 // Requirement: A TASK name that is not a plain kebab-case slug is refused before the filesystem is touched
@@ -244,6 +253,31 @@ it('enqueues a fresh TASK with its given base recorded exactly', async () => {
     branch: 'work/a-real-task',
     base: { kind: 'task', task: 'earlier-task', reason: 'built on its branch' },
   })
+})
+
+// Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
+// Scenario: A TASK whose name an archived entry already holds is refused as a value naming the archive, with the archived entry untouched
+// GIVEN an archived entry already stands for a TASK name, and a different TASK sits queued and ready in the queue
+// WHEN enqueue_task is called with the spent name
+// THEN it reports the refusal as a value naming the archive, never a thrown error, the archived entry is untouched, and no scheduling pass runs — the ready TASK is still queued, undisturbed by the tripwire actions a wrongly-triggered pass would have thrown from
+it('refuses a TASK name an archived entry already holds, naming the archive, leaving the archive untouched', async () => {
+  const repo = await makeGitRepo({ 'specs/b.md': '# b\n' })
+  await repo.git(['branch', 'work/a-real-task'])
+  await enterTask(repo, 'other', { edit: 'specs/b.md' })
+  await writeArchived(repo.root, 'a-real-task')
+  const refusing: ScheduleActions = {
+    startSession: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    countSessions: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    judge: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    notifyHuman: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+  }
+
+  const result = await runEnqueueTask(repo.root, VALID_INPUT, refusing)
+
+  expect(result).toEqual({ ok: false, reason: expect.stringContaining('archive') })
+  await expect(readFile(join(repo.root, '.proofspec', 'archive', 'a-real-task', 'MANIFEST'), 'utf8')).resolves.toContain('docs/old.md')
+  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'other', 'state'), 'utf8')).resolves.toBe('queued')
+  await expect(access(join(repo.root, '.proofspec', 'dispatch', 'a-real-task'))).rejects.toThrow()
 })
 
 // Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
