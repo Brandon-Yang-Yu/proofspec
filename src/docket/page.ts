@@ -279,8 +279,9 @@ function serverRowHtml(group: ChainGroup): string {
   const phase = row.phase === null
     ? '<span class="muted">no phase</span>'
     : `<span class="phase">${serverEscapeHtml(row.phase)}</span>`
-  // The round is null exactly when the phase is — the type pins it — so the phase's own
-  // check covers the round's absence too.
+  // The round is null exactly when the phase is — the view's own construction couples them
+  // (round falls back to null with the phase), so the phase's own check covers the round's
+  // absence too.
   const round = row.phase === null
     ? '<span class="muted">—</span>'
     : String(row.round)
@@ -460,8 +461,9 @@ function pageScript(): string {
     var phase = row.phase === null
       ? '<span class="muted">no phase</span>'
       : '<span class="phase">' + escapeHtml(row.phase) + '</span>'
-    // The round is null exactly when the phase is — the type pins it — so the phase's own
-    // check covers the round's absence too.
+    // The round is null exactly when the phase is — the view's own construction couples
+    // them (round falls back to null with the phase), so the phase's own check covers the
+    // round's absence too.
     var round = row.phase === null
       ? '<span class="muted">—</span>'
       : '' + row.round

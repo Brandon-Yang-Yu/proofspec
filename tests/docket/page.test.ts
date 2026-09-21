@@ -12,16 +12,6 @@ import type {
   PhaseHistoryEntry,
 } from '../../src/docket/index.ts'
 
-/** An answer worth a second screen, walking every rendering branch the page holds: a
- *  working TASK with a session, a two-member chain — a merged TASK with the frontier TASK
- *  building on it — a merged TASK no entry names, a TASK stacked on one that is not on the
- *  queue, a problem, a debt with its named node, and one whose key names no node at all —
- *  so no literal the script could emit goes unrendered. Its rows also walk the phase
- *  account's every branch: alpha carries a returning word (implement stood, left, and
- *  stood again) with a loop past round 1 and a live standing word, stacked carries a
- *  single-word account at round 1, and settled carries no history at all — so the account
- *  column's presence and its absence are both content the parity assertions compare, not
- *  one of them alone. */
 /** The exact attach command one row carries, named once so the answer that carries it and
  *  the test that reads it back cannot drift apart. */
 const ATTACH = 'tmux -L proofspec attach-session -t alpha'
@@ -42,6 +32,16 @@ const READ_AT = Date.UTC(2025, 0, 1, 12, 0, 0)
 /** One hour in the milliseconds the history's `since` moments are spelled in. */
 const HOUR = 3_600_000
 
+/** An answer worth a second screen, walking every rendering branch the page holds: a
+ *  working TASK with a session, a two-member chain — a merged TASK with the frontier TASK
+ *  building on it — a merged TASK no entry names, a TASK stacked on one that is not on the
+ *  queue, a problem, a debt with its named node, and one whose key names no node at all —
+ *  so no literal the script could emit goes unrendered. Its rows also walk the phase
+ *  account's every branch: alpha carries a returning word (implement stood, left, and
+ *  stood again) with a loop past round 1 and a live standing word, stacked carries a
+ *  single-word account at round 1, and settled carries no history at all — so the account
+ *  column's presence and its absence are both content the parity assertions compare, not
+ *  one of them alone. */
 const ANSWER: Docket = {
   rows: [
     {
