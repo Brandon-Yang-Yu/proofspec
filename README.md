@@ -114,6 +114,16 @@ INTENT doc in `.proofspec/dispatch/retrofit/INTENT`, then `enqueue_task`. A succ
 enqueue immediately triggers a scheduling pass, which starts the executor session as
 soon as capacity allows.
 
+One bootstrap wrinkle, on the first TASK only: a pass reads the spec tree to judge how
+TASKs relate, and a project with no `specs/` yet has none for it to read. Create the
+empty directory once — filling it is the retrofit TASK's own first work — and dispatch
+the TASK:
+
+```sh
+mkdir specs            # the empty tree a pass reads; the retrofit TASK fills it
+npx proofspec schedule # starts the executor session for the retrofit TASK
+```
+
 Every TASK after the first one opens the proper way: start `pi` and talk the intent
 through with the investigator. That conversation — and the disposition review it hands
 you, where you judge the settled prose — is the whole of your synchronous work.
