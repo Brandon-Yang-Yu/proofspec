@@ -1,8 +1,9 @@
 # docket-adoption — acceptance report
 
 Run by the executor session in this worktree, every step for real, following
-`.proofspec/dispatch/docket-adoption/acceptance.md` in the main checkout. Evidence per
-step: the command run and what was observed.
+`.proofspec/dispatch/docket-adoption/acceptance.md` in the main checkout, against the
+README as it stands on this branch (the final guide text, commits through 0a6a5a6).
+Evidence per step: the command run and what was observed.
 
 ## 1. Build and pack — PASS
 
@@ -11,48 +12,37 @@ name, `proofspec-0.1.0.tgz`, in the worktree root (verified present with `ls`).
 
 ## 2. The tarball carries the personas and the extension glue — PASS
 
-`tar -tzf proofspec-0.1.0.tgz` lists, among 272 files:
-
-```
-package/.pi/agents/acceptance-checker.md
-package/.pi/agents/completion-reviewer.md
-package/.pi/agents/executor.md
-package/.pi/agents/guideline-reviewer.md
-package/.pi/agents/implementer.md
-package/.pi/agents/intent-writer.md
-package/.pi/agents/investigator.md
-package/.pi/agents/planner.md
-package/.pi/agents/test-reviewer.md
-package/.pi/extensions/handoff.ts
-package/.pi/extensions/progress.ts
-package/dist/cli/main.js
-```
-
-All nine personas, both glue files, beside `package/dist/cli/main.js`.
+`tar -tzf proofspec-0.1.0.tgz` → 11 paths under `package/.pi/`: the nine persona files
+(acceptance-checker.md, completion-reviewer.md, executor.md, guideline-reviewer.md,
+implementer.md, intent-writer.md, investigator.md, planner.md, test-reviewer.md) and
+both extension glue files (`package/.pi/extensions/handoff.ts`,
+`package/.pi/extensions/progress.ts`), with `package/dist/cli/main.js` present beside
+them (272 files total).
 
 ## 3. Make a scratch project — PASS
 
 `DIR=$(mktemp -d)`, `git init`, `npm init -y`, `tests/smoke.test.ts` written exactly as
 the script gives it. Observed: the file exists, `specs/` does not, `git rev-parse
---is-inside-work-tree` → true (branch `main`, no commits yet).
+--is-inside-work-tree` → true.
 
 ## 4. Install the built package — PASS
 
 `npm install <worktree>/proofspec-0.1.0.tgz` → exit 0, "found 0 vulnerabilities".
-`npx proofspec --help` prints the usage naming `check write render touched review impact
-inflight schedule docket`.
+`npx proofspec --help` exits 0 and its Commands section names all nine: check, write,
+render, touched, review, impact, inflight, schedule, docket.
 
 ## 5. Copy the personas and the extension glue as the guide says — PASS
 
-The README's from-zero copy block was run exactly as written (`mkdir -p`, three `cp`s,
-`echo ".proofspec/" >> .gitignore`, `git add`, `git commit`). All exit 0; the scratch
-`.pi/agents/` holds all nine persona files and its `.pi/extensions/` holds `handoff.ts`
-and `progress.ts`. (The guide's "Commit your tests too, if they are not yet" was also
-followed — `git add tests && git commit`.)
+The README's from-zero copy block run exactly as written: `mkdir -p .pi/agents
+.pi/extensions`, the three `cp`s, `printf '.proofspec/dispatch/\n.proofspec/worktrees/\n'
+>> .gitignore`, `git add .gitignore .pi package.json package-lock.json`, `git commit`.
+All exit 0; the scratch `.pi/agents/` holds all nine persona files (`ls | wc -l` → 9)
+and its `.pi/extensions/` holds `handoff.ts` and `progress.ts`. The guide's "Commit your
+tests too, if they are not yet" was also followed.
 
 ## 6. Follow the guide's first-TASK story — PASS
 
-The guide's step-3 command was run verbatim:
+The guide's step-3 block run exactly as written — `mkdir specs`, then the one-shot:
 
 ```
 pi --approve -p "Queue my first TASK, named retrofit: turn this project into one
@@ -63,9 +53,9 @@ spec prose yet, so this TASK carries an INTENT doc only; there is nothing to set
 a disposition review."
 ```
 
-The session created branch `retrofit` (+ its worktree at `.proofspec/worktrees/retrofit`),
-wrote `.proofspec/dispatch/retrofit/INTENT` (an intent doc for the retrofit), and called
-`enqueue_task`. Observed afterwards:
+The session created branch `retrofit` off `main` with its worktree at
+`.proofspec/worktrees/retrofit`, wrote the INTENT doc, and called `enqueue_task`.
+Observed immediately after:
 
 - `cat .proofspec/dispatch/retrofit/MANIFEST` →
   `{"intentRef":"INTENT","branch":"retrofit","base":{"kind":"main"}}`
@@ -73,21 +63,16 @@ wrote `.proofspec/dispatch/retrofit/INTENT` (an intent doc for the retrofit), an
 - the INTENT file stands, opening `# retrofit — turn this project into one ProofSpec
   can run`.
 
-**Finding from the run:** the scheduling pass the enqueue triggered answered
-`cannot-run: specs could not be read` — `gatherQueue` tolerates a missing `specs/` only
-while the queue is empty, and the from-zero project has none yet. The enqueue itself and
-the entry are unaffected (this step's standard is met); but no pass could dispatch the
-retrofit TASK until `specs/` exists, and creating it is the TASK's own work. Verified
-directly: after `mkdir specs`, `npx proofspec schedule` → `started retrofit`, exit 0, and
-the executor session ran live on the dedicated tmux server. The README now names this
-bootstrap wrinkle and its one-command unblock (commit e954ee2).
+The enqueue-triggered scheduling pass dispatched: the retrofit executor session ran
+live on the dedicated tmux server (`tmux -L proofspec list-sessions` → `retrofit: 1
+windows`), exactly as the guide's prose promises.
 
 ## 7. The docket answers the row — PASS
 
 `npx proofspec docket` → exit 0, one row:
 
 ```
-retrofit  building  no phase  on retrofit from main  in state 13s  no phase  moved 0s ago  tmux -L proofspec attach-session -t retrofit
+retrofit  queued  no phase  on retrofit from main  in state 22s  no phase  moved 0s ago  tmux -L proofspec attach-session -t retrofit
 ```
 
 The row carries the TASK's name and its state word.
@@ -95,14 +80,17 @@ The row carries the TASK's name and its state word.
 ## 8. Open the served page — PASS
 
 `npx proofspec docket --serve` in the background; `curl -s http://127.0.0.1:4567/`
-returns HTML (`<!doctype html> … <title>Docket</title>`) carrying the TASK's name
-(`retrofit` appears in the page); `curl -s http://127.0.0.1:4567/docket` returns the
-JSON row with its state word (`"task":"retrofit","state":"building"`, plus the attach
-line). The server was stopped afterwards (`pkill`), and the executor session started for
-the retrofit TASK was killed and the scratch directory removed once the run's evidence
-was captured.
+returns HTML (`<!doctype html> …`) carrying the TASK's name (one `retrofit` match in
+the page); `curl -s http://127.0.0.1:4567/docket` returns the JSON row with its state
+word (`"task":"retrofit","state":"queued"`, plus the attach line). The server was
+stopped afterwards, the executor session started for the retrofit TASK was killed, and
+the scratch directory was removed once the run's evidence was captured.
 
 ## Verdict
 
-8/8 steps pass on the README's own words. One doc-honesty finding surfaced during the
-run (the bootstrap wrinkle) and was fixed in the README before this report.
+8/8 steps pass on the README's own words, on the final guide text. An earlier run of
+the same script against the pre-0a6a5a6 guide surfaced one finding — the from-zero
+bootstrap wrinkle (a scheduling pass needs `specs/` to stand once the queue is
+non-empty; the guide then taught `mkdir specs` only after the enqueue) — which the
+guide fixed by moving `mkdir specs` ahead of the enqueue ask; this run is the re-run on
+that final text, with the dispatch live and no wrinkle left to teach.
