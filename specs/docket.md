@@ -330,9 +330,10 @@ finished is a fact the page says plainly.
 - "The archive answer is computed fresh on each request" → tests/docket/serve.test.ts
 - "The completed record shows its phase account as the live rows show theirs" → tests/docket/page.test.ts
 - "The completed rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
+- "The completed section stands after the rulings outstanding section" → tests/docket/page.test.ts
 - "The docket's own answer is unchanged by the archive's presence" → tests/docket/serve.test.ts
-- "The page renders the archive's records as a completed section beside its live rows" → tests/docket/page.test.ts
-- "The records come back ordered by start time, earliest first" → tests/docket/serve.test.ts
+- "The page renders the archive's records as a completed section in start order, latest first" → tests/docket/page.test.ts
+- "The records come back ordered by start time, latest first" → tests/docket/serve.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The page shows commands and offers no control that runs them

@@ -307,20 +307,30 @@ it('answers an archived TASK without a phase history as absent, never invented',
 })
 
 // Requirement: The page answers the archive of completed TASKs
-// Scenario: The records come back ordered by start time, earliest first
-// GIVEN an archive holding two completed TASKs whose name order, start order, and settle order all disagree
+// Scenario: The records come back ordered by start time, latest first
+// GIVEN an archive holding three completed TASKs whose name order, start order, and settle order all disagree
 // WHEN the archive's JSON is fetched
-// THEN the records come back in start order, earliest first — neither the names nor the settled moments impose their order here, and the live rows' own name sort is not imposed either
-it('orders the archive records by start time, earliest first', async () => {
+// THEN the records come back in start order, latest first — the TASK enqueued most recently stands first and the earliest last — and neither the names, nor the settled moments, nor the live rows' name sort imposes its order here
+it('orders the archive records by start time, latest first', async () => {
   const { repo, served } = await serveOver({})
-  // zeta started first but settled later; alpha started later but settled first — only the
-  // start order answers, so a sort on settled moments or on names is the wrong sort.
-  await writeArchived(repo.root, 'zeta', { enqueuedAt: ENQUEUED_AT, settledAt: new Date('2025-01-01T11:00:00.000Z') })
-  await writeArchived(repo.root, 'alpha', { enqueuedAt: new Date(ENQUEUED_AT.getTime() + 30 * 60 * 1000), settledAt: SETTLED_AT })
+  // Three TASKs whose three orders all disagree — names alpha/beta/gamma, starts
+  // beta/alpha/gamma (09:40, 09:20, 09:00), settles alpha/beta/gamma (10:30, 10:15, 10:00) —
+  // so the start-descended answer [beta, alpha, gamma] is a permutation no other sort
+  // reaches: name-ascending and settled-descending answer [alpha, beta, gamma],
+  // name-descending and settled-ascending answer [gamma, beta, alpha], and
+  // start-ascending answers [gamma, alpha, beta], and the two lived orders answer
+  // [beta, gamma, alpha] and [alpha, gamma, beta]. Two records cannot do this — with two,
+  // some wrong sort always shares the expected permutation. The entries are written in a
+  // fifth order — alpha, gamma, beta — so even a sort on the archive directory's own
+  // mtime, which follows write order rather than any pinned moment, answers a permutation
+  // the assertion refuses.
+  await writeArchived(repo.root, 'alpha', { enqueuedAt: new Date('2025-01-01T09:20:00.000Z'), settledAt: new Date('2025-01-01T10:30:00.000Z') })
+  await writeArchived(repo.root, 'gamma', { enqueuedAt: ENQUEUED_AT, settledAt: new Date('2025-01-01T10:00:00.000Z') })
+  await writeArchived(repo.root, 'beta', { enqueuedAt: new Date('2025-01-01T09:40:00.000Z'), settledAt: new Date('2025-01-01T10:15:00.000Z') })
 
   const answer = await archiveAnswer(served.port)
 
-  expect(answer.records.map(record => record.task)).toEqual(['zeta', 'alpha'])
+  expect(answer.records.map(record => record.task)).toEqual(['beta', 'alpha', 'gamma'])
 })
 
 // Requirement: The page answers the archive of completed TASKs

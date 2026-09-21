@@ -109,10 +109,22 @@ const ANSWER: Docket = {
 }
 
 /** The archive the completed section answers, walking its rendering branches: two finished
- *  TASKs — one built on main, one stacked on another TASK — with milliseconds on the second's
- *  moments, so the page's trim of them is pinned, and lived durations the page's own age()
- *  spelling has to spell. */
+ *  TASKs held latest start first, the order the archive's answer arrives in — one built on
+ *  main, one stacked on another TASK — with milliseconds on the later-started one's moments,
+ *  so the page's trim of them is pinned, and lived durations the page's own age() spelling
+ *  has to spell. */
 const ARCHIVE: readonly ArchiveRecord[] = [
+  {
+    // The later start — the TASK enqueued most recently stands first in the section.
+    task: 'second',
+    branch: 'work/second',
+    base: { kind: 'task', task: 'first', reason: 'stacked on it' },
+    enqueuedAt: '2025-01-01T09:30:00.123Z',
+    settledAt: '2025-01-01T10:45:00.123Z',
+    livedSeconds: 75 * 60,
+    phaseHistory: null,
+    phaseAccount: null,
+  },
   {
     task: 'first',
     branch: 'work/first',
@@ -133,16 +145,6 @@ const ARCHIVE: readonly ArchiveRecord[] = [
       { word: 'implement', totalSeconds: 75 * 60, roundsReached: 2, live: false },
       { word: 'test-review', totalSeconds: 15 * 60, roundsReached: 1, live: false },
     ],
-  },
-  {
-    task: 'second',
-    branch: 'work/second',
-    base: { kind: 'task', task: 'first', reason: 'stacked on it' },
-    enqueuedAt: '2025-01-01T09:30:00.123Z',
-    settledAt: '2025-01-01T10:45:00.123Z',
-    livedSeconds: 75 * 60,
-    phaseHistory: null,
-    phaseAccount: null,
   },
 ]
 
@@ -298,7 +300,7 @@ function shippedMarkup(report: Docket = ANSWER, archive: readonly ArchiveRecord[
  *  names the closer because the content itself holds no element of the same kind: rows live
  *  in the one tbody, problems and rulings in their own ul. */
 function shippedInner(html: string, id: string, tag: string): string {
-  const match = new RegExp(`<${tag} id="${id}">([\\s\\S]*?)</${tag}>`).exec(html)
+  const match = new RegExp(`<${tag} id="${id}"[^>]*>([\\s\\S]*?)</${tag}>`).exec(html)
   if (match === null) throw new Error(`the shipped markup holds no element #${id}`)
   return match[1]!
 }
@@ -553,25 +555,68 @@ it("shows a missing phase history as the account's own absence", async () => {
 })
 
 // Requirement: The page answers the archive of completed TASKs
-// Scenario: The page renders the archive's records as a completed section beside its live rows
-// GIVEN an archive answer holding two completed TASKs, the earlier start first, and a live row standing on the queue
+// Scenario: The page renders the archive's records as a completed section in start order, latest first
+// GIVEN an archive answer holding three completed TASKs, the later starts standing first, whose name order, settle order, and lived order all disagree with that arrival, and a live row standing on the queue
 // WHEN the page renders it
-// THEN the completed section stands beside the live rows — each record's TASK, branch, and base shown, the moments spelled without milliseconds, and how long each TASK lived as its own column in the page's own age spelling — with the records in start order, earliest first
-it('renders the archive records as a completed section beside its live rows', async () => {
-  const page = await renderPageWith(ANSWER)
+// THEN each record's TASK, branch, and base show, the moments are spelled without milliseconds, and how long each TASK lived stands as its own column in the page's own age spelling — with the records in the answer's start order, latest first: the later start above the earlier, whatever the names, the settled moments, or the lived spans say
+it('renders the archive records as a completed section in start order, latest first', async () => {
+  // Arrival order is the answer's own — start-descended, as /archive answers it — and the
+  // three records disagree pairwise in name, settle, and lived so that no re-sort a page
+  // might impose reaches the same order: names bravo/zeta/alpha in arrival, settles
+  // alpha/bravo/zeta ascending, lived 30m/75m/45m. Name-ascending answers alpha, bravo,
+  // zeta; settled-descending answers zeta, bravo, alpha; lived-descending answers zeta,
+  // alpha, bravo — the page-side twin of the serve ordering proof, pinning that the page
+  // renders the answer's order rather than imposing its own.
+  const arrival: readonly ArchiveRecord[] = [
+    {
+      task: 'bravo',
+      branch: 'work/bravo',
+      base: { kind: 'task', task: 'zeta', reason: 'stacked on it' },
+      enqueuedAt: '2025-01-01T09:50:00.123Z',
+      settledAt: '2025-01-01T10:20:00.123Z',
+      livedSeconds: 30 * 60,
+      phaseHistory: null,
+      phaseAccount: null,
+    },
+    {
+      task: 'zeta',
+      branch: 'work/zeta',
+      base: { kind: 'main' },
+      enqueuedAt: '2025-01-01T09:35:00.000Z',
+      settledAt: '2025-01-01T10:50:00.000Z',
+      livedSeconds: 75 * 60,
+      phaseHistory: null,
+      phaseAccount: null,
+    },
+    {
+      task: 'alpha',
+      branch: 'work/alpha',
+      base: { kind: 'main' },
+      enqueuedAt: '2025-01-01T09:20:00.000Z',
+      settledAt: '2025-01-01T10:05:00.000Z',
+      livedSeconds: 45 * 60,
+      phaseHistory: null,
+      phaseAccount: null,
+    },
+  ]
+  const page = await renderPageWith(ANSWER, { records: arrival })
   const rows = page.elements.get('rows')?.innerHTML ?? ''
   const archived = page.elements.get('archive-rows')?.innerHTML ?? ''
 
   expect(rows).toContain('<td>alpha</td>')
-  expect(archived).toContain('<td>first</td><td>work/first <span class="muted">from main</span></td>')
-  expect(archived).toContain('<td>work/second <span class="muted">from first</span></td>')
-  // The lived column, in the page's own age spelling — ninety minutes and seventy-five.
-  expect(archived).toContain('<td>1h 30m 0s</td>')
+  expect(archived).toContain('<td>bravo</td><td>work/bravo <span class="muted">from zeta</span></td>')
+  expect(archived).toContain('<td>zeta</td><td>work/zeta <span class="muted">from main</span></td>')
+  expect(archived).toContain('<td>alpha</td><td>work/alpha <span class="muted">from main</span></td>')
+  // The lived column, in the page's own age spelling — thirty minutes, seventy-five, forty-five.
+  expect(archived).toContain('<td>30m 0s</td>')
   expect(archived).toContain('<td>1h 15m 0s</td>')
-  // Start order: the earlier start stands above the later, whatever the names say.
-  expect(archived.indexOf('<td>first</td>')).toBeLessThan(archived.indexOf('<td>second</td>'))
+  expect(archived).toContain('<td>45m 0s</td>')
+  // The answer's own order, preserved: the later start above the earlier — bravo (09:50)
+  // above zeta (09:35) above alpha (09:20), an order no name, settle, or lived sort reaches.
+  expect(archived.indexOf('<td>bravo</td>')).toBeLessThan(archived.indexOf('<td>zeta</td>'))
+  expect(archived.indexOf('<td>zeta</td>')).toBeLessThan(archived.indexOf('<td>alpha</td>'))
   // The moments as the page spells them — milliseconds trimmed, a precision the JSON keeps and the page does not.
-  expect(archived).toContain('<td>2025-01-01T09:30:00Z</td>')
+  expect(archived).toContain('<td>2025-01-01T09:50:00Z</td>')
   expect(archived).not.toContain('.123Z')
 })
 
@@ -619,6 +664,36 @@ it("closes every phase of a completed record's account at the settled moment", a
 })
 
 // Requirement: The page answers the archive of completed TASKs
+// Scenario: The completed section stands after the rulings outstanding section
+// GIVEN a docket answer holding live rows, a problem, and an outstanding ruling, and an archive holding a completed TASK
+// WHEN the page is written with them
+// THEN the markup's completed section stands after the rulings outstanding section — the rows, the problems, and the debt still owed all read before the history of what has finished
+it('stands the completed section after the rulings outstanding section', () => {
+  const markup = shippedMarkup()
+
+  // Every section the THEN names stands present and before the completed one — a missing
+  // heading would answer -1 and pass a bare less-than vacuously, so presence is pinned too.
+  const completed = markup.indexOf('<h2 id="completed-heading"')
+  for (const before of ['<tbody id="rows"', '<h2 id="problems-heading"', '<h2 id="rulings-heading"', '<ul id="problems"', '<ul id="rulings"']) {
+    const at = markup.indexOf(before)
+    expect(at).toBeGreaterThan(-1)
+    expect(at).toBeLessThan(completed)
+  }
+  expect(completed).toBeGreaterThan(-1)
+  // The history itself, not just its heading: the completed table's rows stand after every
+  // section the THEN names — after the lists that hold the problems and the debt, not merely
+  // their headings — so a page that hoists the table above any of them does not pass. The
+  // last guard is the converse: no list may end after the history either, which is what a
+  // list overlapping the table would read as.
+  const archiveRows = markup.indexOf('<tbody id="archive-rows"')
+  expect(archiveRows).toBeGreaterThan(-1)
+  for (const before of ['<tbody id="rows"', '<ul id="problems"', '<ul id="rulings"']) {
+    expect(markup.indexOf(before)).toBeLessThan(archiveRows)
+  }
+  expect(markup.lastIndexOf('</ul>')).toBeLessThan(archiveRows)
+})
+
+// Requirement: The page answers the archive of completed TASKs
 // Scenario: An empty archive is shown as an absence
 // GIVEN an archive holding no completed TASK
 // WHEN the page is written with it, and its script renders the same answer the way a browser runs it
@@ -627,7 +702,7 @@ it('shows an empty archive as a visible absence', async () => {
   const markup = shippedMarkup(ANSWER, [])
   const page = await renderPageWith(ANSWER, { records: [] })
 
-  expect(markup).toContain('<h2>completed</h2>')
+  expect(markup).toContain('<h2 id="completed-heading">completed <span class="muted">enqueued latest first</span></h2>')
   expect(markup).toContain('<p id="archive-empty">no completed TASK yet</p>')
   expect(page.elements.get('archive-empty')?.hidden).toBe(false)
   expect(shippedInner(markup, 'archive-rows', 'tbody')).toBe(page.elements.get('archive-rows')?.innerHTML)
@@ -757,7 +832,7 @@ it('holds the rows while a selection lives inside them', async () => {
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and answers that walk every rendering branch it holds
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it — against answers, and against a network that fails
-// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the fetches of /docket and /archive, the timer that renews them, and the arithmetic it spells ages with — whether the fetches answer or fail — reads nothing off the document but the element lookup, nothing off an element at all, and writes nothing to one but the text and visibility it renders
+// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the fetches of /docket and /archive, the timer that renews them, and the arithmetic it spells ages with — whether the fetches answer or fail — reads nothing off the document but the element lookup and the live selection the copy guard asks after, nothing off an element at all, and writes nothing to one but the text and visibility it renders
 it('offers no control that runs anything', async () => {
   const page = docketPage(ANSWER, ARCHIVE)
   const run = await renderPageWith(ANSWER)
@@ -770,7 +845,7 @@ it('offers no control that runs anything', async () => {
   // the shipped rows, completed records, problems, and rulings included, for they are
   // content, not controls.
   expect(elementNames(shippedMarkup())).toEqual(['body', 'br', 'code', 'h1', 'h2', 'head', 'html', 'li', 'meta', 'p', 'span', 'style', 'table', 'tbody', 'td', 'th', 'thead', 'title', 'tr', 'ul'])
-  expect(valuedAttributeNames(shippedMarkup())).toEqual(['charset', 'class', 'id', 'lang', 'scope'])
+  expect(valuedAttributeNames(shippedMarkup())).toEqual(['aria-labelledby', 'charset', 'class', 'id', 'lang', 'scope'])
   // The same inventory of the HTML its script renders for the branch-walking answer —
   // nothing the page can build carries an element or a valued attribute beyond these.
   expect(elementNames(rendered)).toEqual(['br', 'code', 'li', 'span', 'td', 'tr'])
