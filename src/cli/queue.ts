@@ -170,11 +170,8 @@ export type PhaseHistoryEntry = { readonly phase: string; readonly round: number
  * Like `writeState` it judges nothing — the queue holds no vocabulary of phase words, and
  *  which word an executor stands at is the executor's own account (`report_task_phase`,
  *  `specs/progress.md`). `since` is the caller's to hold because only the caller knows
- *  whether this write begins a standing or rewrites one already standing; it is optional
- *  only so call sites written before it existed still compile, and a write that omits it
- *  leaves a file `readPhase` answers as absent — the same never-half-invented rule the
- *  read below keeps. */
-export async function writePhase(cwd: string, task: string, phase: string, round: number, since?: number): Promise<void> {
+ *  whether this write begins a standing or rewrites one already standing. */
+export async function writePhase(cwd: string, task: string, phase: string, round: number, since: number): Promise<void> {
   await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify({ phase, round, since }))
 }
 

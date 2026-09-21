@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { settleTask } from '../cli/settle.ts'
 import type { SettleResult } from '../cli/settle.ts'
-import { writeHeartbeat, writePhase, writeState } from '../cli/queue.ts'
+import { appendPhaseHistory, readPhase, writeHeartbeat, writePhase, writeState } from '../cli/queue.ts'
 import { BUILDING } from '../schedule/types.ts'
 
 /**
@@ -151,9 +151,10 @@ export type ReportTaskPhaseResult =
  * The pace-word limb's whole job: judge the word is a word (non-empty once trimmed — the
  * queue enforces no vocabulary of its own, because the vocabulary belongs to the executor
  * persona and evolves without the queue's permission) and the round an integer of 1 or more
- * (defaulting to 1, the first pass through any step), then delegate the write itself to
- * `writePhase`. The pruned-entry refusal keeps the same ENOENT-only boundary
- * `runReportTaskState` keeps, for the same reason a caller's refusal is answered as a value.
+ * (defaulting to 1, the first pass through any step), then write what the entry's own
+ * standing calls for through `writePhase`/`appendPhaseHistory`. The pruned-entry refusal
+ * keeps the same ENOENT-only boundary `runReportTaskState` keeps, for the same reason a
+ * caller's refusal is answered as a value.
  */
 export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: number): Promise<ReportTaskPhaseResult> {
   const word = phase.trim()
@@ -163,9 +164,23 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
     return { ok: false, reason: `round must be an integer of 1 or more, not ${round}` }
   }
   try {
-    // `since` is stamped fresh on every report for now, knowingly naive: the rules that keep
-    // it standing while the word holds and append the history are the write side's own step.
-    await writePhase(env.queueRoot, env.task, word, resolvedRound, Date.now())
+    // One moment per report: on a word change the phase file's `since` and the appended
+    // entry's must name the same instant, so `now` is read exactly once and never again.
+    const now = Date.now()
+    // An absent, old-shape, or garbage phase file reads back as no standing to match — a
+    // file this tool did not write cannot vouch for a `since` worth keeping.
+    const standing = await readPhase(env.queueRoot, env.task)
+    if (standing !== undefined && standing.phase === word && standing.round === resolvedRound) {
+      // The report that changed nothing writes nothing — not the file, not the history: an
+      // entry appended for it would say a standing began that never began. Still answered
+      // ok, because nothing changed and nothing failed.
+      return { ok: true, task: env.task, phase: word, round: resolvedRound }
+    }
+    // A round move keeps the `since` the file records — only the word's beginning moves it —
+    // while a word change (or no standing to match) begins a new one at now.
+    const since = standing !== undefined && standing.phase === word ? standing.since : now
+    await writePhase(env.queueRoot, env.task, word, resolvedRound, since)
+    await appendPhaseHistory(env.queueRoot, env.task, { phase: word, round: resolvedRound, since: now })
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: `TASK ${env.task} has no queue entry to report a phase into` }
     throw error

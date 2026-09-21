@@ -115,12 +115,11 @@ export type DocketRow = {
  *  the word's or the heartbeat's. */
   readonly phaseAgeSeconds: number | null
   /** Every standing the TASK has stood through, as its `phase-history` file holds them —
-   *  `null` when no readable history stands. Optional only so rows spelled before the history
- *  rode them still typecheck; `docketView` always sets it. */
-  readonly phaseHistory?: readonly PhaseHistoryEntry[] | null
+   *  `null` when no readable history stands. */
+  readonly phaseHistory: readonly PhaseHistoryEntry[] | null
   /** The row's account of that history, computed on the read that carries it: one entry per
    *  word in first-standing order, the current word's total live, every closed word closed. */
-  readonly phaseAccount?: readonly PhaseAccountEntry[] | null
+  readonly phaseAccount: readonly PhaseAccountEntry[] | null
   readonly session: SessionWhereabouts
 }
 
