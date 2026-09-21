@@ -42,15 +42,18 @@ these rules:
   why, if the why is still needed after the mechanism is on the page.
 - No decoration: no metaphor for its own sake, no aphorism doing an argument's job.
 
-**A requirement's rationale states the current, correct design and why it is correct —
-never the history of how the draft got there.** Comparing against an alternative is only
-worth the words when that alternative is a standing design principle this capability (or
-the wider tool) keeps re-asserting elsewhere — "never probe whether a process is still
-alive" is that kind of contrast, worth repeating wherever it applies. A one-off drafting
-mistake an earlier round happened to write down, later corrected, is not: mentioning it
-teaches a reader nothing about why today's design is right, only that an earlier draft
-said something else. When a revision makes earlier reasoning untrue, drop that reasoning —
-never layer the new reasoning on top of the old.
+**A requirement's prose discusses only what its own scenarios prove.** Behavior proved by
+another requirement is neither restated nor referenced. Shared nouns travel as glossary
+TERMs — a rewritten TERM ripples — and shared rules belong to the requirement that owns
+them.
+
+**A sentence states either our design or a third party's behavior.** A third party's
+behavior — pi, tmux, git — is never written. The rule's own purpose clause — our design
+intent — may stand, at most one sentence.
+
+**Measurements and incident narratives are not written into prose.** If a why is
+load-bearing, it lives as a principle clause inside the mechanism sentence — no numbers,
+no incidents, no third-party behavior, and never the history of how the draft got there.
 
 ## How you work
 - Read what surrounds the prose before writing it. For a spec pass: the capability file,
