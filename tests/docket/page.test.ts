@@ -909,9 +909,9 @@ it('focuses the summary again on each refresh that repeats its chain', async () 
 
 // Requirement: The docket answers on a page
 // Scenario: A merged entry no entry names keeps its own row, shown muted
-// GIVEN an answer holding a merged TASK no other entry's base names
+// GIVEN an answer holding a merged TASK no other entry's base names, beside a standing chain and a standing singleton
 // WHEN the page renders it
-// THEN it keeps a row of its own, shown muted, carrying its facts as any row does — until a scheduling pass prunes its entry
+// THEN the merged TASK keeps a row of its own, shown muted, carrying its facts as any row does — until a scheduling pass prunes its entry — and the standing rows open as a plain tr: the chain's rendered frontier and the singleton alike, the muting the landed row's own fact and not the renderer's habit
 it('keeps a merged entry no entry names as its own row, shown muted', async () => {
   const { elements } = await renderPageWith(ANSWER)
   const rowsHtml = elements.get('rows')?.innerHTML ?? ''
@@ -919,6 +919,11 @@ it('keeps a merged entry no entry names as its own row, shown muted', async () =
   expect(rowsHtml).toContain('<tr class="muted"><td>settled</td>')
   expect(rowsHtml).toContain('<td>settled</td><td><span class="muted">no phase</span></td>')
   expect(rowsHtml).toContain('work/settled <span class="muted">from main</span>')
+  // The standing rows answer the muted one, spelled exactly: the chain's rendered
+  // frontier and the plain singleton both open with a bare tr — no muting class — so the
+  // two spellings are two rows' facts, not one renderer's habit.
+  expect(rowsHtml).toContain('<tr><td>frontier')
+  expect(rowsHtml).toContain('<tr><td>alpha')
 })
 
 // Requirement: The docket answers on a page
@@ -945,6 +950,35 @@ it('renders a chain whose every member has merged as that one muted row', async 
 })
 
 // Requirement: The docket answers on a page
+// Scenario: A chain whose in-progress member is queued renders its row there, not at its merged root
+// GIVEN an answer holding a merged TASK and a queued TASK whose base names it — the member nearest main whose state word is not merged is the queued one
+// WHEN the page renders it
+// THEN the chain answers one row at the queued member's place, unmuted, its fraction 1/2 and its disclosure naming both members — not at the merged member's place, muted: in progress means any word but merged, not building alone
+it("renders a chain whose in-progress member is queued at that member's place, unmuted", async () => {
+  const held: Docket = {
+    rows: [
+      fixtureRow('held-base', { state: 'merged' }),
+      fixtureRow('held-child', { state: 'queued', base: { kind: 'task', task: 'held-base', reason: 'built on it' } }),
+    ],
+    problems: [],
+    outstanding: [],
+  }
+  const { elements } = await renderPageWith(held)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  // The one row stands at the queued member's place and opens unmuted — a bare tr — the
+  // member nearest main that is not merged, whatever word it carries.
+  expect((rowsHtml.match(/<tr/g) ?? []).length).toBe(1)
+  expect(rowsHtml).toContain('<tr><td>held-child<details')
+  expect(rowsHtml).toContain('<details id="chain-held-child"><summary>1/2</summary>')
+  expect(rowsHtml).toContain('<li>held-base merged</li><li>held-child queued</li>')
+  // The merged root rides the row — its name stands only inside the disclosure — and the
+  // row does not fall back to its place, muted.
+  expect(rowsHtml).not.toContain('<td>held-base')
+  expect(rowsHtml).not.toContain('<tr class="muted">')
+})
+
+// Requirement: The docket answers on a page
 // Scenario: An entry whose base names a TASK not on the queue keeps its own row
 // GIVEN an answer holding an entry whose base names a TASK that is not on the queue
 // WHEN the page renders it
@@ -957,6 +991,35 @@ it('keeps an entry whose base names a TASK not on the queue as its own row', asy
   // recorded fact, naming a TASK the queue no longer holds.
   expect(rowsHtml).toContain('<td>stacked</td><td><span class="phase">plan</span></td><td>1</td>')
   expect(rowsHtml).toContain('<span class="muted">from other-task</span>')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A chain runs through a root whose own base names a TASK not on the queue
+// GIVEN an answer holding a merged TASK whose base names a TASK that is not on the queue, and a building TASK whose base names that merged one
+// WHEN the page renders it
+// THEN the two form one chain of two — the dormant base links the root to nothing, so the root is a root like any other — answering one row at the building member's place, unmuted, its fraction 1/2, its disclosure naming both members, and no row at the merged member's name cell
+it('runs a chain through a root whose own base names a TASK not on the queue', async () => {
+  const waiting: Docket = {
+    rows: [
+      fixtureRow('waitbase', { state: 'merged', base: { kind: 'task', task: 'dormant', reason: 'built on it' } }),
+      fixtureRow('waitchild', { phase: 'build-green', round: 1, base: { kind: 'task', task: 'waitbase', reason: 'built on it' } }),
+    ],
+    problems: [],
+    outstanding: [],
+  }
+  const { elements } = await renderPageWith(waiting)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  // One chain of two, one row at the building member's place, opening unmuted: the
+  // dormant name links the merged member to nothing, so a member another TASK rides is a
+  // root whatever its own base names.
+  expect((rowsHtml.match(/<tr/g) ?? []).length).toBe(1)
+  expect(rowsHtml).toContain('<tr><td>waitchild<details')
+  expect(rowsHtml).toContain('<details id="chain-waitchild"><summary>1/2</summary>')
+  expect(rowsHtml).toContain('<li>waitbase merged</li><li>waitchild building</li>')
+  // The merged member rides the row — its name stands only inside the disclosure, never
+  // as a row of its own.
+  expect(rowsHtml).not.toContain('<td>waitbase')
 })
 
 // Requirement: The docket answers on a page
@@ -1311,7 +1374,7 @@ it('carries the docket\'s facts as visible content in the markup it ships', () =
 // Scenario: The page ships a viewport meta and both color schemes, and its script owns no theme machinery
 // GIVEN the docket's page
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it
-// THEN the head carries a viewport meta and names light and dark both as color schemes, the stylesheet answers the system's preference between them and spells none of the effects the redo left behind — no corner radius, no shadow, no gradient anywhere in it — and the script owns no theme machinery of its own — no matchMedia anywhere on the page, and its global reach stays what it was
+// THEN the head carries a viewport meta and names light and dark both as color schemes, the stylesheet answers the system's preference with a dark palette of its own — reassigning the signal color to one the light palette never held, the phase word's color wired to the variable that carries it — and spells none of the effects the redo left behind — no corner radius, no shadow, no gradient anywhere in it — and the script owns no theme machinery of its own — no matchMedia anywhere on the page, and its global reach stays what it was
 it('ships a viewport meta and both color schemes, and no theme machinery in the script', async () => {
   const page = docketPage(ANSWER, ARCHIVE)
   const run = await renderPageWith(ANSWER)
@@ -1324,6 +1387,19 @@ it('ships a viewport meta and both color schemes, and no theme machinery in the 
   const stylesheet = /<style>([\s\S]*?)<\/style>/.exec(page)?.[1]
   if (stylesheet === undefined) throw new Error('the docket page ships no stylesheet')
   holdsNoCosmeticEffect(stylesheet)
+  // The dark half is a palette of its own, not a token presence: its block reassigns the
+  // signal color to a value the light palette — the first one the stylesheet spells —
+  // never held, and the phase word, the one place the signal shows on a row, stays wired
+  // to the variable the two palettes feed.
+  const darkBlock = /@media \(prefers-color-scheme: dark\)\s*\{([\s\S]*?)\n  \}/.exec(stylesheet)?.[1]
+  if (darkBlock === undefined) throw new Error('the stylesheet ships no dark media block')
+  const signalOf = (css: string): string => {
+    const signal = /--signal:\s*([^;]+);/.exec(css)?.[1]
+    if (signal === undefined) throw new Error('the palette spells no signal color')
+    return signal
+  }
+  expect(signalOf(darkBlock)).not.toBe(signalOf(stylesheet))
+  expect(stylesheet).toContain('.phase { color: var(--signal); }')
   // The system names the theme and the stylesheet answers it; the script keeps no media
   // machinery of its own — nowhere on the page, and nothing new within its reach.
   expect(page).not.toContain('matchMedia')
