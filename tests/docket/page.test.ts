@@ -3,12 +3,22 @@
 import { createContext, runInContext } from 'node:vm'
 import { expect, it } from 'vitest'
 import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
-import type { ArchiveRecord, Docket, OutstandingRuling } from '../../src/docket/index.ts'
+import type {
+  ArchiveRecord,
+  Docket,
+  OutstandingRuling,
+  PhaseAccountEntry,
+  PhaseHistoryEntry,
+} from '../../src/docket/index.ts'
 
 /** An answer worth a second screen, walking every rendering branch the page holds: a
  *  working TASK with a session, a merged TASK with no heartbeat, a TASK stacked on another,
  * a problem, a debt with its named node, and one whose key names no node at all — so no
- *  literal the script could emit goes unrendered. */
+ *  literal the script could emit goes unrendered. Its rows also walk the phase account's
+ *  every branch: alpha carries a returning word (implement stood, left, and stood again)
+ *  with a loop past round 1 and a live standing word, stacked carries a single-word account
+ *  at round 1, and settled carries no history at all — so the account column's presence and
+ *  its absence are both content the parity assertions compare, not one of them alone. */
 /** The exact attach command one row carries, named once so the answer that carries it and
  *  the test that reads it back cannot drift apart. */
 const ATTACH = 'tmux -L proofspec attach-session -t alpha'
@@ -20,6 +30,14 @@ const RULING: OutstandingRuling = {
   key: 'capability:spec-tree:alpha,beta',
   answerWith: `proofspec schedule --ruling "<your ruling>" 'capability:spec-tree:alpha,beta'`,
 }
+
+/** The moment the fixtures' numbers were read at — every `since` a history records and every
+ *  age a row shows is measured from one spelled now, so the account a fixture carries and
+ *  the ages beside it cannot drift apart. */
+const READ_AT = Date.UTC(2025, 0, 1, 12, 0, 0)
+
+/** One hour in the milliseconds the history's `since` moments are spelled in. */
+const HOUR = 3_600_000
 
 const ANSWER: Docket = {
   rows: [
@@ -33,6 +51,20 @@ const ANSWER: Docket = {
       stateAgeSeconds: 7541,
       heartbeatAgeSeconds: 90,
       phaseAgeSeconds: 6000,
+      // The account that history holds at READ_AT: implement's two runs (eight hours to
+      // three ago, two hours to the 6000-second mark) sum to 5h 20m under the one word and
+      // reached round 3; test-review's two runs sum to 2h 40m, reached round 2, and are the
+      // standing word — live.
+      phaseHistory: [
+        { phase: 'implement', round: 1, since: READ_AT - 8 * HOUR },
+        { phase: 'test-review', round: 1, since: READ_AT - 3 * HOUR },
+        { phase: 'implement', round: 3, since: READ_AT - 2 * HOUR },
+        { phase: 'test-review', round: 2, since: READ_AT - 6_000_000 },
+      ],
+      phaseAccount: [
+        { word: 'implement', totalSeconds: 5 * 3600 + 20 * 60, roundsReached: 3, live: false },
+        { word: 'test-review', totalSeconds: 2 * 3600 + 40 * 60, roundsReached: 2, live: true },
+      ],
       session: { listed: true, attach: ATTACH },
     },
     {
@@ -45,6 +77,8 @@ const ANSWER: Docket = {
       stateAgeSeconds: 45,
       heartbeatAgeSeconds: null,
       phaseAgeSeconds: null,
+      phaseHistory: null,
+      phaseAccount: null,
       session: { listed: false },
     },
     {
@@ -57,6 +91,8 @@ const ANSWER: Docket = {
       stateAgeSeconds: 300,
       heartbeatAgeSeconds: 12,
       phaseAgeSeconds: 250,
+      phaseHistory: [{ phase: 'plan', round: 1, since: READ_AT - 250_000 }],
+      phaseAccount: [{ word: 'plan', totalSeconds: 250, roundsReached: 1, live: true }],
       session: { listed: false },
     },
   ],
@@ -84,6 +120,19 @@ const ARCHIVE: readonly ArchiveRecord[] = [
     enqueuedAt: '2025-01-01T09:00:00.000Z',
     settledAt: '2025-01-01T10:30:00.000Z',
     livedSeconds: 90 * 60,
+    // The account that archived history holds: implement stood the first hour, returned for
+    // the last quarter hour (its two runs summed to 1h 15m, its loop reaching round 2), and
+    // test-review stood the quarter hour between — every phase closed, the last entry's run
+    // ending at the settled moment 10:30.
+    phaseHistory: [
+      { phase: 'implement', round: 1, since: Date.UTC(2025, 0, 1, 9, 0, 0) },
+      { phase: 'test-review', round: 1, since: Date.UTC(2025, 0, 1, 10, 0, 0) },
+      { phase: 'implement', round: 2, since: Date.UTC(2025, 0, 1, 10, 15, 0) },
+    ],
+    phaseAccount: [
+      { word: 'implement', totalSeconds: 75 * 60, roundsReached: 2, live: false },
+      { word: 'test-review', totalSeconds: 15 * 60, roundsReached: 1, live: false },
+    ],
   },
   {
     task: 'second',
@@ -92,6 +141,8 @@ const ARCHIVE: readonly ArchiveRecord[] = [
     enqueuedAt: '2025-01-01T09:30:00.123Z',
     settledAt: '2025-01-01T10:45:00.123Z',
     livedSeconds: 75 * 60,
+    phaseHistory: null,
+    phaseAccount: null,
   },
 ]
 
@@ -355,8 +406,10 @@ it('shows the phase word, its round, and its age on the row', async () => {
   // The no-phase TASK's absences are spelled as absences — the word's own absence and
   // the phase age's dash, the word-spelled way a missing heartbeat is — never the state
   // word or a number standing in: a renderer standing the row's state age into the open
-  // cell passes every expectation above.
-  expect(rows).toContain('no phase')
+  // cell passes every expectation above. The absence is asserted by its exact spelling
+  // because the account column's own absence — no phases — contains the bare word: a
+  // substring assertion would pass on the wrong column's absence.
+  expect(rows).toContain('<span class="muted">no phase</span>')
   expect(rows).toContain('no heartbeat')
   expect(rows).toContain('—')
 
@@ -371,6 +424,132 @@ it('shows the phase word, its round, and its age on the row', async () => {
   expect(rows).not.toContain('2h 5m 41s')
   expect(rows).not.toContain('45s')
   expect(rows).not.toContain('5m 0s')
+})
+
+/** The phase-totals cell one row carries — the last cell the row holds, so the row's own
+ *  boundaries frame it. */
+function accountCellOf(rowsHtml: string, task: string): string {
+  const row = new RegExp(`<tr><td>${task}</td>[\\s\\S]*?</tr>`).exec(rowsHtml)?.[0]
+  if (row === undefined) throw new Error(`the rows hold no TASK ${task}`)
+  return ([...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(match => match[1]!).at(-1) ?? '')
+}
+
+// Requirement: The docket answers on a page
+// Scenario: The account lists each phase word once, in the order each first stood
+// GIVEN an answer whose TASK stood implement, then test-review, then implement again — implement its first word, test-review its standing one
+// WHEN the page renders it
+// THEN the account lists implement first and test-review second, each word once — the word that returned did not reorder, and the standing word did not move itself to the front
+it('lists each phase word once, in the order each first stood', async () => {
+  const { elements } = await renderPageWith(ANSWER)
+
+  expect(accountCellOf(elements.get('rows')?.innerHTML ?? '', 'alpha'))
+    .toBe('implement 5h 20m 0s through round 3<br>test-review 2h 40m 0s through round 2')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A word that returned shows one total, its separate runs summed under it
+// GIVEN an answer whose TASK stood implement for 2 hours, then test-review for 1 hour, then implement again for the last hour
+// WHEN the page renders it
+// THEN the account spells implement once with the one total of 3 hours — neither run spelled apart, no second line for the word
+it("sums a returning word's separate runs under its one total", async () => {
+  const summed: Docket = {
+    rows: [
+      {
+        task: 'looper',
+        state: 'building',
+        phase: 'implement',
+        round: 2,
+        branch: 'work/looper',
+        base: { kind: 'main' },
+        stateAgeSeconds: 4 * 3600 + 600,
+        heartbeatAgeSeconds: 30,
+        phaseAgeSeconds: 3600,
+        phaseHistory: [
+          { phase: 'implement', round: 1, since: READ_AT - 4 * HOUR },
+          { phase: 'test-review', round: 1, since: READ_AT - 2 * HOUR },
+          { phase: 'implement', round: 2, since: READ_AT - 1 * HOUR },
+        ],
+        phaseAccount: [
+          { word: 'implement', totalSeconds: 3 * 3600, roundsReached: 2, live: true },
+          { word: 'test-review', totalSeconds: 3600, roundsReached: 1, live: false },
+        ],
+        session: { listed: false },
+      },
+    ],
+    problems: [],
+    outstanding: [],
+  }
+  const { elements } = await renderPageWith(summed)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  expect(accountCellOf(rowsHtml, 'looper')).toBe('implement 3h 0m 0s through round 2<br>test-review 1h 0m 0s')
+  // Neither run spelled apart: the two-hour run and nothing else spells two hours.
+  expect(rowsHtml).not.toContain('2h 0m 0s')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A looping word shows the highest round it reached, and a word that stood only at round 1 shows no round at all
+// GIVEN an answer holding a TASK whose implement reached round 3 and whose standing test-review reached round 2, and a TASK whose plan stood at round 1
+// WHEN the page renders it
+// THEN each looping word's account line spells through round N with its highest round, and the round-1 word's line carries no round suffix
+it('shows how many rounds a looping word reached, and no round for a word that never looped', async () => {
+  const { elements } = await renderPageWith(ANSWER)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+
+  expect(rowsHtml).toContain('implement 5h 20m 0s through round 3')
+  expect(rowsHtml).toContain('test-review 2h 40m 0s through round 2')
+  expect(accountCellOf(rowsHtml, 'stacked')).toBe('plan 4m 10s')
+  expect(rowsHtml).not.toContain('through round 1')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: The standing word's total moves with each answer, and every closed word's total holds still
+// GIVEN a page rendered over an answer whose TASK's standing word is test-review, and a later answer read at a later now — the standing word's total grown ten minutes, every closed word's total unchanged
+// WHEN the refresh lands the later answer
+// THEN the standing word's total shows the grown number and its old one is gone, and the closed word's total shows the same number as before — the page moves the live time with its answers alone
+it("moves the standing word's total with each answer and holds every closed word's fixed", async () => {
+  const page = await renderPageWith(ANSWER)
+  expect(page.elements.get('rows')?.innerHTML ?? '').toContain('test-review 2h 40m 0s through round 2')
+
+  const later: Docket = {
+    ...ANSWER,
+    rows: ANSWER.rows.map(row => row.task === 'alpha'
+      ? {
+          ...row,
+          phaseAgeSeconds: 6600,
+          phaseAccount: [
+            row.phaseAccount![0]!,
+            { ...row.phaseAccount![1]!, totalSeconds: 2 * 3600 + 50 * 60 },
+          ],
+        }
+      : row),
+  }
+  page.setAnswer(later)
+  page.renewals[0]!()
+  await page.flush()
+
+  const moved = page.elements.get('rows')?.innerHTML ?? ''
+  expect(moved).toContain('test-review 2h 50m 0s through round 2')
+  expect(moved).not.toContain('2h 40m 0s')
+  expect(moved).toContain('implement 5h 20m 0s through round 3')
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A TASK with no phase history shows the account's own absence
+// GIVEN an answer holding a TASK with no phase file and no history, beside an archived TASK that kept none
+// WHEN the page renders it
+// THEN the phase-totals cell spells its own absence — no phases — in the live rows and the completed rows alike, never a number, the lived column, or the phase column's own no phase standing in for it
+it("shows a missing phase history as the account's own absence", async () => {
+  const { elements } = await renderPageWith(ANSWER)
+  const rowsHtml = elements.get('rows')?.innerHTML ?? ''
+  const archivedHtml = elements.get('archive-rows')?.innerHTML ?? ''
+
+  expect(accountCellOf(rowsHtml, 'settled')).toBe('<span class="muted">no phases</span>')
+  expect(accountCellOf(archivedHtml, 'second')).toBe('<span class="muted">no phases</span>')
+  // The two absences the page spells — the phase column's and the account's — stay distinct
+  // words, each asserted by its exact spelling: the one contains the other as a substring.
+  expect(rowsHtml).toContain('<span class="muted">no phase</span>')
+  expect(rowsHtml).toContain('<span class="muted">no phases</span>')
 })
 
 // Requirement: The page answers the archive of completed TASKs
@@ -394,6 +573,49 @@ it('renders the archive records as a completed section beside its live rows', as
   // The moments as the page spells them — milliseconds trimmed, a precision the JSON keeps and the page does not.
   expect(archived).toContain('<td>2025-01-01T09:30:00Z</td>')
   expect(archived).not.toContain('.123Z')
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: The completed record shows its phase account as the live rows show theirs
+// GIVEN an archive answer holding a completed TASK that stood implement, then test-review, then implement again
+// WHEN the page renders it, shipped and refreshed alike
+// THEN the completed section spells the same account a live row would — each word once in first-standing order, its separate runs summed under one total, the looping word's highest round beside it
+it("shows the completed record's phase account as the live rows show theirs", async () => {
+  const page = await renderPageWith(ANSWER)
+  const account = 'implement 1h 15m 0s through round 2<br>test-review 15m 0s'
+
+  expect(accountCellOf(page.elements.get('archive-rows')?.innerHTML ?? '', 'first')).toBe(account)
+  expect(shippedMarkup()).toContain(`<td>${account}</td>`)
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: Every phase of a completed record's account is closed at the settled moment
+// GIVEN an archive answer holding a TASK settled at 10:30 whose last history entry began at 10:00
+// WHEN the page renders it
+// THEN the last word's total is the half hour between the two moments — closed at the settled moment, not at any later now, which would spell months — and the word before it closed at the moment the last began
+it("closes every phase of a completed record's account at the settled moment", async () => {
+  const closer: readonly ArchiveRecord[] = [
+    {
+      task: 'closer',
+      branch: 'work/closer',
+      base: { kind: 'main' },
+      enqueuedAt: '2025-01-01T09:00:00.000Z',
+      settledAt: '2025-01-01T10:30:00.000Z',
+      livedSeconds: 90 * 60,
+      phaseHistory: [
+        { phase: 'implement', round: 1, since: Date.UTC(2025, 0, 1, 9, 0, 0) },
+        { phase: 'test-review', round: 1, since: Date.UTC(2025, 0, 1, 10, 0, 0) },
+      ],
+      phaseAccount: [
+        { word: 'implement', totalSeconds: 3600, roundsReached: 1, live: false },
+        { word: 'test-review', totalSeconds: 1800, roundsReached: 1, live: false },
+      ],
+    },
+  ]
+  const page = await renderPageWith(ANSWER, { records: closer })
+
+  expect(accountCellOf(page.elements.get('archive-rows')?.innerHTML ?? '', 'closer'))
+    .toBe('implement 1h 0m 0s<br>test-review 30m 0s')
 })
 
 // Requirement: The page answers the archive of completed TASKs
@@ -435,6 +657,7 @@ it('carries the docket\'s facts as visible content in the markup it ships', () =
   expect(markup).toContain(htmlEscaped(ATTACH))
   expect(markup).toContain('test-review')
   expect(markup).toContain('round 2')
+  expect(markup).toContain('through round 3')
   expect(markup).toContain(htmlEscaped('task broken has no MANIFEST'))
   expect(markup).toContain(htmlEscaped(RULING.answerWith))
   // The completed section ships as content too — the records, their order, and the lived

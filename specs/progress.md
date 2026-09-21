@@ -237,15 +237,20 @@ many rounds a looping one reached. Those are answerable only from a record kept 
 by standing, and the docket answers them from this one (`specs/docket.md`).
 
 <!-- scenarios: generated -->
+- "A first report records the standing and opens the history" → tests/progress/extension.test.ts
 - "A phase report leaves the entry's state, MANIFEST, LEASE, and heartbeat exactly as they were" → tests/progress/extension.test.ts
-- "A phase report overwrites whatever the phase file held before" → tests/progress/extension.test.ts
 - "A phase report trims the word it is given" → tests/progress/extension.test.ts
 - "A phase report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
 - "A phase report with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
 - "A phase report with no round given defaults the round to 1" → tests/progress/extension.test.ts
 - "A phase word and its round are written into the TASK's phase file, answered as a value" → tests/progress/extension.test.ts
 - "A phase word that is empty or only whitespace is refused, naming why, touching nothing" → tests/progress/extension.test.ts
+- "A report into an entry whose phase file holds no standing to match counts as a word change" → tests/progress/extension.test.ts
+- "A report whose word and round both match the standing writes nothing at all" → tests/progress/extension.test.ts
 - "A round below 1, or one that is not an integer, is refused, naming why" → tests/progress/extension.test.ts
+- "A round change rewrites the round and keeps the since the file records" → tests/progress/extension.test.ts
+- "A word change rewrites the phase file with the new word, round, and now, and appends the standing to the history" → tests/progress/extension.test.ts
 - "Reporting a phase for a TASK whose queue entry has been pruned is refused as a value, never thrown" → tests/progress/extension.test.ts
+- "The history is appended to, never overwritten — a word that returns stands as its own entry" → tests/progress/extension.test.ts
 - "The registered phase tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
 <!-- /scenarios -->

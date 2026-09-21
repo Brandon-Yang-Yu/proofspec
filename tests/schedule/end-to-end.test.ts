@@ -350,7 +350,8 @@ it('moves the pruned entry whole into the archive, exactly as it stood', async (
     INTENT: 'the intent of a',
     acceptance: 'the acceptance run of a',
     heartbeat: '2026-09-21T09:05:00.000Z',
-    phase: JSON.stringify({ phase: 'merge', round: 1 }),
+    phase: JSON.stringify({ phase: 'merge', round: 1, since: 1_789_950_000_000 }),
+    'phase-history': `${JSON.stringify({ phase: 'build-green', round: 1, since: 1_789_940_000_000 })}\n${JSON.stringify({ phase: 'merge', round: 1, since: 1_789_950_000_000 })}\n`,
   }
   for (const [name, content] of Object.entries(files)) await repo.write(`.proofspec/dispatch/a/${name}`, content)
   // The entry's own bytes before the pass — the standard is "exactly as it stood", so every
@@ -368,7 +369,7 @@ it('moves the pruned entry whole into the archive, exactly as it stood', async (
   }
   // Every file the entry held, not a whitelist of conventional names — the count pins that
   // a file the fixture carries that a copier forgot would fail here, where a move cannot.
-  expect(await readdir(archived)).toHaveLength(7)
+  expect(await readdir(archived)).toHaveLength(8)
   await expect(readdir(join(repo.root, '.proofspec', 'dispatch'))).resolves.not.toContain('a')
 })
 

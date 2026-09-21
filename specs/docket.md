@@ -59,10 +59,14 @@ comparable, the same reason the graph answers in one stable order.
 <!-- scenarios: generated -->
 - "A TASK entry that cannot be read answers a problem naming it, with every other TASK's row still standing" → tests/docket/view.test.ts
 - "A TASK with no phase file carries the phase word and its round both as absent, never invented" → tests/docket/view.test.ts
+- "A TASK with no phase-history file carries the history as absent, never invented" → tests/docket/view.test.ts
 - "A merged TASK stays on the docket until a pass prunes its entry" → tests/docket/view.test.ts
 - "A phase word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
+- "A phase-history file that does not hold the tool's shape answers as absent, with the rest of the row still standing" → tests/docket/view.test.ts
 - "A queue directory that does not exist answers an empty docket" → tests/docket/view.test.ts
+- "A row carries the TASK's phase history exactly as its phase-history file holds it" → tests/docket/view.test.ts
 - "A row carries the TASK's phase word and round exactly as its phase file holds them" → tests/docket/view.test.ts
+- "A row carries the branch and base its MANIFEST records" → tests/docket/view.test.ts
 - "A state word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
 - "Rows come back sorted by TASK name" → tests/docket/view.test.ts
 <!-- /scenarios -->
@@ -109,9 +113,11 @@ and nothing aggregated is stored anywhere.
 <!-- scenarios: generated -->
 - "A TASK with no heartbeat file carries the second number as absent, never as a repeat of the first" → tests/docket/view.test.ts
 - "A TASK with no phase file carries the third number as absent, never as a repeat of another" → tests/docket/view.test.ts
+- "A phase file written before the shape gained its since answers the word, the round, and the age all as absent" → tests/docket/view.test.ts
 - "A row carries how long it has been since the heartbeat was last refreshed" → tests/docket/view.test.ts
-- "A row carries how long it has been since the phase file was last written" → tests/docket/view.test.ts
+- "A row carries how long it has been since the phase word began running" → tests/docket/view.test.ts
 - "A row carries how long it has been since the state file was last written" → tests/docket/view.test.ts
+- "A row reads the phase age from the since the file's content records, never the file's write time" → tests/docket/view.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
@@ -233,15 +239,23 @@ nothing on it is a cache, a prediction, or the residue of an earlier glance. Ser
 page is not a second capability beside the view; it is the view, asked more than once.
 
 <!-- scenarios: generated -->
+- "A TASK with no phase history shows the account's own absence" → tests/docket/page.test.ts
+- "A looping word shows the highest round it reached, and a word that stood only at round 1 shows no round at all" → tests/docket/page.test.ts
 - "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
+- "A row carries the TASK's phase history and the account computed from it" → tests/docket/serve.test.ts
+- "A row's phase account carries each word in first-standing order, separate runs summed, the highest round reached, and the standing word live" → tests/docket/view.test.ts
+- "A standing appended to a live TASK's phase history between two requests moves the next answer" → tests/docket/serve.test.ts
+- "A word that returned shows one total, its separate runs summed under it" → tests/docket/page.test.ts
 - "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
 - "Every column the header names is a cell every row carries" → tests/docket/page.test.ts
 - "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
+- "The account lists each phase word once, in the order each first stood" → tests/docket/page.test.ts
 - "The page a request answers carries the docket's facts as visible content" → tests/docket/page.test.ts
 - "The page answered at / carries the docket computed at that moment" → tests/docket/serve.test.ts
 - "The page ships the same shape for an empty docket, its absences spelled as absences" → tests/docket/page.test.ts
 - "The page shows the TASK's phase word, its round, and how long it has stood there" → tests/docket/page.test.ts
 - "The rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
+- "The standing word's total moves with each answer, and every closed word's total holds still" → tests/docket/page.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does
@@ -302,9 +316,14 @@ finished is a fact the page says plainly.
 
 <!-- scenarios: generated -->
 - "An archive that holds no TASK answers an empty list of records" → tests/docket/serve.test.ts
+- "An archived TASK that kept no phase history is answered with the history absent, never invented" → tests/docket/serve.test.ts
+- "An archived record carries its phase history and an account with every phase closed, the last ending at the settled moment" → tests/docket/view.test.ts
+- "An archived record carries the TASK's phase history and the account closed at its settled moment" → tests/docket/serve.test.ts
 - "An empty archive is shown as an absence" → tests/docket/page.test.ts
+- "Every phase of a completed record's account is closed at the settled moment" → tests/docket/page.test.ts
 - "The archive answer carries one record per archived TASK, each holding the fields read from its own files" → tests/docket/serve.test.ts
 - "The archive answer is computed fresh on each request" → tests/docket/serve.test.ts
+- "The completed record shows its phase account as the live rows show theirs" → tests/docket/page.test.ts
 - "The completed rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
 - "The docket's own answer is unchanged by the archive's presence" → tests/docket/serve.test.ts
 - "The page renders the archive's records as a completed section beside its live rows" → tests/docket/page.test.ts
