@@ -1,4 +1,4 @@
-import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling } from './view.ts'
+import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling, PhaseAccountEntry } from './view.ts'
 
 /**
  * The docket's page: the view's answer spelled for a browser. Pure content — a string, not
@@ -44,6 +44,7 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   th, td { padding: 0.3rem 1rem 0.3rem 0; text-align: left; vertical-align: top; }
   td { white-space: nowrap; }
   thead th { border-bottom: 1px solid #ddd; }
+  tbody td { border-bottom: 1px solid #eee; }
   code { background: #f2f2f2; padding: 0.1rem 0; }
   .muted { color: #777; }
 </style>
@@ -54,7 +55,7 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
 <p id="empty"${report.rows.length === 0 ? '' : ' hidden'}>no TASK in the queue</p>
 <table>
   <thead>
-    <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th></tr>
+    <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th><th scope="col">phase totals</th></tr>
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
 </table>
@@ -62,7 +63,7 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
 <p id="archive-empty"${archive.length === 0 ? '' : ' hidden'}>no completed TASK yet</p>
 <table>
   <thead>
-    <tr><th scope="col">TASK</th><th scope="col">branch</th><th scope="col">enqueued</th><th scope="col">settled</th><th scope="col">lived</th></tr>
+    <tr><th scope="col">TASK</th><th scope="col">branch</th><th scope="col">enqueued</th><th scope="col">settled</th><th scope="col">lived</th><th scope="col">phase totals</th></tr>
   </thead>
   <tbody id="archive-rows">${archive.map(serverArchiveRowHtml).join('')}</tbody>
 </table>
@@ -113,6 +114,25 @@ function serverBaseLabel(base: DocketRow['base']): string {
   return base.kind === 'main' ? 'main' : base.task
 }
 
+/** One word's line of a phase account: the word, its total time, and — only when the word
+ *  stood past round 1 — the highest round it reached, spelled as a point reached rather
+ *  than the present-tense `round N` the phase column three cells left already means (rounds
+ *  count the TASK's whole pipeline, so a word's highest round is a point it reached, not a
+ *  count of its own standings). The same spelling the script twin below writes, so the
+ *  shipped cell and the refreshed cell read identically. */
+function serverAccountFragment(entry: PhaseAccountEntry): string {
+  const fragment = `${serverEscapeHtml(entry.word)} ${serverAge(entry.totalSeconds)}`
+  return entry.roundsReached > 1 ? `${fragment} through round ${entry.roundsReached}` : fragment
+}
+
+/** A phase account as the page spells it: one fragment per word, first-standing order, a
+ *  fragment per line — or the row's own word-shaped absence when no history stands, the
+ *  same vocabulary `no phase` and `no session` keep (`—` stays the age columns' absence). */
+function serverPhaseAccountHtml(account: readonly PhaseAccountEntry[] | null | undefined): string {
+  if (account === null || account === undefined) return '<span class="muted">no phases</span>'
+  return account.map(serverAccountFragment).join('<br>')
+}
+
 function serverRowHtml(row: DocketRow): string {
   const pace = row.phase === null
     ? '<span class="muted">no phase</span>'
@@ -123,6 +143,7 @@ function serverRowHtml(row: DocketRow): string {
   const move = row.heartbeatAgeSeconds === null
     ? '<span class="muted">no heartbeat</span>'
     : serverAge(row.heartbeatAgeSeconds)
+  const account = serverPhaseAccountHtml(row.phaseAccount)
   const session = row.session.listed
     ? `<code>${serverEscapeHtml(row.session.attach)}</code>`
     : '<span class="muted">no session</span>'
@@ -133,6 +154,7 @@ function serverRowHtml(row: DocketRow): string {
     + `<td>${inPhase}</td>`
     + `<td>${move}</td>`
     + `<td>${session}</td>`
+    + `<td>${account}</td>`
     + '</tr>'
 }
 
@@ -147,6 +169,7 @@ function serverArchiveRowHtml(record: ArchiveRecord): string {
     + `<td>${serverMoment(record.enqueuedAt)}</td>`
     + `<td>${serverMoment(record.settledAt)}</td>`
     + `<td>${serverAge(record.livedSeconds)}</td>`
+    + `<td>${serverPhaseAccountHtml(record.phaseAccount)}</td>`
     + '</tr>'
 }
 
@@ -188,6 +211,19 @@ function pageScript(): string {
     return base.kind === 'main' ? 'main' : base.task
   }
 
+  // One word's line of a phase account — the same spelling the shipped half's
+  // serverAccountFragment writes, so the two renderers stay byte for byte.
+  function accountFragment(entry) {
+    var fragment = escapeHtml(entry.word) + ' ' + age(entry.totalSeconds)
+    if (entry.roundsReached > 1) fragment += ' through round ' + entry.roundsReached
+    return fragment
+  }
+
+  function phaseAccountHtml(account) {
+    if (account === null || account === undefined) return '<span class="muted">no phases</span>'
+    return account.map(accountFragment).join('<br>')
+  }
+
   // A moment as the page spells it — the record's own ISO string with the milliseconds
   // trimmed, the same trim the shipped half makes, so the two renderers stay byte for byte.
   // The character-class pattern matches the shipped half's for the same reason it gives:
@@ -206,6 +242,7 @@ function pageScript(): string {
     var move = row.heartbeatAgeSeconds === null
       ? '<span class="muted">no heartbeat</span>'
       : age(row.heartbeatAgeSeconds)
+    var account = phaseAccountHtml(row.phaseAccount)
     var session = row.session.listed
       ? '<code>' + escapeHtml(row.session.attach) + '</code>'
       : '<span class="muted">no session</span>'
@@ -216,6 +253,7 @@ function pageScript(): string {
       + '<td>' + inPhase + '</td>'
       + '<td>' + move + '</td>'
       + '<td>' + session + '</td>'
+      + '<td>' + account + '</td>'
       + '</tr>'
   }
 
@@ -226,6 +264,7 @@ function pageScript(): string {
       + '<td>' + moment(record.enqueuedAt) + '</td>'
       + '<td>' + moment(record.settledAt) + '</td>'
       + '<td>' + age(record.livedSeconds) + '</td>'
+      + '<td>' + phaseAccountHtml(record.phaseAccount) + '</td>'
       + '</tr>'
   }
 

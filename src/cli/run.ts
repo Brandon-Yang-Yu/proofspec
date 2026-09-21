@@ -38,7 +38,8 @@ import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
 import { readSpecFiles, readTestFiles } from './discover.ts'
 import type { SourceFile, SpecFileRead } from './discover.ts'
-import { archiveQueueEntry, readIntentDoc, readPhase, reclaimLease, readLease, readQueue, recordsFrom, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
+import { archiveQueueEntry, readIntentDoc, readPhase, readPhaseHistory, reclaimLease, readLease, readQueue, recordsFrom, RESERVED_INTENT_REF, takeLease, writeTimes } from './queue.ts'
+import type { PhaseHistoryEntry } from './queue.ts'
 import { appendRaised, readRaisedLedger } from './raised.ts'
 import { commandLine, listTmuxSessions, tmuxAttachCommand } from './session.ts'
 import { settleTask } from './settle.ts'
@@ -1096,6 +1097,7 @@ export async function docket(options: RunOptions): Promise<Outcome> {
   const entries: QueueEntryRead[] = []
   const times: TaskTimes[] = []
   const phases = new Map<string, TaskPhase>()
+  const histories = new Map<string, readonly PhaseHistoryEntry[]>()
   for (const entry of queue.tasks) {
     if (!entry.ok) {
       entries.push(entry)
@@ -1106,11 +1108,15 @@ export async function docket(options: RunOptions): Promise<Outcome> {
       entries.push({ ok: false, task: entry.task, reason: `TASK ${entry.task}'s state file could not be read` })
       continue
     }
-    // The pace word reads as one fact-cluster — word, round, and write time together — because
-    // a row that carries one carries all three, and a row that carries none carries three
-    // absences: the same all-or-nothing the entry's own read keeps one line above.
+    // The pace word reads as one fact-cluster — word, round, and the moment the word began
+    // together — because a row that carries one carries all three, and a row that carries
+    // none carries three absences: the same all-or-nothing the entry's own read keeps one
+    // line above. The history reads beside it under its own all-or-nothing: a row without
+    // one carries the account as absent, never half-invented.
     const phase = await readPhase(options.cwd, entry.task)
     if (phase !== undefined) phases.set(entry.task, { ...phase, task: entry.task })
+    const history = await readPhaseHistory(options.cwd, entry.task)
+    if (history !== undefined) histories.set(entry.task, history)
     entries.push(entry)
     times.push({ task: entry.task, ...written })
   }
@@ -1121,6 +1127,7 @@ export async function docket(options: RunOptions): Promise<Outcome> {
       entries,
       times,
       phases,
+      histories,
       sessions,
       raised: await readRaisedLedger(options.cwd),
       now: options.now ?? new Date(),

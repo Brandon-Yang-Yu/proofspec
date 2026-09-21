@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readManifest, stateOf } from '../inflight/index.ts'
 import type { Manifest, TaskFailure, TaskRecord } from '../inflight/index.ts'
@@ -24,6 +24,7 @@ const STATE_FILE = 'state'
 const LEASE_FILE = 'LEASE'
 const HEARTBEAT_FILE = 'heartbeat'
 const PHASE_FILE = 'phase'
+const PHASE_HISTORY_FILE = 'phase-history'
 
 /** The one `intentRef` value that names no file on a TASK's branch: the reserved word that
  *  points at the TASK's own intent document in its queue entry instead. A plain word, not a
@@ -152,40 +153,99 @@ export async function readState(cwd: string, task: string): Promise<string | und
   return readOptional(join(cwd, ...QUEUE_DIR, task, STATE_FILE))
 }
 
-/** The pace word and its round as one record: what `report_task_phase` writes and the
- *  docket reads back. The byte shape is this pair's own — one JSON object holding both
- *  facts — and nothing outside `writePhase`/`readPhase` may depend on it, so the format
- *  can change without a single other caller noticing. */
-export type PhaseRecord = { readonly phase: string; readonly round: number }
+/** What `writePhase` puts in the `phase` file: the word, the round, and `since` — the
+ *  moment, in epoch milliseconds, the current word began running. The byte shape is
+ *  `writePhase`/`readPhase`'s own — one JSON object holding all three facts — and nothing
+ *  outside that pair may depend on it, so the format can change without a single other
+ *  caller noticing. */
+export type PhaseRecord = { readonly phase: string; readonly round: number; readonly since: number }
 
-/** Overwrites a TASK's phase file with its pace word and round. Like `writeState` it judges
- *  nothing — the queue holds no vocabulary of phase words, and which word an executor
- *  stands at is the executor's own account (`report_task_phase`, `specs/progress.md`). */
-export async function writePhase(cwd: string, task: string, phase: string, round: number): Promise<void> {
-  await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify({ phase, round }))
+/** One standing the `phase-history` file appends: the word, the round, and the moment that
+ *  standing began — the same triple the `phase` file holds for the present, kept for every
+ *  standing the TASK has stood through. The byte shape is
+ *  `appendPhaseHistory`/`readPhaseHistory`'s own, the same ownership the pair above keeps. */
+export type PhaseHistoryEntry = { readonly phase: string; readonly round: number; readonly since: number }
+
+/** Overwrites a TASK's phase file with its pace word, round, and the moment the word began.
+ * Like `writeState` it judges nothing — the queue holds no vocabulary of phase words, and
+ *  which word an executor stands at is the executor's own account (`report_task_phase`,
+ *  `specs/progress.md`). `since` is the caller's to hold because only the caller knows
+ *  whether this write begins a standing or rewrites one already standing; it is optional
+ *  only so call sites written before it existed still compile, and a write that omits it
+ *  leaves a file `readPhase` answers as absent — the same never-half-invented rule the
+ *  read below keeps. */
+export async function writePhase(cwd: string, task: string, phase: string, round: number, since?: number): Promise<void> {
+  await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify({ phase, round, since }))
 }
 
-/** A TASK's pace word, its round, and the moment its phase file was last written — one
- *  read answering every phase fact the docket's row carries, or nothing when no readable
+/** A TASK's pace word, its round, and the moment that word began running — one read
+ *  answering every phase fact the docket's row carries, or nothing when no readable
  *  phase file stands. Absent is the ordinary case (a TASK no session has reported a phase
  *  for), and a file that does not hold the shape `writePhase` writes answers as absent
- *  too: the docket carries words it has never met as they stand, but it cannot carry a
- *  word a file never held. */
-export async function readPhase(cwd: string, task: string): Promise<(PhaseRecord & { readonly writtenAt: number }) | undefined> {
-  const path = join(cwd, ...QUEUE_DIR, task, PHASE_FILE)
-  const raw = await readOptional(path)
+ *  too: a file written before the shape gained its `since` among them. The moment is read
+ *  from the file's own content rather than its write time because the file is rewritten
+ *  on every round move — an age read from the write time would say how long since the last
+ *  round, not how long the word has stood. */
+export async function readPhase(cwd: string, task: string): Promise<PhaseRecord | undefined> {
+  const raw = await readOptional(join(cwd, ...QUEUE_DIR, task, PHASE_FILE))
   if (raw === undefined) return undefined
-  let parsed: unknown
   try {
-    parsed = JSON.parse(raw)
+    return phaseEntryFrom(JSON.parse(raw))
   } catch {
     return undefined
   }
+}
+
+/** Appends one standing to a TASK's `phase-history` file — the write side of the account
+ *  the docket's page keeps. Appended, never overwritten: the history is the record of
+ *  every standing the TASK reached, and a rewrite would spend it on the present. */
+export async function appendPhaseHistory(cwd: string, task: string, entry: PhaseHistoryEntry): Promise<void> {
+  await appendFile(join(cwd, ...QUEUE_DIR, task, PHASE_HISTORY_FILE), `${JSON.stringify(entry)}\n`)
+}
+
+/** Every standing a TASK's `phase-history` file holds, in file order, or nothing when the
+ *  file is absent, empty, or holds any line that is not one entry of the shape
+ *  `appendPhaseHistory` writes — all or nothing, the same rule `readPhase` keeps: a history
+ *  half of which reads is a history the account would invent numbers from. */
+export async function readPhaseHistory(cwd: string, task: string): Promise<readonly PhaseHistoryEntry[] | undefined> {
+  return await readPhaseHistoryIn(join(cwd, ...QUEUE_DIR, task))
+}
+
+/** `readPhaseHistory` over one task directory, so the archive — which holds the same file
+ *  family the prune moved whole — reads its histories through the same rule. */
+async function readPhaseHistoryIn(taskDir: string): Promise<readonly PhaseHistoryEntry[] | undefined> {
+  const raw = await readOptional(join(taskDir, PHASE_HISTORY_FILE))
+  if (raw === undefined) return undefined
+  const lines = raw.split('\n')
+  // A file that ends in its newline splits to one empty final segment — the ordinary shape
+  // `appendPhaseHistory` always leaves, not a malformed line.
+  if (lines.at(-1) === '') lines.pop()
+  if (lines.length === 0) return undefined
+  const entries: PhaseHistoryEntry[] = []
+  for (const line of lines) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(line)
+    } catch {
+      return undefined
+    }
+    const entry = phaseEntryFrom(parsed)
+    if (entry === undefined) return undefined
+    entries.push(entry)
+  }
+  return entries
+}
+
+/** One phase entry out of parsed JSON, or nothing when it does not hold the shape: a
+ *  non-empty word, an integer round of 1 or more, and a finite moment of 0 or later — the
+ *  one validation the `phase` file and every `phase-history` line share. */
+function phaseEntryFrom(parsed: unknown): { readonly phase: string; readonly round: number; readonly since: number } | undefined {
   if (typeof parsed !== 'object' || parsed === null) return undefined
-  const { phase, round } = parsed as Record<string, unknown>
-  if (typeof phase !== 'string' || phase.trim() === '' || typeof round !== 'number' || !Number.isInteger(round) || round < 1) return undefined
-  const writtenAt = await mtimeOf(path)
-  return writtenAt === undefined ? undefined : { phase, round, writtenAt }
+  const { phase, round, since } = parsed as Record<string, unknown>
+  if (typeof phase !== 'string' || phase.trim() === '') return undefined
+  if (typeof round !== 'number' || !Number.isInteger(round) || round < 1) return undefined
+  if (typeof since !== 'number' || !Number.isFinite(since) || since < 0) return undefined
+  return { phase, round, since }
 }
 
 /**
@@ -349,15 +409,17 @@ export type ArchiveRead =
   | { readonly ok: true; readonly entries: readonly ArchivedEntry[] }
   | { readonly ok: false; readonly reason: string }
 
-/** One archived TASK's entry as read: its MANIFEST as raw text, plus the two write times the
+/** One archived TASK's entry as read: its MANIFEST as raw text, the two write times the
  *  docket's completed records read — the MANIFEST's for the enqueued moment, the `state`
- *  file's for the settled one. Tracked nowhere else, the same way a live row's ages are read
- *  from its own files' write times. */
+ *  file's for the settled one — and the phase history the archived entry carries, absent
+ *  as `undefined` for a TASK that kept none. Tracked nowhere else, the same way a live
+ *  row's ages are read from its own files' write times. */
 export type ArchivedEntry = {
   readonly task: string
   readonly manifest: string
   readonly manifestWrittenAt: number
   readonly stateWrittenAt: number
+  readonly history: readonly PhaseHistoryEntry[] | undefined
 }
 
 /**
@@ -378,11 +440,12 @@ export async function readArchive(cwd: string): Promise<ArchiveRead> {
  *  stands damaged was damaged by hand — a fact about that entry, not a reason to hide every
  *  other finished TASK behind it. */
 async function archivedEntry(dir: string, task: string): Promise<ArchivedEntry | undefined> {
-  const [manifest, manifestWrittenAt, stateWrittenAt] = await Promise.all([
+  const [manifest, manifestWrittenAt, stateWrittenAt, history] = await Promise.all([
     readOptional(join(dir, task, MANIFEST_FILE)),
     mtimeOf(join(dir, task, MANIFEST_FILE)),
     mtimeOf(join(dir, task, STATE_FILE)),
+    readPhaseHistoryIn(join(dir, task)),
   ])
   if (manifest === undefined || manifestWrittenAt === undefined || stateWrittenAt === undefined) return undefined
-  return { task, manifest, manifestWrittenAt, stateWrittenAt }
+  return { task, manifest, manifestWrittenAt, stateWrittenAt, history }
 }

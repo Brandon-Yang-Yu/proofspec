@@ -163,7 +163,9 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
     return { ok: false, reason: `round must be an integer of 1 or more, not ${round}` }
   }
   try {
-    await writePhase(env.queueRoot, env.task, word, resolvedRound)
+    // `since` is stamped fresh on every report for now, knowingly naive: the rules that keep
+    // it standing while the word holds and append the history are the write side's own step.
+    await writePhase(env.queueRoot, env.task, word, resolvedRound, Date.now())
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: `TASK ${env.task} has no queue entry to report a phase into` }
     throw error
