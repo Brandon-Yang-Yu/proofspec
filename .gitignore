@@ -5,7 +5,9 @@ node_modules/
 dist/
 
 # `render`'s output — a generated site, regenerated on demand, never committed.
-build/
+# Anchored to the repo root: render's default out is `build/` there, and the bare
+# pattern would also hide a `tests/build/` capability from git.
+/build/
 
 # Claude Code worktrees live here; the skills beside them are committed.
 .claude/worktrees/
