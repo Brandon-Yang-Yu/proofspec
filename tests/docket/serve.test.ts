@@ -88,7 +88,7 @@ it('answers the page at / with the docket computed at that moment', async () => 
   const json = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; round: number | null; phaseAgeSeconds: number | null; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }
 
   expect(page).toContain('test-review')
-  expect(page).toContain('round 2')
+  expect(page).toContain('<td><span class="phase">test-review</span></td><td>2</td>')
   expect(page).toContain('phase totals')
   expect(page).toContain('no phases')
   expect(json.rows).toEqual([
