@@ -14,10 +14,11 @@ The build SHALL leave the CLI entry it produces executable.
 
 The compiler grants the entry no executable bit of its own, so restoring the
 bit is the build script's own last step, not a repair anyone performs by hand.
-The guarantee covers the rebuild: a working copy whose `dist/` already holds a
-previous entry — even one stripped of the bit — gets a startable entry from the
-next build.
+The guarantee covers a working copy in any state: with no `dist/` at all, and
+with a `dist/` already holding a previous entry — even one stripped of the bit
+— the next build leaves a startable entry.
 
 <!-- scenarios: generated -->
+- "The CLI entry a first build produces is executable" → tests/build/executable-bit.test.ts
 - "The CLI entry the build leaves behind is executable" → tests/build/executable-bit.test.ts
 <!-- /scenarios -->

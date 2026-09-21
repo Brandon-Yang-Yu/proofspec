@@ -1,7 +1,7 @@
 // Capability: build
 
 import { execFile } from 'node:child_process'
-import { access, chmod, constants } from 'node:fs/promises'
+import { access, chmod, constants, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -15,6 +15,28 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const CLI_ENTRY = join(REPO_ROOT, 'dist/cli/main.js')
 
 const build = () => runCommand('pnpm', ['run', 'build'], { cwd: REPO_ROOT })
+
+const isExecutable = () => access(CLI_ENTRY, constants.X_OK).then(() => true, () => false)
+
+// Requirement: A finished build leaves the CLI directly startable
+// Scenario: The CLI entry a first build produces is executable
+// GIVEN a working copy with no dist/ — nothing from an earlier build survives
+// WHEN the project's build script runs to completion
+// THEN the CLI entry it leaves in dist/ is executable, so the operating system starts the file directly when asked
+it(
+  'leaves the CLI entry executable on a first build',
+  async () => {
+    // The real npm script, not bare tsc — the executable bit is set by the script.
+    // Wiping dist/ here (force: a no-op when absent) starts from the state a fresh
+    // checkout or CI runner is in — the state whose 644 entry was the original fault.
+    await rm(join(REPO_ROOT, 'dist'), { recursive: true, force: true })
+
+    await build()
+
+    expect(await isExecutable()).toBe(true)
+  },
+  60_000,
+)
 
 // Requirement: A finished build leaves the CLI directly startable
 // Scenario: The CLI entry the build leaves behind is executable
@@ -34,11 +56,7 @@ it(
 
     await build()
 
-    const isExecutable = await access(CLI_ENTRY, constants.X_OK).then(
-      () => true,
-      () => false,
-    )
-    expect(isExecutable).toBe(true)
+    expect(await isExecutable()).toBe(true)
   },
   60_000,
 )
