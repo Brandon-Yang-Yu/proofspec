@@ -77,9 +77,7 @@ this capability's job.
 
 A tag without its pair is not checked here. The skill that applies a change writes the
 two tags together, so a lone tag is prevented where it would be written rather than
-caught afterwards. One that appears anyway still fails the build, under another rule: it
-yields no PROOF_SITE, so its requirement reads as uncovered, or its scenario reads as
-missing from the regenerated tree.
+caught afterwards. One that appears anyway still fails the build.
 
 <!-- scenarios: generated -->
 - "A tagged site in a file that declares no capability fails the build" → tests/guard/unreadable.test.ts
@@ -112,8 +110,7 @@ the tool already handles.
 
 But two headings of one name are almost always an editing slip, and which one is meant to
 survive is the author's call, not the tool's. So the guard says what it sees and leaves the
-fix to the person or the AI reading the report — the same reason a site with no Gherkin
-above it warns rather than fails.
+fix to the person or the AI reading the report.
 
 <!-- scenarios: generated -->
 - "A requirement declared twice in a committed CAPABILITY_FILE is a warning" → tests/guard/duplicate-requirement.test.ts
