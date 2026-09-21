@@ -40,7 +40,10 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    ".pi/agents",
+    ".pi/extensions"
   ],
   "scripts": {
     "preinstall": "node -e \"const{existsSync}=require('node:fs');const ua=process.env.npm_config_user_agent??'';if(existsSync('.githooks')&&!ua.startsWith('pnpm')){console.error('This repo uses pnpm');process.exit(1)}\"",
