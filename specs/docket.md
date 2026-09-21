@@ -199,16 +199,36 @@ holds them — so a page
 held open shows the docket as it stood at its last request, never as it stood when the
 server started.
 
-The rendered page SHALL show everything the JSON carries except the state word and the
-state word's age. The phase word and its round SHALL stand where the state word stood. The
-round SHALL always show beside the phase word, round 1 included. The page's two ages SHALL
-be the time in the phase word and the heartbeat age, each exactly as the row carries it.
-For a TASK with no phase file — queued before any
-session, or anything else — the page SHALL show the word's absence as absent, the same way
-it shows a missing heartbeat, and SHALL never show the state word standing in for it.
+The rendered page SHALL render the queue's entries as chains, not one flat row per queue
+entry. An entry whose MANIFEST records a base of the `task` shape — one TASK's worktree
+deliberately built on another TASK's — links to the TASK that base names while that TASK
+is still on the queue, and the entries so linked form one chain. A chain SHALL render one
+row: the row of its in-progress member, the member nearest `main` whose state word is not
+`merged`. The members merged before it and the members queued after it SHALL ride that
+row, and none of them SHALL render a row of its own. A merged entry that no entry names as
+its base SHALL keep a row of its own, shown muted, until a scheduling pass prunes its
+entry. A chain's one row SHALL stand in the name order the JSON's rows already carry, at
+the place of the member it renders.
 
-The page SHALL also show, for each TASK, an account of the phases it has been through:
-every phase word in the order each first stood; the total time spent in each, the word's
+When members ride a row, the row SHALL carry the chain's progress as a bare fraction: the
+members whose state word reads `merged` over all the chain's members, and no words around
+the number. The fraction SHALL be expandable: a `details`/`summary` disclosure listing
+every member of the chain, each by name and state word. An expanded disclosure SHALL stay
+expanded across the page's own refreshes.
+
+The rendered page SHALL show everything the JSON carries except the state word and the
+state word's age. A member riding a row shows inside that row's disclosure by name and
+state word alone, and none of its other facts renders. The branch renders only when it
+differs from the TASK's name. The phase word and its round SHALL stand where the state
+word stood. The round SHALL stand in a column of its own beside the phase word's column,
+always shown, round 1 included. The page's two ages SHALL be the time in the phase word
+and the heartbeat age, each exactly as the row carries it. For a TASK with no phase file —
+queued before any session, or anything else — the page SHALL show the word's absence as
+absent, the same way it shows a missing heartbeat, and SHALL never show the state word
+standing in for it.
+
+The page SHALL also show, for each rendered row, an account of the phases its TASK has been
+through: every phase word in the order each first stood; the total time spent in each, the word's
 separate runs summed under the one word; and for a word that looped, how many rounds it
 reached — its highest round. The current phase's time SHALL be live, moving with each
 answer the page receives; every closed phase's time SHALL be closed. The durations SHALL be
@@ -222,13 +242,46 @@ a TASK. The phase word is the executor's own account of where the work stands
 (`report_task_phase`, `specs/progress.md`), and the page is for the human watching. The
 round shows even on round 1 because some steps of the executor's work happen more than
 once: a bare phase word does not say whether the work is on its first `test-review` or its
-third. The account answers the question that runs backwards from there: a phase word says
-where the work stands now, and a person watching also asks which phases this TASK has been
+third. The round stands in a column of its own because a round folded into the phase
+word's cell crowds the one word the eye reads first. The account answers the question
+that runs backwards from there: a phase word says where the work stands now, and a person watching also asks which phases this TASK has been
 through, how long each stood, and how many rounds a looping one reached — questions the
 `phase-history` file already holds every fact for. Nothing is stored to answer them: the
 account is computed fresh on each answer from the recorded moments, which is what makes the
 current phase live and the closed phases closed — the last entry runs to now because the
 standing it records is still the standing the `phase` file holds.
+
+A chain renders one row because a TASK built on another TASK's worktree waits for that
+TASK to merge. The linked entries are one stream of work taken one after the other, and a
+row per entry would say there were two streams running at once. A merged entry that stays
+on the docket only because another TASK is built on it looks like work still standing.
+Folding it into the row that stands on it says what it is: work already landed. The
+fraction answers the question a scanning eye asks of a chain: how much of it has landed.
+The names sit behind the fraction because most glances do not want them; a person who does
+want them opens the disclosure and reads every member by name and state word. The list
+then stays open across the page's own refreshes, because a list that collapsed on every
+refresh would close while the person was reading it. The state word shows inside the
+disclosure and nowhere else. On a row it would say `building` almost the whole life of a
+TASK; as a riding member's one rendered fact it says the thing the fraction counts: that
+this member has merged. The branch renders only when it differs from the TASK's name
+because the two are two kinds of name that happen to coincide here. When they coincide,
+the TASK's name already carries everything the branch name would say.
+
+The redo keeps the page's plainness — nothing new stands on the page that carries no fact
+— and improves the craft of what already stands. Light and dark are both real, through
+CSS's own `prefers-color-scheme` and `color-scheme`; the script grows no `matchMedia` of
+its own, because the system names the theme and the stylesheet answers it. A viewport
+meta stands in the head, and contrast stays readable in both themes. The body sets the
+system font stack, commands stay monospaced, and one signal color stands on the phase
+word. No decoration: no rounded cards, no shadows, no gradients. The table gets breathing
+room — long cells wrap, and the table never scrolls horizontally — without giving up the
+compact density it already has. The rulings outstanding section gets a visual redo under
+two hard constraints: each command stays whole in one copyable run, and no control
+appears. Where the work sits in the TASK's whole run reads from the account the row
+already carries; the rendering improves and no new fact joins the contract. The page's
+tests hold its whole reach as inventories, and they extend honestly to what the page now
+ships: the `details`/`summary` disclosure, the viewport and color-scheme metas, the
+classes, and the element reads and writes that carry an open disclosure across a refresh.
 
 The state word stays in the JSON because the page's JSON is the same read the one-shot
 command makes, not a second answer — and so the history travels in the JSON the same way.
