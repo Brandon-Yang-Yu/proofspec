@@ -1524,27 +1524,32 @@ it('ships an empty docket with its absences spelled as absences', async () => {
 
 /** Each table the page ships, read as its own header-and-body pair — the live rows and the
  *  completed records are two tables, and a header must answer for its own rows alone. */
-function tablesOf(html: string): { readonly bodyId: string; readonly headerCells: number; readonly firstRow: string }[] {
+function tablesOf(html: string): { readonly bodyId: string; readonly headerCells: number; readonly rows: string[] }[] {
   const pattern = /<thead>[\s\S]*?<\/thead>\s*<tbody id="([^"]+)">([\s\S]*?)<\/tbody>/g
   return [...html.matchAll(pattern)].map(match => ({
     bodyId: match[1]!,
     headerCells: (match[0].match(/<th scope="col">/g) ?? []).length,
-    firstRow: /<tr(?: class="muted")?>[\s\S]*?<\/tr>/.exec(match[2]!)?.[0] ?? '',
+    rows: [...match[2]!.matchAll(/<tr(?: class="muted")?>[\s\S]*?<\/tr>/g)].map(row => row[0]),
   }))
 }
 
 // Requirement: The docket answers on a page
 // Scenario: Every column the header names is a cell every row carries
 // GIVEN the page shipped over a branch-walking answer, holding both of its tables
-// WHEN each table's header is read against the first row it shipped
-// THEN each row carries exactly one cell per its own header's columns — the headers and the two renderers cannot drift apart end to end, in either table
+// WHEN each table's header is read against every row it shipped
+// THEN each row carries exactly one cell per its own header's columns — the headers and the two renderers cannot drift apart end to end, in either table, on any row
 it('carries one cell per column each table\'s header names', () => {
   const tables = tablesOf(shippedMarkup())
 
   expect(tables.map(table => table.bodyId)).toEqual(['rows', 'archive-rows'])
   for (const table of tables) {
     expect(table.headerCells).toBeGreaterThan(0)
-    expect((table.firstRow.match(/<td>/g) ?? []).length).toBe(table.headerCells)
+    // Every row, not the first alone: a row that drops or adds a cell anywhere in either
+    // table's body is a drift the header no longer answers for.
+    expect(table.rows.length).toBeGreaterThan(0)
+    for (const row of table.rows) {
+      expect((row.match(/<td>/g) ?? []).length).toBe(table.headerCells)
+    }
   }
 })
 
