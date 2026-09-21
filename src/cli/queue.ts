@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readManifest, stateOf } from '../inflight/index.ts'
 import type { Manifest, TaskFailure, TaskRecord } from '../inflight/index.ts'
@@ -270,9 +270,18 @@ async function mtimeOf(path: string): Promise<number | undefined> {
   }
 }
 
-/** Removes a TASK's whole queue entry — the prune this capability alone is permitted to make. */
-export async function removeQueueEntry(cwd: string, task: string): Promise<void> {
-  await rm(join(cwd, ...QUEUE_DIR, task), { recursive: true, force: true })
+/** Moves a TASK's whole queue entry into the archive directory — the prune this capability
+ *  alone is permitted to make. The entry arrives exactly as it stood, file for file, and
+ *  nothing rewrites it afterwards: the archive is the record of finished work, kept rather
+ *  than cleaned so it can still be read and analyzed. A `rename`, not a copy: the entry
+ *  leaves the queue directory in the one step, so nothing can observe it standing in both
+ *  places or neither. A name the archive already holds cannot arise — `enqueue` refuses
+ *  spent names — so the collision a bare `rename` would throw on is a real bug, not a case
+ *  to answer quietly. */
+export async function archiveQueueEntry(cwd: string, task: string): Promise<void> {
+  const archive = join(cwd, ...ARCHIVE_DIR)
+  await mkdir(archive, { recursive: true })
+  await rename(join(cwd, ...QUEUE_DIR, task), join(archive, task))
 }
 
 /** Overwrites a TASK's state with a new word. No knowledge of which words exist or what order
@@ -297,12 +306,21 @@ export type EnqueueResult = { readonly ok: true } | { readonly ok: false; readon
 
 /**
  * Creates a new queue entry for a TASK not seen before: its MANIFEST, and an initial state of
- * `queued`. Refuses, touching nothing, when a TASK of that name is already in the queue — the
- * same `wx`-flag idiom `takeLease` above already uses, so the check-then-create step two
- * callers racing to enqueue the same name could otherwise land inside of is collapsed to the
- * one filesystem call the OS already makes atomic.
+ * `queued`. Refuses, touching nothing, when a TASK of that name already stands in the queue or
+ * in the archive — the same `wx`-flag idiom `takeLease` above already uses, so the
+ * check-then-create step two callers racing to enqueue the same name could otherwise land
+ * inside of is collapsed to the one filesystem call the OS already makes atomic.
+ *
+ * A TASK name is spent once: a finished TASK keeps its name in the archive forever, and no
+ * later TASK is handed the same one — two TASKs of one name would leave every reader that
+ * names TASKs unable to say which TASK a name means. The archive check is a plain existence
+ * read rather than another `wx` dance because it cannot race: an archived entry never
+ * leaves, so a name observed free of the archive stays free of it.
  */
 export async function enqueue(cwd: string, task: string, manifest: Manifest): Promise<EnqueueResult> {
+  if (await entryExists(join(cwd, ...ARCHIVE_DIR, task))) {
+    return { ok: false, reason: `a TASK named ${task} already stands in the archive` }
+  }
   const dir = join(cwd, ...QUEUE_DIR, task)
   await mkdir(dir, { recursive: true })
   try {
@@ -313,6 +331,17 @@ export async function enqueue(cwd: string, task: string, manifest: Manifest): Pr
   }
   await writeState(cwd, task, 'queued')
   return { ok: true }
+}
+
+/** Whether anything at all stands at the path — a directory or a file, because either way the
+ *  name behind it is spent. */
+async function entryExists(path: string): Promise<boolean> {
+  try {
+    await stat(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** The archive as a whole, or the reason the directory itself could not be listed. */
