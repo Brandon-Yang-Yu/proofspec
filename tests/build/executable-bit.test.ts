@@ -7,14 +7,17 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { expect, it } from 'vitest'
 
-const runCommand = promisify(execFile)
+const execFileAsync = promisify(execFile)
 
 // The test runs from the repo root, but resolve the root from this file so the
 // build's cwd does not depend on how vitest was invoked.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const CLI_ENTRY = join(REPO_ROOT, 'dist/cli/main.js')
 
-const build = () => runCommand('pnpm', ['run', 'build'], { cwd: REPO_ROOT })
+// A full tsc compile outlasts vitest's 5s default; the build gets a minute.
+const BUILD_TIMEOUT_MS = 60_000
+
+const build = () => execFileAsync('pnpm', ['run', 'build'], { cwd: REPO_ROOT })
 
 const isExecutable = () => access(CLI_ENTRY, constants.X_OK).then(() => true, () => false)
 
@@ -35,7 +38,7 @@ it(
 
     expect(await isExecutable()).toBe(true)
   },
-  60_000,
+  BUILD_TIMEOUT_MS,
 )
 
 // Requirement: A finished build leaves the CLI directly startable
@@ -58,5 +61,5 @@ it(
 
     expect(await isExecutable()).toBe(true)
   },
-  60_000,
+  BUILD_TIMEOUT_MS,
 )
