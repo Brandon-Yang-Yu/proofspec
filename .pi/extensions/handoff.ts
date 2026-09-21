@@ -1,1 +1,1 @@
-export { default } from '../../src/handoff/extension.ts'
+export { default } from 'proofspec/src/handoff/extension.ts'

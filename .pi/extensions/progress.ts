@@ -1,1 +1,1 @@
-export { default } from '../../src/progress/extension.ts'
+export { default } from 'proofspec/src/progress/extension.ts'
