@@ -1571,9 +1571,9 @@ it('holds the rows while a selection lives inside them', async () => {
 
 // Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
-// GIVEN the docket's page, and answers that walk every rendering branch it holds — a chain's disclosure left open and a chain's summary keyboard-focused among them
+// GIVEN the docket's page, and answers that walk every rendering branch it holds — a chain's disclosure left open, a chain's summary keyboard-focused, a copy's selection holding a refresh, and a refresh advancing a chain under a standing focus among them
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it — against answers, and against a network that fails
-// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the fetches of /docket and /archive, the timer that renews them, and the arithmetic it spells ages with — whether the fetches answer or fail — reads nothing off the document but the element lookup, the live selection the copy guard asks after, and the focus it asks the document for, reads nothing off an element but the open state of the disclosures it carries and, while a summary stands focused and its chain redraws, the summary facts the carry needs — the tag, the parent, the parent's id, and the first element it focuses — invokes nothing on an element but that one focus, once per refresh that carries it, and writes nothing to one but the text, the visibility, and the open flag it reopens a carried disclosure with
+// THEN it offers no control that runs anything — no element beyond the ones it was written with, in the markup it ships or the HTML it renders, nor any attribute that carries a value beyond the ones it was written with, nor any stylesheet import or url or javascript: scheme anywhere, and its script touches no global but the document, the fetches of /docket and /archive, the timer that renews them, and the arithmetic it spells ages with — whether the fetches answer or fail — reads nothing off the document but the element lookup, the live selection the copy guard asks after — and, while one lives, the body its walk climbs to — and the focus it asks the document for, reads nothing off an element but the open state of the disclosures it carries, the parent the live selection's walk climbs by, and, while a summary stands focused and its chain redraws, the summary facts the carry needs — the tag, the parent, the parent's id, and the first element it focuses, whichever id the redraw leaves the carry to follow — invokes nothing on an element but that one focus, once per refresh that carries it, and writes nothing to one but the text, the visibility, and the open flag it reopens a carried disclosure with
 it('offers no control that runs anything', async () => {
   const page = docketPage(ANSWER, ARCHIVE)
   const run = await renderPageWith(ANSWER)
@@ -1602,7 +1602,8 @@ it('offers no control that runs anything', async () => {
   // script — a handler read off an element, a request by any other means — is a touch this
   // inventory would have to carry, and the claim above with it.
   // 'body' joins this inventory only while a selection is live — the guard's walk up the
-  // tree reads it, the collapsed check before it does not.
+  // tree reads it, the collapsed check before it does not — and no selection has lived
+  // yet in this run: the held-refresh leg below carries it in.
   expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
   expect([...run.documentReads].sort()).toEqual(['activeElement', 'getElementById', 'getSelection'])
   expect([...run.documentWrites]).toEqual([])
@@ -1669,6 +1670,103 @@ it('offers no control that runs anything', async () => {
     'chain-frontier>summary.tagName',
     'chain-settled.open',
     'chain-stacked.open',
+  ])
+  // The copy guard's branch runs at last: a selection live inside the rows, held against
+  // one refresh and cleared before the next. The walk joins the inventories — the body it
+  // climbs to, the parent it climbs by — and the held refresh itself reaches for nothing
+  // else: no probe, no swap, no focus read, which is the very fact the copy scenario
+  // stands on.
+  run.selectWithin('rows')
+  run.renewals[0]!()
+  await run.flush()
+  expect([...run.documentReads].sort()).toEqual(['activeElement', 'body', 'getElementById', 'getSelection'])
+  expect([...run.elementReads].sort()).toEqual([
+    'chain-alpha.open',
+    'chain-base-task.open',
+    'chain-frontier.firstElementChild',
+    'chain-frontier.id',
+    'chain-frontier.open',
+    'chain-frontier>summary.focus',
+    'chain-frontier>summary.parentNode',
+    'chain-frontier>summary.tagName',
+    'chain-settled.open',
+    'chain-stacked.open',
+    'rows.parentNode',
+  ])
+  expect([...run.elementWrites].sort()).toEqual([
+    'archive-empty.hidden',
+    'archive-rows.innerHTML',
+    'chain-frontier.open',
+    'completed-table.hidden',
+    'empty.hidden',
+    'problems-heading.hidden',
+    'problems.hidden',
+    'problems.innerHTML',
+    'queue-table.hidden',
+    'rows.innerHTML',
+    'rulings-heading.hidden',
+    'rulings.hidden',
+    'rulings.innerHTML',
+  ])
+  expect([...run.elementActs]).toEqual(['chain-frontier>summary.focus'])
+  run.clearSelection()
+  run.renewals[0]!()
+  await run.flush()
+  // The refresh after the copy ends is the ordinary path again: one more landing, on the
+  // summary the redraw spells again.
+  expect([...run.elementActs]).toEqual(['chain-frontier>summary.focus', 'chain-frontier>summary.focus'])
+  // The carry's miss branch runs at last: the chain advancing under the standing focus,
+  // the redraw moving the disclosure's id off the member the old one named. The
+  // resolution's group walk is pure arithmetic on the answer; the reads that are not —
+  // the carried disclosure's first element, the focus its summary reads to land — join
+  // the inventories, and the open flag follows the chain as the open-carry scenario
+  // showed.
+  run.setAnswer({
+    ...ANSWER,
+    rows: ANSWER.rows.map(row => (row.task === 'frontier' ? { ...row, state: 'merged' } : row)),
+  })
+  run.renewals[0]!()
+  await run.flush()
+  expect([...run.elementActs]).toEqual([
+    'chain-frontier>summary.focus',
+    'chain-frontier>summary.focus',
+    'chain-base-task>summary.focus',
+  ])
+  expect([...run.documentReads].sort()).toEqual(['activeElement', 'body', 'getElementById', 'getSelection'])
+  // No branch the walk added reaches past the families claimed above — no global, no
+  // document write, nothing the answering paths never touched.
+  expect([...run.touched].sort()).toEqual(['Math', 'document', 'fetch', 'setInterval'])
+  expect([...run.documentWrites]).toEqual([])
+  expect([...run.elementReads].sort()).toEqual([
+    'chain-alpha.open',
+    'chain-base-task.firstElementChild',
+    'chain-base-task.open',
+    'chain-base-task>summary.focus',
+    'chain-frontier.firstElementChild',
+    'chain-frontier.id',
+    'chain-frontier.open',
+    'chain-frontier>summary.focus',
+    'chain-frontier>summary.parentNode',
+    'chain-frontier>summary.tagName',
+    'chain-settled.open',
+    'chain-stacked.open',
+    'rows.parentNode',
+  ])
+  expect([...run.elementWrites].sort()).toEqual([
+    'archive-empty.hidden',
+    'archive-rows.innerHTML',
+    'chain-base-task.open',
+    'chain-frontier.open',
+    'completed-table.hidden',
+    'empty.hidden',
+    'problems-heading.hidden',
+    'problems.hidden',
+    'problems.innerHTML',
+    'queue-table.hidden',
+    'rows.innerHTML',
+    'rulings-heading.hidden',
+    'rulings.hidden',
+    'rulings.innerHTML',
   ])
   // The failed fetches run the refresh's catch branches — shipped code with a reach of
   // their own. Nothing renders there, and the branches still touch nothing but the fetches
