@@ -89,40 +89,33 @@ mkdir -p .pi/agents .pi/extensions
 cp node_modules/proofspec/.pi/agents/*.md .pi/agents/
 cp node_modules/proofspec/.pi/extensions/handoff.ts .pi/extensions/
 cp node_modules/proofspec/.pi/extensions/progress.ts .pi/extensions/
-echo ".proofspec/" >> .gitignore   # the queue and its worktrees are runtime state,
-                                   # never committed
+printf '.proofspec/dispatch/\n.proofspec/worktrees/\n' >> .gitignore
 git add .gitignore .pi package.json package-lock.json   # or pnpm-lock.yaml
 git commit -m "chore: adopt the ProofSpec docket pipeline"
 ```
 
 Commit them: the queue reads the personas from the project root, and a TASK's worktree
-branches from what is committed. Commit your tests too, if they are not yet. The
-personas ship as this repo runs them — written against its own conventions (pnpm
-scripts, a codebase-memory index, its agent rules); your copies in `.pi/agents/` are
-yours to edit.
+branches from what is committed. Commit your tests too, if they are not yet. Only the
+queue and its worktrees are ignored — `.proofspec/reviews.jsonl`, the committed ledger
+of recorded reviews, stays committable. The personas ship as this repo runs them —
+written against its own conventions (pnpm scripts, a codebase-memory index, its agent
+rules); your copies in `.pi/agents/` are yours to edit.
 
-**3. Queue the retrofit TASK.** Start pi in the project and ask for the first TASK
-(`--approve` trusts the project-local files for this run). There is no spec prose yet,
-so nothing needs a disposition review — one ask is enough:
+**3. Queue the retrofit TASK.** One ask is enough — there is no spec prose yet, so
+nothing needs a disposition review. First create the empty spec directory: the queue
+judges how TASKs relate against the spec tree, and a pass needs `specs/` to stand
+before it can run — filling that tree is the retrofit TASK's own first work. Then ask
+(`--approve` trusts the project-local files for this run):
 
 ```sh
+mkdir specs
 pi --approve -p "Queue my first TASK, named retrofit: turn this project into one ProofSpec can run. Do the investigator's setup — a branch and worktree for the TASK, and its INTENT doc in the queue entry — then enqueue it. The TASK's intent: create specs/, write the Gherkin above the existing tests, and get check green. There is no spec prose yet, so this TASK carries an INTENT doc only; there is nothing to settle at a disposition review."
 ```
 
 The session sets the TASK up the way the investigator does — a branch of its own, an
 INTENT doc in `.proofspec/dispatch/retrofit/INTENT`, then `enqueue_task`. A successful
-enqueue immediately triggers a scheduling pass, which starts the executor session as
-soon as capacity allows.
-
-One bootstrap wrinkle, on the first TASK only: a pass reads the spec tree to judge how
-TASKs relate, and a project with no `specs/` yet has none for it to read. Create the
-empty directory once — filling it is the retrofit TASK's own first work — and dispatch
-the TASK:
-
-```sh
-mkdir specs            # the empty tree a pass reads; the retrofit TASK fills it
-npx proofspec schedule # starts the executor session for the retrofit TASK
-```
+enqueue immediately triggers a scheduling pass, which starts the executor session —
+headed, in a tmux session of its own — as soon as capacity allows.
 
 Every TASK after the first one opens the proper way: start `pi` and talk the intent
 through with the investigator. That conversation — and the disposition review it hands
