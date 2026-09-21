@@ -41,6 +41,23 @@ it('does not prune a merged TASK an in-flight TASK still names', () => {
 })
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it
+// Scenario: A merged TASK only a merged TASK's base still names is pruned
+// GIVEN a merged TASK, and a TASK whose base names it but which has itself reached merged
+// WHEN a scheduling pass decides what to prune
+// THEN both are pruned — the hold is the in-flight TASK's claim, and a merged TASK makes no claim
+it('prunes a merged TASK a merged TASK\'s base still names', () => {
+  const target = record('a', { state: 'merged' })
+  const dependent = record('b', {
+    state: 'merged',
+    manifest: { intentRef: 'docs/y.md', branch: 'work/b', base: { kind: 'task', task: 'a', reason: "needs a's work" } },
+  })
+
+  const pruned = entriesToPrune([target, dependent])
+
+  expect(pruned).toEqual(['a', 'b'])
+})
+
+// Requirement: A merged TASK's queue entry is pruned once nothing still names it
 // Scenario: An in-flight TASK is never pruned
 // GIVEN an in-flight TASK
 // WHEN a scheduling pass decides what to prune

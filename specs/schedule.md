@@ -129,7 +129,9 @@ queue directory — and what changed is where the removed entry goes.
 - "A merged TASK an in-flight TASK's base still names is not pruned" → tests/schedule/prune.test.ts
 - "A merged TASK no in-flight TASK's base names is pruned" → tests/schedule/prune.test.ts
 - "A merged TASK nothing still names is pruned from the queue directory" → tests/schedule/end-to-end.test.ts
+- "A merged TASK only a merged TASK's base still names is pruned" → tests/schedule/prune.test.ts
 - "An in-flight TASK is never pruned" → tests/schedule/prune.test.ts
+- "The pruned entry stands in the archive whole, exactly as it stood" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Dispatching a ready TASK starts exactly one executor session
@@ -588,6 +590,8 @@ from a command line, and none is being added here — `enqueue` ships as a plain
 function for a future caller, an "investigator" capability not yet built, to use.
 
 <!-- scenarios: generated -->
+- "A TASK name already standing in the archive is refused, naming the archive" → tests/schedule/queue.test.ts
+- "A TASK name no archived entry holds enqueues while the archive stands" → tests/schedule/queue.test.ts
 - "Two racing enqueue calls on the same TASK name still create exactly one entry" → tests/schedule/queue.test.ts
 - "enqueue creates a new TASK's MANIFEST and initial queued state" → tests/schedule/queue.test.ts
 - "enqueue refuses a TASK name already in the queue, without touching its existing entry" → tests/schedule/queue.test.ts

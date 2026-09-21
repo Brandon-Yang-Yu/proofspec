@@ -530,7 +530,7 @@ it('holds the rows while a selection lives inside them', async () => {
   expect(page.elements.get('rows')?.innerHTML).toContain('work/renamed')
 })
 
-// Requirement: The page shows commands and offers no control that runs anything
+// Requirement: The page shows commands and offers no control that runs them
 // Scenario: No control on the page attaches, rules, holds, or starts anything
 // GIVEN the docket's page, and answers that walk every rendering branch it holds
 // WHEN it is read as the HTML it is, and its script is run the way a browser runs it — against answers, and against a network that fails

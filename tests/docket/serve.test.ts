@@ -178,12 +178,14 @@ it('answers one record per archived TASK with its own files\' facts', async () =
 
 // Requirement: The page answers the archive of completed TASKs
 // Scenario: The records come back ordered by start time, earliest first
-// GIVEN an archive holding two completed TASKs whose name order and start order disagree
+// GIVEN an archive holding two completed TASKs whose name order, start order, and settle order all disagree
 // WHEN the archive's JSON is fetched
-// THEN the records come back in start order, earliest first — the later name does not jump the queue, and the live rows' own name sort is not imposed here
+// THEN the records come back in start order, earliest first — neither the names nor the settled moments impose their order here, and the live rows' own name sort is not imposed either
 it('orders the archive records by start time, earliest first', async () => {
   const { repo, served } = await serveOver({})
-  await writeArchived(repo.root, 'zeta', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+  // zeta started first but settled later; alpha started later but settled first — only the
+  // start order answers, so a sort on settled moments or on names is the wrong sort.
+  await writeArchived(repo.root, 'zeta', { enqueuedAt: ENQUEUED_AT, settledAt: new Date('2025-01-01T11:00:00.000Z') })
   await writeArchived(repo.root, 'alpha', { enqueuedAt: new Date(ENQUEUED_AT.getTime() + 30 * 60 * 1000), settledAt: SETTLED_AT })
 
   const answer = await archiveAnswer(served.port)

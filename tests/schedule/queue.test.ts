@@ -106,6 +106,22 @@ it('refuses a TASK name already standing in the archive, leaving the archive unt
 })
 
 // Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
+// Scenario: A TASK name no archived entry holds enqueues while the archive stands
+// GIVEN an archive already holding one finished TASK, and a different TASK name not yet in the queue
+// WHEN enqueue is called with that new name
+// THEN it creates the new TASK's entry — the archive's presence alone refuses nothing, only a name it holds is spent
+it('enqueues a fresh name while the archive stands, refusing nothing', async () => {
+  const repo = await makeRepo({})
+  await writeArchived(repo.root, 'old', { manifest: JSON.stringify(MANIFEST), state: 'merged' })
+
+  const result = await enqueue(repo.root, 'new', { ...MANIFEST, branch: 'work/new' })
+
+  expect(result).toEqual({ ok: true })
+  expect(await stateOf(repo.root, 'new')).toBe('queued')
+  expect(await archivedManifestOf(repo.root, 'old')).toEqual(MANIFEST)
+})
+
+// Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
 // Scenario: Two racing enqueue calls on the same TASK name still create exactly one entry
 // GIVEN no queue entry exists yet for a TASK name
 // WHEN two enqueue calls for that same name race at the same instant rather than one after another

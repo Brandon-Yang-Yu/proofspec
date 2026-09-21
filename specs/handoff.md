@@ -88,6 +88,7 @@ reason every other refusal in this tool answers `{ok: false, reason}` rather tha
 - "A TASK already in the queue is refused, naming the collision, and its existing entry is untouched" → tests/handoff/extension.test.ts
 - "A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued" → tests/handoff/extension.test.ts
 - "A TASK not already in the queue is enqueued with the given base recorded exactly" → tests/handoff/extension.test.ts
+- "A TASK whose name an archived entry already holds is refused as a value naming the archive, with the archived entry untouched" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: census_in_flight answers the queue's census for the repo it runs in, writing nothing

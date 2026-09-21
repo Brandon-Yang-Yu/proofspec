@@ -246,6 +246,17 @@ two write times, and no log of durations is kept anywhere. An empty archive show
 absence rather than a hidden section, the same honesty an empty docket already keeps:
 nothing finished is a fact the page says plainly.
 
+<!-- scenarios: generated -->
+- "An archive that holds no TASK answers an empty list of records" → tests/docket/serve.test.ts
+- "An empty archive is shown as an absence" → tests/docket/page.test.ts
+- "The archive answer carries one record per archived TASK, each holding the fields read from its own files" → tests/docket/serve.test.ts
+- "The archive answer is computed fresh on each request" → tests/docket/serve.test.ts
+- "The completed rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
+- "The docket's own answer is unchanged by the archive's presence" → tests/docket/serve.test.ts
+- "The page renders the archive's records as a completed section beside its live rows" → tests/docket/page.test.ts
+- "The records come back ordered by start time, earliest first" → tests/docket/serve.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The page shows commands and offers no control that runs them
 
 The page SHALL show the attach command of a listed session and the ruling command of an

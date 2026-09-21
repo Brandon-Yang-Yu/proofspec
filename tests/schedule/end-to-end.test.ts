@@ -348,21 +348,27 @@ it('moves the pruned entry whole into the archive, exactly as it stood', async (
   const files = {
     LEASE: '2026-09-21T09:00:00.000Z',
     INTENT: 'the intent of a',
+    acceptance: 'the acceptance run of a',
     heartbeat: '2026-09-21T09:05:00.000Z',
     phase: JSON.stringify({ phase: 'merge', round: 1 }),
   }
   for (const [name, content] of Object.entries(files)) await repo.write(`.proofspec/dispatch/a/${name}`, content)
+  // The entry's own bytes before the pass — the standard is "exactly as it stood", so every
+  // file is compared against what stood there, not against a reconstruction of it.
+  const before = await Promise.all(
+    ['MANIFEST', 'state', ...Object.keys(files)].map(async name => [name, await readFile(join(repo.root, '.proofspec', 'dispatch', 'a', name), 'utf8')] as const),
+  )
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
 
   expect(plan.pruned).toEqual(['a'])
   const archived = join(repo.root, '.proofspec', 'archive', 'a')
-  for (const [name, content] of Object.entries(files)) {
+  for (const [name, content] of before) {
     await expect(readFile(join(archived, name), 'utf8')).resolves.toBe(content)
   }
-  await expect(readFile(join(archived, 'state'), 'utf8')).resolves.toBe('merged')
-  await expect(readFile(join(archived, 'MANIFEST'), 'utf8')).resolves.toContain('work/a')
-  expect(await readdir(archived)).toHaveLength(6)
+  // Every file the entry held, not a whitelist of conventional names — the count pins that
+  // a file the fixture carries that a copier forgot would fail here, where a move cannot.
+  expect(await readdir(archived)).toHaveLength(7)
   await expect(readdir(join(repo.root, '.proofspec', 'dispatch'))).resolves.not.toContain('a')
 })
 
