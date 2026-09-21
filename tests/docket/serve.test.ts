@@ -1,6 +1,6 @@
 // Capability: docket
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, utimes, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
@@ -130,4 +130,112 @@ it('answers two requests over an unmoved queue identically', async () => {
   const second = await get('/docket', served.port)
 
   expect(second).toBe(first)
+})
+
+// --- the archive of completed TASKs ------------------------------------------------------------
+
+/** The one archive fixture's moments, pinned so the record's fields and duration have exact
+ *  values to check against: enqueued 09:00, settled 10:30 — ninety minutes. */
+const ENQUEUED_AT = new Date('2025-01-01T09:00:00.000Z')
+const SETTLED_AT = new Date('2025-01-01T10:30:00.000Z')
+
+/** An archived entry as the prune leaves one, with both write times pinned by hand. */
+async function writeArchived(root: string, task: string, options: { readonly enqueuedAt: Date; readonly settledAt: Date }): Promise<void> {
+  const dir = join(root, '.proofspec', 'archive', task)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'MANIFEST'), manifestFor(task))
+  await writeFile(join(dir, 'state'), 'merged')
+  await utimes(join(dir, 'MANIFEST'), options.enqueuedAt, options.enqueuedAt)
+  await utimes(join(dir, 'state'), options.settledAt, options.settledAt)
+}
+
+async function archiveAnswer(port: number): Promise<{ records: { task: string; branch: string; base: { kind: string }; enqueuedAt: string; settledAt: string; livedSeconds: number }[] }> {
+  return JSON.parse(await get('/archive', port))
+}
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: The archive answer carries one record per archived TASK, each holding the fields read from its own files
+// GIVEN an archive holding one completed TASK, its two write times pinned by hand
+// WHEN the archive's JSON is fetched
+// THEN it carries exactly one record for it — the TASK's name, the branch and base its MANIFEST records, and the two moments and the duration read from its own files' write times
+it('answers one record per archived TASK with its own files\' facts', async () => {
+  const { repo, served } = await serveOver({})
+  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+
+  const answer = await archiveAnswer(served.port)
+
+  expect(answer.records).toEqual([
+    {
+      task: 'first',
+      branch: 'work/first',
+      base: { kind: 'main' },
+      enqueuedAt: ENQUEUED_AT.toISOString(),
+      settledAt: SETTLED_AT.toISOString(),
+      livedSeconds: 90 * 60,
+    },
+  ])
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: The records come back ordered by start time, earliest first
+// GIVEN an archive holding two completed TASKs whose name order and start order disagree
+// WHEN the archive's JSON is fetched
+// THEN the records come back in start order, earliest first — the later name does not jump the queue, and the live rows' own name sort is not imposed here
+it('orders the archive records by start time, earliest first', async () => {
+  const { repo, served } = await serveOver({})
+  await writeArchived(repo.root, 'zeta', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+  await writeArchived(repo.root, 'alpha', { enqueuedAt: new Date(ENQUEUED_AT.getTime() + 30 * 60 * 1000), settledAt: SETTLED_AT })
+
+  const answer = await archiveAnswer(served.port)
+
+  expect(answer.records.map(record => record.task)).toEqual(['zeta', 'alpha'])
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: An archive that holds no TASK answers an empty list of records
+// GIVEN a served docket whose archive directory holds nothing — the ordinary state until the first prune archives
+// WHEN the archive's JSON is fetched
+// THEN it answers an empty list of records, the same honest absence an empty docket keeps
+it('answers an empty archive as an empty list of records', async () => {
+  const { served } = await serveOver(FILES)
+
+  const answer = await archiveAnswer(served.port)
+
+  expect(answer.records).toEqual([])
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: The archive answer is computed fresh on each request
+// GIVEN a served docket, an archive holding one completed TASK, and the settled moment moved by hand after the server started
+// WHEN the archive's JSON is fetched again
+// THEN the record's settled moment follows the file's new write time — every number is computed on the request that asks for it, never held from an earlier answer
+it('computes the archive answer fresh on each request', async () => {
+  const { repo, served } = await serveOver({})
+  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+  const first = await archiveAnswer(served.port)
+
+  const moved = new Date('2025-01-01T11:00:00.000Z')
+  await utimes(join(repo.root, '.proofspec', 'archive', 'first', 'state'), moved, moved)
+  const second = await archiveAnswer(served.port)
+
+  expect(second.records[0]?.settledAt).toBe(moved.toISOString())
+  expect(second.records[0]?.livedSeconds).toBe(120 * 60)
+  expect(first.records[0]?.settledAt).toBe(SETTLED_AT.toISOString())
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: The docket's own answer is unchanged by the archive's presence
+// GIVEN a served docket whose archive holds one completed TASK and whose queue holds one live TASK
+// WHEN the page's JSON is fetched from /docket
+// THEN the rows carry exactly the live TASK and nothing else — what stands on the queue now and what has finished are two questions, and the archive is the second one, not more rows of the first
+it('leaves the docket\'s own answer unchanged by the archive\'s presence', async () => {
+  const { repo, served } = await serveOver({
+    '.proofspec/dispatch/third/MANIFEST': manifestFor('third'),
+    '.proofspec/dispatch/third/state': 'building',
+  })
+  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+
+  const rows = JSON.parse(await get('/docket', served.port)).rows as { task: string }[]
+
+  expect(rows.map(row => row.task)).toEqual(['third'])
 })

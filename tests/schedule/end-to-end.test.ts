@@ -1,7 +1,7 @@
 // Capability: schedule
 
 import { execFile } from 'node:child_process'
-import { readdir, readFile } from 'node:fs/promises'
+import { access, readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -320,7 +320,7 @@ it('dispatches a TASK held on a mergeable TASK whose branch has landed, in the s
 // Scenario: A merged TASK nothing still names is pruned from the queue directory
 // GIVEN a merged TASK no in-flight TASK's base names
 // WHEN a scheduling pass runs
-// THEN that TASK's whole queue entry is gone from disk — not just one file inside it
+// THEN that TASK's whole queue entry is gone from the queue directory — and stands in the archive instead
 it('prunes a merged TASK nothing still names from the queue directory', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
@@ -333,6 +333,37 @@ it('prunes a merged TASK nothing still names from the queue directory', async ()
   expect(remaining).not.toContain('a')
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'MANIFEST'), 'utf8')).rejects.toThrow()
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).rejects.toThrow()
+  await expect(access(join(repo.root, '.proofspec', 'archive', 'a'))).resolves.toBeUndefined()
+})
+
+// Requirement: A merged TASK's queue entry is pruned once nothing still names it
+// Scenario: The pruned entry stands in the archive whole, exactly as it stood
+// GIVEN a merged TASK whose queue entry holds every conventional file, and no in-flight TASK's base names it
+// WHEN a scheduling pass runs
+// THEN every file the entry held stands in .proofspec/archive/<task>/ byte for byte, and nothing of the entry remains in the queue directory
+it('moves the pruned entry whole into the archive, exactly as it stood', async () => {
+  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await repo.write('.proofspec/dispatch/a/state', 'merged')
+  const files = {
+    LEASE: '2026-09-21T09:00:00.000Z',
+    INTENT: 'the intent of a',
+    heartbeat: '2026-09-21T09:05:00.000Z',
+    phase: JSON.stringify({ phase: 'merge', round: 1 }),
+  }
+  for (const [name, content] of Object.entries(files)) await repo.write(`.proofspec/dispatch/a/${name}`, content)
+
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
+
+  expect(plan.pruned).toEqual(['a'])
+  const archived = join(repo.root, '.proofspec', 'archive', 'a')
+  for (const [name, content] of Object.entries(files)) {
+    await expect(readFile(join(archived, name), 'utf8')).resolves.toBe(content)
+  }
+  await expect(readFile(join(archived, 'state'), 'utf8')).resolves.toBe('merged')
+  await expect(readFile(join(archived, 'MANIFEST'), 'utf8')).resolves.toContain('work/a')
+  expect(await readdir(archived)).toHaveLength(6)
+  await expect(readdir(join(repo.root, '.proofspec', 'dispatch'))).resolves.not.toContain('a')
 })
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it
