@@ -245,10 +245,8 @@ one kickoff message.
 
 ### Requirement: startSession seeds the executor session with the executor's own system prompt
 
-The bare CLI's `startSession` action SHALL read `.pi/agents/executor.md` from this tool's own
-checkout — never from the TASK's own worktree or branch — strip its YAML frontmatter, and
-pass the remaining prose to `pi` as `--append-system-prompt`, alongside the worktree and
-tmux-socket handling above.
+The bare CLI's `startSession` action SHALL use `.pi/agents/executor.md` — its YAML
+frontmatter stripped — as the executor session's system prompt.
 
 The session must know it is the executor, that its scope starts only after the disposition
 review, and that a wrong judged standard — never a wrong implementation — is the one thing
