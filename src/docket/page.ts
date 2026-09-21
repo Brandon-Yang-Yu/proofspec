@@ -29,9 +29,10 @@ import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling, PhaseAccountE
  *  current, long enough that a page left open is a handful of requests a minute. */
 export const PAGE_REFRESH_MILLISECONDS = 2000
 
-/** The page a browser opens: the queue's rows, the completed TASKs the archive holds beside
- *  them, the problems that kept a TASK off the rows, and the rulings still outstanding with
- *  the command that pays each. */
+/** The page a browser opens, in the order the work is read: the queue's rows, the problems
+ *  that kept a TASK off the rows, the rulings still outstanding with the command that pays
+ *  each, and — last — the completed TASKs the archive holds, because debt reads before
+ *  history. */
 export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): string {
   return `<!doctype html>
 <html lang="en">
@@ -59,6 +60,10 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
 </table>
+<h2 id="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>problems</h2>
+<ul id="problems">${report.problems.map(serverProblemHtml).join('')}</ul>
+<h2 id="rulings-heading"${report.outstanding.length === 0 ? ' hidden' : ''}>rulings outstanding</h2>
+<ul id="rulings">${report.outstanding.map(serverRulingHtml).join('')}</ul>
 <h2>completed</h2>
 <p id="archive-empty"${archive.length === 0 ? '' : ' hidden'}>no completed TASK yet</p>
 <table>
@@ -67,10 +72,6 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   </thead>
   <tbody id="archive-rows">${archive.map(serverArchiveRowHtml).join('')}</tbody>
 </table>
-<h2 id="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>problems</h2>
-<ul id="problems">${report.problems.map(serverProblemHtml).join('')}</ul>
-<h2 id="rulings-heading"${report.outstanding.length === 0 ? ' hidden' : ''}>rulings outstanding</h2>
-<ul id="rulings">${report.outstanding.map(serverRulingHtml).join('')}</ul>
 <script>
 ${pageScript()}
 </script>
