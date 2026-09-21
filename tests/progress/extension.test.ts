@@ -229,7 +229,7 @@ it('records the standing and opens the history on a first report', async () => {
 it('writes nothing at all when the report matches the standing word and round', async () => {
   const repo = await makeRepo({})
   await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
-  await writePhase(repo.root, 'a', 'build-green', 2, 1_700_000_000_000)
+  await writePhase(repo.root, 'a', { phase: 'build-green', round: 2, since: 1_700_000_000_000 })
   await appendPhaseHistory(repo.root, 'a', { phase: 'tests-red', round: 1, since: 1_699_999_000_000 })
   const bytesBefore = await phaseFileBytes(repo.root, 'a')
   const historyBefore = await phaseHistoryFileBytes(repo.root, 'a')
@@ -256,7 +256,7 @@ it('keeps the standing since while rewriting the round on a round change', async
   const repo = await makeRepo({})
   await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
   const standingSince = 1_700_000_000_000
-  await writePhase(repo.root, 'a', 'test-review', 1, standingSince)
+  await writePhase(repo.root, 'a', { phase: 'test-review', round: 1, since: standingSince })
 
   const t0 = Date.now()
   const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'test-review', 2)
@@ -281,7 +281,7 @@ it('keeps the standing since while rewriting the round on a round change', async
 it('rewrites word, round, and since on a word change', async () => {
   const repo = await makeRepo({})
   await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
-  await writePhase(repo.root, 'a', 'tests-red', 1, 1_700_000_000_000)
+  await writePhase(repo.root, 'a', { phase: 'tests-red', round: 1, since: 1_700_000_000_000 })
 
   const t0 = Date.now()
   const result = await runReportTaskPhase({ queueRoot: repo.root, task: 'a' }, 'build-green', 1)
@@ -358,7 +358,7 @@ it('appends to the history without overwriting earlier standings', async () => {
   await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
   const firstSince = 1_700_000_000_000
   const secondSince = firstSince + 5_000
-  await writePhase(repo.root, 'a', 'test-review', 3, secondSince)
+  await writePhase(repo.root, 'a', { phase: 'test-review', round: 3, since: secondSince })
   await appendPhaseHistory(repo.root, 'a', { phase: 'tests-red', round: 1, since: firstSince })
   await appendPhaseHistory(repo.root, 'a', { phase: 'test-review', round: 3, since: secondSince })
 

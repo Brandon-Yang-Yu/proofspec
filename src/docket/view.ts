@@ -77,12 +77,11 @@ export type ArchiveRecord = {
   readonly settledAt: string
   readonly livedSeconds: number
   /** Every standing the archived TASK stood through, as its own `phase-history` file holds
-   *  them — `null` when it kept none. Optional only so records spelled before the history
-   *  rode them still typecheck; `archiveView` always sets it. */
-  readonly phaseHistory?: readonly PhaseHistoryEntry[] | null
+   *  them — `null` when it kept none. */
+  readonly phaseHistory: readonly PhaseHistoryEntry[] | null
   /** The record's account of that history, computed on the request that asks: every phase
    *  closed, the last entry's time ending at the settled moment. */
-  readonly phaseAccount?: readonly PhaseAccountEntry[] | null
+  readonly phaseAccount: readonly PhaseAccountEntry[] | null
 }
 
 /** Whether the dedicated tmux server still holds a session named for the TASK. A listed
@@ -316,14 +315,14 @@ function phaseAccountFrom(
   history.forEach((entry, index) => {
     const next = history.at(index + 1)
     const ms = Math.max(0, (next === undefined ? endsAtMs : next.since) - entry.since)
-    const at = where.get(entry.phase)
-    if (at === undefined) {
+    const slot = where.get(entry.phase)
+    if (slot === undefined) {
       where.set(entry.phase, accounts.length)
       accounts.push({ word: entry.phase, totalMs: ms, roundsReached: entry.round })
       return
     }
-    const standing = accounts[at]!
-    accounts[at] = {
+    const standing = accounts[slot]!
+    accounts[slot] = {
       word: standing.word,
       totalMs: standing.totalMs + ms,
       roundsReached: Math.max(standing.roundsReached, entry.round),

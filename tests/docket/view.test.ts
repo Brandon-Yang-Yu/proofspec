@@ -166,7 +166,7 @@ it('carries no heartbeat as absent, never as a repeat of the word\'s own age', a
 // the read against the real bytes, not a fixture's guess at them.
 it('carries the phase word and round exactly as the phase file holds them', async () => {
   const repo = await makeRepo({ ...queueEntry('phased', { state: 'building' }) })
-  await writePhase(repo.root, 'phased', 'test-review', 2, msBeforeNow(2_500))
+  await writePhase(repo.root, 'phased', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -202,7 +202,7 @@ it('carries the phase word and round both as absent when there is no phase file'
     ...queueEntry('phased', { state: 'building' }),
     ...queueEntry('plain', { state: 'queued' }),
   })
-  await writePhase(repo.root, 'phased', 'test-review', 2, msBeforeNow(2_500))
+  await writePhase(repo.root, 'phased', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -220,7 +220,7 @@ it('carries the phase word and round both as absent when there is no phase file'
 // THEN the row carries the word exactly as the phase file holds it
 it('shows a phase word it has never met as it stands', async () => {
   const repo = await makeRepo({ ...queueEntry('odd', { state: 'building' }) })
-  await writePhase(repo.root, 'odd', 'warping', 4, msBeforeNow(2_500))
+  await writePhase(repo.root, 'odd', { phase: 'warping', round: 4, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -245,7 +245,7 @@ it('carries the phase history exactly as the phase-history file holds it', async
     { phase: 'test-review', round: 2, since: msBeforeNow(2_500) },
   ]
   for (const standing of standings) await appendPhaseHistory(repo.root, 'storied', standing)
-  await writePhase(repo.root, 'storied', 'test-review', 2, msBeforeNow(2_500))
+  await writePhase(repo.root, 'storied', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -259,7 +259,7 @@ it('carries the phase history exactly as the phase-history file holds it', async
 // THEN its row carries the history and the account both as absent — a phase standing alone invents no past
 it('carries no phase-history file as an absent history, never invented', async () => {
   const repo = await makeRepo(queueEntry('plain', { state: 'building' }))
-  await writePhase(repo.root, 'plain', 'test-review', 2, msBeforeNow(2_500))
+  await writePhase(repo.root, 'plain', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -280,7 +280,7 @@ it('carries an unreadable phase-history as absent while the rest of the row stil
     ...queueEntry('corrupt', { state: 'building' }),
     '.proofspec/dispatch/corrupt/phase-history': `${readable}\nnot the tool's shape\n`,
   })
-  await writePhase(repo.root, 'corrupt', 'test-review', 2, msBeforeNow(2_500_000))
+  await writePhase(repo.root, 'corrupt', { phase: 'test-review', round: 2, since: msBeforeNow(2_500_000) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -299,7 +299,7 @@ it('carries an unreadable phase-history as absent while the rest of the row stil
 // THEN its row carries 240 as the time in the phase word — the since the file's content records, its own number, never a repeat of the word's
 it('carries the time since the phase word began running', async () => {
   const repo = await makeRepo(queueEntry('a', { state: 'building' }))
-  await writePhase(repo.root, 'a', 'test-review', 2, msBeforeNow(240_000))
+  await writePhase(repo.root, 'a', { phase: 'test-review', round: 2, since: msBeforeNow(240_000) })
   await writtenAgo(repo, '.proofspec/dispatch/a/state', 600)
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
@@ -332,7 +332,7 @@ it('carries no phase file as an absent third number, never as a repeat of anothe
 // THEN its row carries four hours as the time in the phase word — the file is rewritten on every round move, so its write time would say minutes
 it('reads the phase age from the since the content records, never the write time', async () => {
   const repo = await makeRepo(queueEntry('endurance', { state: 'building' }))
-  await writePhase(repo.root, 'endurance', 'test-review', 200, msBeforeNow(14_400_000))
+  await writePhase(repo.root, 'endurance', { phase: 'test-review', round: 200, since: msBeforeNow(14_400_000) })
   await writtenAgo(repo, '.proofspec/dispatch/endurance/phase', 120)
   await writtenAgo(repo, '.proofspec/dispatch/endurance/state', 120)
 
@@ -380,7 +380,7 @@ it('answers the phase account with summed runs, highest rounds, and the standing
     { phase: 'review', round: 1, since: msBeforeNow(2_500) },
   ]
   for (const standing of standings) await appendPhaseHistory(repo.root, 'looped', standing)
-  await writePhase(repo.root, 'looped', 'review', 1, msBeforeNow(2_500))
+  await writePhase(repo.root, 'looped', { phase: 'review', round: 1, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 

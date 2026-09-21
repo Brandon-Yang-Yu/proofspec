@@ -82,7 +82,7 @@ async function get(path: string, port: number): Promise<string> {
 // THEN the page's markup carries the TASK's phase word and its round as visible content and its phase totals column spelling the absence of any history, and the JSON carries the same row with its phase fields — one view, asked twice, answering the same moment
 it('answers the page at / with the docket computed at that moment', async () => {
   const { repo, served } = await serveOver(FILES)
-  await writePhase(repo.root, 'alpha', 'test-review', 2, minutesAgo(25))
+  await writePhase(repo.root, 'alpha', { phase: 'test-review', round: 2, since: minutesAgo(25) })
 
   const page = await get('/', served.port)
   const json = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; round: number | null; phaseAgeSeconds: number | null; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }
@@ -103,7 +103,7 @@ it('answers the page at / with the docket computed at that moment', async () => 
 // THEN the two answers carry the same content — rows, problems, and outstanding rulings alike, the history and its account included — nothing on the page is a dialect of its own
 it('answers at /docket the same content the one-shot JSON form gives', async () => {
   const { repo, served } = await serveOver(FILES)
-  await writePhase(repo.root, 'alpha', 'build-green', 2, minutesAgo(25))
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 2, since: minutesAgo(25) })
   await appendPhaseHistory(repo.root, 'alpha', { phase: 'test-red', round: 1, since: minutesAgo(90) })
   await appendPhaseHistory(repo.root, 'alpha', { phase: 'build-green', round: 2, since: minutesAgo(25) })
 
@@ -129,7 +129,7 @@ it("carries a TASK's phase history and the account computed from it in its row",
     { phase: 'test-red', round: 2, since: minutesAgo(40) },
     { phase: 'build-green', round: 3, since: minutesAgo(20) },
   ]
-  await writePhase(repo.root, 'alpha', 'build-green', 3, minutesAgo(20))
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 3, since: minutesAgo(20) })
   for (const standing of standings) await appendPhaseHistory(repo.root, 'alpha', standing)
 
   const answer = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }
@@ -173,7 +173,7 @@ it('answers a phase history appended between two requests on the request after i
     '.proofspec/dispatch/alpha/MANIFEST': manifestFor('alpha'),
     '.proofspec/dispatch/alpha/state': 'building',
   })
-  await writePhase(repo.root, 'alpha', 'build-green', 1, minutesAgo(30))
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 1, since: minutesAgo(30) })
   await appendPhaseHistory(repo.root, 'alpha', { phase: 'test-red', round: 1, since: minutesAgo(60) })
   await appendPhaseHistory(repo.root, 'alpha', { phase: 'build-green', round: 1, since: minutesAgo(30) })
 
@@ -187,7 +187,7 @@ it('answers a phase history appended between two requests on the request after i
   ])
 
   await appendPhaseHistory(repo.root, 'alpha', { phase: 'review', round: 1, since: minutesAgo(10) })
-  await writePhase(repo.root, 'alpha', 'review', 1, minutesAgo(10))
+  await writePhase(repo.root, 'alpha', { phase: 'review', round: 1, since: minutesAgo(10) })
 
   const after = await rowOf()
   expect(after?.phase).toBe('review')

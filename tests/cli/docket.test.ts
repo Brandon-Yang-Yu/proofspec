@@ -62,7 +62,7 @@ it('carries the phase word and its round on the text row', async () => {
   const repo = await makeRepo(FILES)
   // `since` pinned to the fixture's own moment so the file holds the shape `readPhase` answers —
   // the row's ages are not this test's question.
-  await writePhase(repo.root, 'alpha', 'test-review', 2, Date.now())
+  await writePhase(repo.root, 'alpha', { phase: 'test-review', round: 2, since: Date.now() })
 
   const answer = renderAnswer(await docket({ cwd: repo.root, docket: { listSessions: async () => [] } }))
 

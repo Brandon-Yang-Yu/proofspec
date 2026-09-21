@@ -128,8 +128,8 @@ function serverAccountFragment(entry: PhaseAccountEntry): string {
 /** A phase account as the page spells it: one fragment per word, first-standing order, a
  *  fragment per line — or the row's own word-shaped absence when no history stands, the
  *  same vocabulary `no phase` and `no session` keep (`—` stays the age columns' absence). */
-function serverPhaseAccountHtml(account: readonly PhaseAccountEntry[] | null | undefined): string {
-  if (account === null || account === undefined) return '<span class="muted">no phases</span>'
+function serverPhaseAccountHtml(account: readonly PhaseAccountEntry[] | null): string {
+  if (account === null) return '<span class="muted">no phases</span>'
   return account.map(serverAccountFragment).join('<br>')
 }
 
@@ -220,7 +220,7 @@ function pageScript(): string {
   }
 
   function phaseAccountHtml(account) {
-    if (account === null || account === undefined) return '<span class="muted">no phases</span>'
+    if (account === null) return '<span class="muted">no phases</span>'
     return account.map(accountFragment).join('<br>')
   }
 

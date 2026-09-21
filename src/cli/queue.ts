@@ -169,10 +169,10 @@ export type PhaseHistoryEntry = { readonly phase: string; readonly round: number
 /** Overwrites a TASK's phase file with its pace word, round, and the moment the word began.
  * Like `writeState` it judges nothing — the queue holds no vocabulary of phase words, and
  *  which word an executor stands at is the executor's own account (`report_task_phase`,
- *  `specs/progress.md`). `since` is the caller's to hold because only the caller knows
+ *  `specs/progress.md`). The record arrives as one value because only the caller knows
  *  whether this write begins a standing or rewrites one already standing. */
-export async function writePhase(cwd: string, task: string, phase: string, round: number, since: number): Promise<void> {
-  await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify({ phase, round, since }))
+export async function writePhase(cwd: string, task: string, record: PhaseRecord): Promise<void> {
+  await writeFile(join(cwd, ...QUEUE_DIR, task, PHASE_FILE), JSON.stringify(record))
 }
 
 /** A TASK's pace word, its round, and the moment that word began running — one read

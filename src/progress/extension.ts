@@ -179,7 +179,7 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
     // A round move keeps the `since` the file records — only the word's beginning moves it —
     // while a word change (or no standing to match) begins a new one at now.
     const since = standing !== undefined && standing.phase === word ? standing.since : now
-    await writePhase(env.queueRoot, env.task, word, resolvedRound, since)
+    await writePhase(env.queueRoot, env.task, { phase: word, round: resolvedRound, since })
     await appendPhaseHistory(env.queueRoot, env.task, { phase: word, round: resolvedRound, since: now })
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ok: false, reason: `TASK ${env.task} has no queue entry to report a phase into` }
