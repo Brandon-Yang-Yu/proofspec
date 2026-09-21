@@ -165,9 +165,11 @@ source, and a run of them that is nothing but whitespace SHALL not be reported a
 the helper, the import and the fixture edits, and they are usually a line or two — the read
 that fetches them costs a reader more than the lines are worth, so they are carried as written.
 But nothing judges them, and on a change that adds tests there are more of them than there are
-PROMISE, so they are not in the work list beyond their number. A blank run is worth nothing either way: it would bury the runs worth reading. The file they are in is often not a test, so it is read back for them; one
-git names as changed but that cannot be read is a cannot-run, because reporting those lines as
-blank is a CLAIM about them and a wrong one.
+PROMISE, so they are not in the work list beyond their number. A blank run is worth
+nothing either way: it would bury the runs worth reading. The file they are in is often
+not a test, so it is read back for them; one git names as changed but that cannot be read
+is a cannot-run, because reporting those lines as blank is a CLAIM about them and a wrong
+one.
 
 Requirements SHALL come back in capability then requirement order, and the scenarios under
 each in file order. Git lists what it already tracks ahead of what it has never seen, so the
@@ -274,8 +276,8 @@ measured from.
 
 The description is the STANDARD every scenario under the requirement is judged against: a
 reworded description is a different question being asked of every scenario, and every
-judgement made under the old wording is worth taking again. Reading the change and not re-opening would let a branch change what its
-PROMISE mean with the gate silent.
+judgement made under the old wording is worth taking again. Reading the change and not
+re-opening would let a branch change what its PROMISE mean with the gate silent.
 
 <!-- scenarios: generated -->
 - "A PROMISE both a description change and a test change reached is gathered once" → tests/cli/touched-descriptions.test.ts

@@ -168,8 +168,7 @@ capacity freeing is no state of the TASK's own: a freed slot is there for the ne
 see, with no producer of its own to build. The bound is what a single pass can see: two
 passes triggered at the same instant can each see three live sessions and each start one —
 five, briefly — and closing that window would take a lock over the whole queue, which this
-design declines to build; the LEASE already prevents the common double-dispatch, two
-sessions for one TASK. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
+design declines to build. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
 bound point at a throwaway socket and a bound of one, rather than start four real sessions
 on the production server.
 
@@ -323,7 +322,8 @@ TASKs arrive.
 
 Most shared ground between two TASKs is coincidence, not conflict, and reading both
 intents is cheap enough to run on every relationship the graph finds, which is what keeps
-a human's attention for the ones that actually need it. A process with no tools and no saved session is what makes "authored
+a human's attention for the ones that actually need it. A process with no tools and no
+saved session is what makes "authored
 neither TASK's work" a fact about the call, not an assumption about who happens to be
 running it — it cannot have touched either TASK's branch, and it remembers nothing from
 one relationship to the next, so the same two TASKs get the same question wherever in
@@ -487,10 +487,12 @@ of the archive SHALL name the archive in its reason.
 A TASK name is spent once. A name a finished TASK already used stays with that TASK in the
 archive, and is never handed to a new one: two TASKs of one name — one finished in the
 archive, one in flight in the queue — would leave every reader that names TASKs unable to
-say which TASK a name means. Two callers racing to enqueue the same TASK name are collapsed to the one filesystem call
-the OS already makes atomic. There is deliberately no new CLI verb for this — nothing calls `proofspec enqueue`
-from a command line, and none is being added here — `enqueue` ships as a plain exported
-function for a future caller, an "investigator" capability not yet built, to use.
+say which TASK a name means. Two callers racing to enqueue the same TASK name still end
+with exactly one entry, the winner's and not a mix: the create is exclusive, so the loser
+refuses rather than overwrites. There is deliberately no new CLI verb for this — nothing
+calls `proofspec enqueue` from a command line, and none is being added here — `enqueue`
+ships as a plain exported function for a future caller, an "investigator" capability not
+yet built, to use.
 
 <!-- scenarios: generated -->
 - "A TASK name already standing in the archive is refused, naming the archive" → tests/schedule/queue.test.ts
