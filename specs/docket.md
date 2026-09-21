@@ -288,9 +288,9 @@ tracked nowhere else; and its phase history, read from the `phase-history` file 
 archived entry carries — a file that needs no move of its own, because the archive move
 takes the whole entry directory and the history rides along with the MANIFEST and the
 `state` file. Records SHALL come back ordered by each TASK's start time — the enqueued
-moment — earliest first; the live rows keep their own name sort. The page SHALL render the
-records as a completed section beside its live rows, each record showing the same phase
-account a live row shows: every phase word in the order each first stood, the total time
+moment — latest first, earliest last; the live rows keep their own name sort. The page
+SHALL render the records as a completed section after the rulings outstanding section,
+each record showing the same phase account a live row shows: every phase word in the order each first stood, the total time
 spent in each, and for a word that looped, how many rounds it reached. Every phase in an
 archived account SHALL be closed — the TASK is finished — and the last entry's time SHALL
 end at the TASK's settled moment, the moment the record already reads. An archived TASK
@@ -301,9 +301,14 @@ The docket's own answer is untouched by this read: the rows, one-shot and at `/d
 still carry exactly what they carried. What stands on the queue now and what has finished
 are two questions, and the archive is the second one — not more rows of the first, because
 a completed TASK is no longer in flight and standing it among the live rows would say it
-was. Ordering by start time rather than by name makes the completed section a chronology:
-the work shows in the order it began, earliest first, and the live rows keep their own name
-sort because theirs is a different read serving a different question. The phase account
+was. Ordering by start time rather than by name keeps the completed section a chronology,
+and it reads latest first: the
+TASK enqueued most recently stands at the top, because a person scanning the completed
+section wants the most recent work where the eye lands first. The chronology still holds,
+newest at top and oldest at the bottom. The live rows keep their own name sort because
+theirs is a different read serving a different question. The completed section stands after
+the rulings outstanding section because debt reads before history: what the human still
+owes the queue comes before what the queue has already finished. The phase account
 belongs in the completed section for the same reason it belongs on a live row: where a
 finished TASK's time went is part of what finished means, and the archived `phase-history`
 file already holds every fact of it — the prune archived the entry whole, and this read
@@ -325,9 +330,10 @@ finished is a fact the page says plainly.
 - "The archive answer is computed fresh on each request" → tests/docket/serve.test.ts
 - "The completed record shows its phase account as the live rows show theirs" → tests/docket/page.test.ts
 - "The completed rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
+- "The completed section stands after the rulings outstanding section" → tests/docket/page.test.ts
 - "The docket's own answer is unchanged by the archive's presence" → tests/docket/serve.test.ts
-- "The page renders the archive's records as a completed section beside its live rows" → tests/docket/page.test.ts
-- "The records come back ordered by start time, earliest first" → tests/docket/serve.test.ts
+- "The page renders the archive's records as a completed section in start order, latest first" → tests/docket/page.test.ts
+- "The records come back ordered by start time, latest first" → tests/docket/serve.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The page shows commands and offers no control that runs them

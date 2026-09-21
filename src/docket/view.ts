@@ -217,14 +217,16 @@ export function docketView(input: {
 }
 
 /** The archive over facts already read: one record per archived TASK, ordered by each
- *  TASK's start time — the enqueued moment — earliest first, so the completed section reads
- *  as a chronology of the work rather than a second name-sorted list. An entry whose
- *  MANIFEST cannot be parsed is skipped rather than answered half-invented: entries arrive
- *  whole by construction (the prune moves them untouched), and a hand-damaged archive is
- *  outside what this view promises to judge. */
+ *  TASK's start time — the enqueued moment — latest first, earliest last, so the most
+ *  recently enqueued TASK stands at the top where the eye lands first. Debt reads before
+ *  history is the page-side reason the completed section sits last; this is the data-side
+ *  reason for the same ordering — a chronology, newest first. An entry whose MANIFEST
+ *  cannot be parsed is skipped rather than answered half-invented: entries arrive whole
+ *  by construction (the prune moves them untouched), and a hand-damaged archive is outside
+ *  what this view promises to judge. */
 export function archiveView(entries: readonly ArchiveEntryRead[]): readonly ArchiveRecord[] {
   const started = [...entries].sort(
-    (a, b) => a.manifestWrittenAt - b.manifestWrittenAt || compareStrings(a.task, b.task),
+    (a, b) => b.manifestWrittenAt - a.manifestWrittenAt || compareStrings(a.task, b.task),
   )
   const records: ArchiveRecord[] = []
   for (const entry of started) {
