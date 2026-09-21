@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { afterEach, expect, it } from 'vitest'
 import { docket, exitCodeOf } from '../../src/cli/index.ts'
-import { writePhase } from '../../src/cli/queue.ts'
+import { appendPhaseHistory, writePhase } from '../../src/cli/queue.ts'
+import { archiveView } from '../../src/docket/index.ts'
 import type { Docket } from '../../src/docket/index.ts'
 import type { Outcome } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
@@ -14,6 +15,10 @@ afterEach(cleanupRepos)
 
 /** The one clock the ages are read against, so a fixture's mtimes and the run's `now` agree. */
 const NOW = new Date('2026-09-16T12:00:00.000Z')
+
+/** The moment `ms` before the frozen NOW, in epoch milliseconds — the clock every fixture pins a
+ *  `since` to, so a standing's recorded moment and the run's `now` agree the same way. */
+const msBeforeNow = (ms: number): number => NOW.getTime() - ms
 
 function reportOf(outcome: Outcome): Docket {
   if (outcome.kind !== 'docket') throw new Error(`expected a docket report, got ${outcome.kind}`)
@@ -161,13 +166,30 @@ it('carries no heartbeat as absent, never as a repeat of the word\'s own age', a
 // the read against the real bytes, not a fixture's guess at them.
 it('carries the phase word and round exactly as the phase file holds them', async () => {
   const repo = await makeRepo({ ...queueEntry('phased', { state: 'building' }) })
-  await writePhase(repo.root, 'phased', 'test-review', 2)
+  await writePhase(repo.root, 'phased', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
   const row = reportOf(outcome).rows[0]
   expect(row?.phase).toBe('test-review')
   expect(row?.round).toBe(2)
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A row carries the branch and base its MANIFEST records
+// GIVEN a queue holding one TASK branched off another TASK and one branched off main
+// WHEN the docket is answered
+// THEN each row carries exactly the branch and base its own MANIFEST records — the two facts that say which work the row stands for and where it was built
+it('carries the branch and base exactly as each MANIFEST records them', async () => {
+  const { outcome } = await docketOver({
+    ...queueEntry('on-main', { manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/on-main', base: { kind: 'main' } }) }),
+    ...queueEntry('on-task', { manifest: JSON.stringify({ intentRef: 'docs/y.md', branch: 'work/on-task', base: { kind: 'task', task: 'on-main', reason: 'it builds on that work' } }) }),
+  })
+
+  expect(reportOf(outcome).rows.map(row => [row.branch, row.base])).toEqual([
+    ['work/on-main', { kind: 'main' }],
+    ['work/on-task', { kind: 'task', task: 'on-main', reason: 'it builds on that work' }],
+  ])
 })
 
 // Requirement: The docket answers one row per queue entry
@@ -180,7 +202,7 @@ it('carries the phase word and round both as absent when there is no phase file'
     ...queueEntry('phased', { state: 'building' }),
     ...queueEntry('plain', { state: 'queued' }),
   })
-  await writePhase(repo.root, 'phased', 'test-review', 2)
+  await writePhase(repo.root, 'phased', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -198,7 +220,7 @@ it('carries the phase word and round both as absent when there is no phase file'
 // THEN the row carries the word exactly as the phase file holds it
 it('shows a phase word it has never met as it stands', async () => {
   const repo = await makeRepo({ ...queueEntry('odd', { state: 'building' }) })
-  await writePhase(repo.root, 'odd', 'warping', 4)
+  await writePhase(repo.root, 'odd', { phase: 'warping', round: 4, since: msBeforeNow(2_500) })
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -208,16 +230,77 @@ it('shows a phase word it has never met as it stands', async () => {
   expect(reportOf(outcome).rows[0]?.round).toBe(4)
 })
 
-// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
-// Scenario: A row carries how long it has been since the phase file was last written
-// GIVEN a TASK whose state file was last written 600 seconds ago and whose phase file 240 seconds ago
+// Requirement: The docket answers one row per queue entry
+// Scenario: A row carries the TASK's phase history exactly as its phase-history file holds it
+// GIVEN a TASK whose phase-history file holds three standings, each with its own round and moment
 // WHEN the docket is answered
-// THEN its row carries 240 as the time since the phase was written — its own file's age, not a repeat of the word's
-it('carries the time since the phase file was last written', async () => {
+// THEN the row carries those three standings exactly as the file holds them, in file order
+// The history is written through the same writer the extension tool's history side uses, so
+// the test pins the read against the real bytes, not a fixture's guess at them.
+it('carries the phase history exactly as the phase-history file holds it', async () => {
+  const repo = await makeRepo(queueEntry('storied', { state: 'building' }))
+  const standings = [
+    { phase: 'test-red', round: 1, since: msBeforeNow(9_000) },
+    { phase: 'build', round: 1, since: msBeforeNow(7_500) },
+    { phase: 'test-review', round: 2, since: msBeforeNow(2_500) },
+  ]
+  for (const standing of standings) await appendPhaseHistory(repo.root, 'storied', standing)
+  await writePhase(repo.root, 'storied', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  expect(reportOf(outcome).rows[0]?.phaseHistory).toEqual(standings)
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A TASK with no phase-history file carries the history as absent, never invented
+// GIVEN a TASK with a phase file but no phase-history file at all
+// WHEN the docket is answered
+// THEN its row carries the history and the account both as absent — a phase standing alone invents no past
+it('carries no phase-history file as an absent history, never invented', async () => {
+  const repo = await makeRepo(queueEntry('plain', { state: 'building' }))
+  await writePhase(repo.root, 'plain', { phase: 'test-review', round: 2, since: msBeforeNow(2_500) })
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phase).toBe('test-review')
+  expect(row?.phaseHistory).toBeNull()
+  expect(row?.phaseAccount).toBeNull()
+})
+
+// Requirement: The docket answers one row per queue entry
+// Scenario: A phase-history file that does not hold the tool's shape answers as absent, with the rest of the row still standing
+// GIVEN a TASK whose phase-history file holds one readable standing beside a line that is not the tool's shape
+// WHEN the docket is answered
+// THEN the row carries the history and the account as absent — all or nothing — while its phase word, round, and age still stand
+it('carries an unreadable phase-history as absent while the rest of the row still stands', async () => {
+  const readable = JSON.stringify({ phase: 'build', round: 1, since: msBeforeNow(9_000) })
+  const repo = await makeRepo({
+    ...queueEntry('corrupt', { state: 'building' }),
+    '.proofspec/dispatch/corrupt/phase-history': `${readable}\nnot the tool's shape\n`,
+  })
+  await writePhase(repo.root, 'corrupt', { phase: 'test-review', round: 2, since: msBeforeNow(2_500_000) })
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phaseHistory).toBeNull()
+  expect(row?.phaseAccount).toBeNull()
+  expect(row?.phase).toBe('test-review')
+  expect(row?.round).toBe(2)
+  expect(row?.phaseAgeSeconds).toBe(2_500)
+})
+
+// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
+// Scenario: A row carries how long it has been since the phase word began running
+// GIVEN a TASK whose state file was last written 600 seconds ago and whose phase file records a since 240 seconds ago
+// WHEN the docket is answered
+// THEN its row carries 240 as the time in the phase word — the since the file's content records, its own number, never a repeat of the word's
+it('carries the time since the phase word began running', async () => {
   const repo = await makeRepo(queueEntry('a', { state: 'building' }))
-  await writePhase(repo.root, 'a', 'test-review', 2)
+  await writePhase(repo.root, 'a', { phase: 'test-review', round: 2, since: msBeforeNow(240_000) })
   await writtenAgo(repo, '.proofspec/dispatch/a/state', 600)
-  await writtenAgo(repo, '.proofspec/dispatch/a/phase', 240)
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
@@ -240,6 +323,74 @@ it('carries no phase file as an absent third number, never as a repeat of anothe
   const row = reportOf(outcome).rows[0]
   expect(row?.stateAgeSeconds).toBe(600)
   expect(row?.phaseAgeSeconds).toBeNull()
+})
+
+// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
+// Scenario: A row reads the phase age from the since the file's content records, never the file's write time
+// GIVEN a TASK whose phase file records a since four hours ago but was last written two minutes ago
+// WHEN the docket is answered
+// THEN its row carries four hours as the time in the phase word — the file is rewritten on every round move, so its write time would say minutes
+it('reads the phase age from the since the content records, never the write time', async () => {
+  const repo = await makeRepo(queueEntry('endurance', { state: 'building' }))
+  await writePhase(repo.root, 'endurance', { phase: 'test-review', round: 200, since: msBeforeNow(14_400_000) })
+  await writtenAgo(repo, '.proofspec/dispatch/endurance/phase', 120)
+  await writtenAgo(repo, '.proofspec/dispatch/endurance/state', 120)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  expect(reportOf(outcome).rows[0]?.phaseAgeSeconds).toBe(14_400)
+})
+
+// Requirement: A row carries how long the TASK has stood in its word, and when it last moved
+// Scenario: A phase file written before the shape gained its since answers the word, the round, and the age all as absent
+// GIVEN a TASK whose phase file holds a word and a round but no since — the shape the tool wrote before since existed — beside a state file 90 seconds old
+// WHEN the docket is answered
+// THEN the row carries the phase word, the round, and the phase age all as absent, while the state word and its own age still stand
+it('carries an old-shape phase file as word, round, and age all absent', async () => {
+  const repo = await makeRepo({
+    ...queueEntry('oldshape', { state: 'building' }),
+    '.proofspec/dispatch/oldshape/phase': JSON.stringify({ phase: 'test-review', round: 2 }),
+  })
+  await writtenAgo(repo, '.proofspec/dispatch/oldshape/state', 90)
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phase).toBeNull()
+  expect(row?.round).toBeNull()
+  expect(row?.phaseAgeSeconds).toBeNull()
+  expect(row?.state).toBe('building')
+  expect(row?.stateAgeSeconds).toBe(90)
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A row's phase account carries each word in first-standing order, separate runs summed, the highest round reached, and the standing word live
+// GIVEN a TASK whose history holds build, test-red, build again, and then review — review the standing its phase file records
+// WHEN the docket is answered
+// THEN the row's account carries build first with its two runs summed under one word, test-red next, and review last and live, each word's round the highest it reached
+// The runs are pinned so the sums prove the flooring: build's 1500ms and 3500.6ms sum to
+// 5000.6ms — 5 seconds floored once at the total, where a floor per run would say 4 — and
+// review's single live run agrees with the row's own phase age for the standing word.
+it('answers the phase account with summed runs, highest rounds, and the standing word live', async () => {
+  const repo = await makeRepo(queueEntry('looped', { state: 'building' }))
+  const standings = [
+    { phase: 'build', round: 1, since: msBeforeNow(9_000) },
+    { phase: 'test-red', round: 1, since: msBeforeNow(7_500) },
+    { phase: 'build', round: 2, since: msBeforeNow(6_000.6) },
+    { phase: 'review', round: 1, since: msBeforeNow(2_500) },
+  ]
+  for (const standing of standings) await appendPhaseHistory(repo.root, 'looped', standing)
+  await writePhase(repo.root, 'looped', { phase: 'review', round: 1, since: msBeforeNow(2_500) })
+
+  const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
+
+  const row = reportOf(outcome).rows[0]
+  expect(row?.phaseAccount).toEqual([
+    { word: 'build', totalSeconds: 5, roundsReached: 2, live: false },
+    { word: 'test-red', totalSeconds: 1, roundsReached: 1, live: false },
+    { word: 'review', totalSeconds: 2, roundsReached: 1, live: true },
+  ])
+  expect(row?.phaseAgeSeconds).toBe(2)
 })
 
 // Requirement: The answer names every relationship raised but not yet ruled
@@ -349,5 +500,34 @@ it('exits its ok code whatever it finds', async () => {
   })
 
   expect(exitCodeOf(outcome)).toBe(0)
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: An archived record carries its phase history and an account with every phase closed, the last ending at the settled moment
+// GIVEN an archived TASK whose entry carries a two-standing phase history and a settled moment after both
+// WHEN the archive's records are answered
+// THEN the record carries the history exactly as the entry holds it, and its account closes every phase — no word live, the last entry's run ending at the settled moment
+it('carries the archived history and an account closed at the settled moment', () => {
+  const settled = msBeforeNow(3_600_000)
+  const history = [
+    { phase: 'build', round: 1, since: settled - 10_000 },
+    { phase: 'test-review', round: 2, since: settled - 3_000 },
+  ]
+
+  const records = archiveView([
+    {
+      task: 'done',
+      manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/done', base: { kind: 'main' } }),
+      manifestWrittenAt: settled - 3_600_000,
+      stateWrittenAt: settled,
+      history,
+    },
+  ])
+
+  expect(records[0]?.phaseHistory).toEqual(history)
+  expect(records[0]?.phaseAccount).toEqual([
+    { word: 'build', totalSeconds: 7, roundsReached: 1, live: false },
+    { word: 'test-review', totalSeconds: 3, roundsReached: 2, live: false },
+  ])
 })
 

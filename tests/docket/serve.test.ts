@@ -6,13 +6,25 @@ import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { docket, renderAnswer, serveDocket } from '../../src/cli/index.ts'
-import { writePhase } from '../../src/cli/queue.ts'
+import { appendPhaseHistory, writePhase } from '../../src/cli/queue.ts'
 import type { StandingServe } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
 // The one clock the served answers are computed against, frozen: two requests over a queue
 // that has not moved then read the same ages, which is what makes "identically" provable.
 const NOW = new Date('2026-09-16T12:00:00.000Z')
+
+/** A moment the given minutes before the frozen NOW: every phase fact this file pins is
+ *  stated against the one clock the served answers are computed at. */
+function minutesAgo(minutes: number): number {
+  return NOW.getTime() - minutes * 60 * 1000
+}
+
+/** One standing as the JSON answers it — the same triple the phase file holds. */
+type StandingJson = { readonly phase: string; readonly round: number; readonly since: number }
+
+/** One word's line of a phase account as the JSON answers it. */
+type AccountEntryJson = { readonly word: string; readonly totalSeconds: number; readonly roundsReached: number; readonly live: boolean }
 
 function manifestFor(task: string): string {
   return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
@@ -65,36 +77,69 @@ async function get(path: string, port: number): Promise<string> {
 
 // Requirement: The docket answers on a page
 // Scenario: The page answered at / carries the docket computed at that moment
-// GIVEN a served docket whose queue holds a TASK with a phase file
+// GIVEN a served docket whose queue holds a TASK with a phase file holding a word that began 25 minutes before the frozen now
 // WHEN the page at / is fetched, and the JSON the page reads at /docket
-// THEN the page's markup carries the TASK's phase word and its round as visible content, and the JSON carries the same row with its phase fields — one view, asked twice, answering the same moment
+// THEN the page's markup carries the TASK's phase word and its round as visible content and its phase totals column spelling the absence of any history, and the JSON carries the same row with its phase fields — one view, asked twice, answering the same moment
 it('answers the page at / with the docket computed at that moment', async () => {
   const { repo, served } = await serveOver(FILES)
-  await writePhase(repo.root, 'alpha', 'test-review', 2)
+  await writePhase(repo.root, 'alpha', { phase: 'test-review', round: 2, since: minutesAgo(25) })
 
   const page = await get('/', served.port)
-  const json = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; round: number | null; phaseAgeSeconds: number | null }[] }
+  const json = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; round: number | null; phaseAgeSeconds: number | null; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }
 
   expect(page).toContain('test-review')
   expect(page).toContain('round 2')
+  expect(page).toContain('phase totals')
+  expect(page).toContain('no phases')
   expect(json.rows).toEqual([
-    expect.objectContaining({ task: 'alpha', phase: 'test-review', round: 2 }),
+    expect.objectContaining({ task: 'alpha', phase: 'test-review', round: 2, phaseAgeSeconds: 25 * 60, phaseHistory: null, phaseAccount: null }),
   ])
-  expect(typeof json.rows[0]?.phaseAgeSeconds).toBe('number')
 })
 
 // Requirement: The docket answers on a page
 // Scenario: The JSON answered at /docket is the same content the one-shot JSON form gives
-// GIVEN a queue holding a TASK, a problem, and an outstanding ruling
+// GIVEN a queue holding a TASK with a phase file and a phase history, a problem, and an outstanding ruling
 // WHEN the page's JSON is fetched from /docket while the one-shot command is run as JSON over the same queue at the same moment
-// THEN the two answers carry the same content — rows, problems, and outstanding rulings alike — nothing on the page is a dialect of its own
+// THEN the two answers carry the same content — rows, problems, and outstanding rulings alike, the history and its account included — nothing on the page is a dialect of its own
 it('answers at /docket the same content the one-shot JSON form gives', async () => {
   const { repo, served } = await serveOver(FILES)
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 2, since: minutesAgo(25) })
+  await appendPhaseHistory(repo.root, 'alpha', { phase: 'test-red', round: 1, since: minutesAgo(90) })
+  await appendPhaseHistory(repo.root, 'alpha', { phase: 'build-green', round: 2, since: minutesAgo(25) })
 
   const oneShot = renderAnswer(await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } }), { format: 'json' })
   const fetched = await get('/docket', served.port)
 
   expect(JSON.parse(fetched)).toEqual(JSON.parse(oneShot))
+})
+
+// Requirement: The docket answers on a page
+// Scenario: A row carries the TASK's phase history and the account computed from it
+// GIVEN a served docket whose queue holds a TASK whose phase-history file holds four standings across two words, the last still standing
+// WHEN the page's JSON is fetched from /docket
+// THEN the TASK's row carries the history exactly as its file holds it, and beside it the account computed from that history at the frozen now — separate runs under one word summed into its one total, the highest round each word reached, and only the standing still running marked live
+it("carries a TASK's phase history and the account computed from it in its row", async () => {
+  const { repo, served } = await serveOver({
+    '.proofspec/dispatch/alpha/MANIFEST': manifestFor('alpha'),
+    '.proofspec/dispatch/alpha/state': 'building',
+  })
+  const standings = [
+    { phase: 'test-red', round: 1, since: minutesAgo(60) },
+    { phase: 'build-green', round: 1, since: minutesAgo(50) },
+    { phase: 'test-red', round: 2, since: minutesAgo(40) },
+    { phase: 'build-green', round: 3, since: minutesAgo(20) },
+  ]
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 3, since: minutesAgo(20) })
+  for (const standing of standings) await appendPhaseHistory(repo.root, 'alpha', standing)
+
+  const answer = JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }
+
+  const row = answer.rows.find(one => one.task === 'alpha')
+  expect(row?.phaseHistory).toEqual(standings)
+  expect(row?.phaseAccount).toEqual([
+    { word: 'test-red', totalSeconds: 30 * 60, roundsReached: 2, live: false },
+    { word: 'build-green', totalSeconds: 30 * 60, roundsReached: 3, live: true },
+  ])
 })
 
 // Requirement: The docket answers on a page
@@ -119,6 +164,47 @@ it('computes the docket fresh on each request it answers', async () => {
 })
 
 // Requirement: The docket answers on a page
+// Scenario: A standing appended to a live TASK's phase history between two requests moves the next answer
+// GIVEN a served docket whose queue holds a TASK with a phase file and a two-standing history, and a third standing appended to that history after one request and before the next
+// WHEN the page's JSON is fetched again, and the page at / after it
+// THEN the new answer's row carries the appended standing and the account recomputed around it — the new word live, the word it replaced closed at the moment the new one began — and the page's markup carries the recomputed fragments in its phase totals column
+it('answers a phase history appended between two requests on the request after it', async () => {
+  const { repo, served } = await serveOver({
+    '.proofspec/dispatch/alpha/MANIFEST': manifestFor('alpha'),
+    '.proofspec/dispatch/alpha/state': 'building',
+  })
+  await writePhase(repo.root, 'alpha', { phase: 'build-green', round: 1, since: minutesAgo(30) })
+  await appendPhaseHistory(repo.root, 'alpha', { phase: 'test-red', round: 1, since: minutesAgo(60) })
+  await appendPhaseHistory(repo.root, 'alpha', { phase: 'build-green', round: 1, since: minutesAgo(30) })
+
+  const rowOf = async (): Promise<{ phase: string | null; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null } | undefined> =>
+    (JSON.parse(await get('/docket', served.port)) as { rows: { task: string; phase: string | null; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }).rows.find(one => one.task === 'alpha')
+
+  const before = await rowOf()
+  expect(before?.phaseAccount).toEqual([
+    { word: 'test-red', totalSeconds: 30 * 60, roundsReached: 1, live: false },
+    { word: 'build-green', totalSeconds: 30 * 60, roundsReached: 1, live: true },
+  ])
+
+  await appendPhaseHistory(repo.root, 'alpha', { phase: 'review', round: 1, since: minutesAgo(10) })
+  await writePhase(repo.root, 'alpha', { phase: 'review', round: 1, since: minutesAgo(10) })
+
+  const after = await rowOf()
+  expect(after?.phase).toBe('review')
+  expect(after?.phaseHistory?.map(standing => standing.phase)).toEqual(['test-red', 'build-green', 'review'])
+  expect(after?.phaseAccount).toEqual([
+    { word: 'test-red', totalSeconds: 30 * 60, roundsReached: 1, live: false },
+    { word: 'build-green', totalSeconds: 20 * 60, roundsReached: 1, live: false },
+    { word: 'review', totalSeconds: 10 * 60, roundsReached: 1, live: true },
+  ])
+
+  const page = await get('/', served.port)
+  expect(page).toContain('test-red 30m 0s')
+  expect(page).toContain('build-green 20m 0s')
+  expect(page).toContain('review 10m 0s')
+})
+
+// Requirement: The docket answers on a page
 // Scenario: A queue that has not moved between two requests answers those two requests identically
 // GIVEN a served docket, its clock frozen, and nothing written to the queue between two requests
 // WHEN the page's JSON is fetched twice
@@ -139,17 +225,21 @@ it('answers two requests over an unmoved queue identically', async () => {
 const ENQUEUED_AT = new Date('2025-01-01T09:00:00.000Z')
 const SETTLED_AT = new Date('2025-01-01T10:30:00.000Z')
 
-/** An archived entry as the prune leaves one, with both write times pinned by hand. */
-async function writeArchived(root: string, task: string, options: { readonly enqueuedAt: Date; readonly settledAt: Date }): Promise<void> {
+/** An archived entry as the prune leaves one, with both write times pinned by hand and —
+ *  when the TASK kept one — a phase history standing in its entry beside them. */
+async function writeArchived(root: string, task: string, options: { readonly enqueuedAt: Date; readonly settledAt: Date; readonly history?: readonly { readonly phase: string; readonly round: number; readonly since: number }[] }): Promise<void> {
   const dir = join(root, '.proofspec', 'archive', task)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, 'MANIFEST'), manifestFor(task))
   await writeFile(join(dir, 'state'), 'merged')
+  if (options.history !== undefined) {
+    await writeFile(join(dir, 'phase-history'), `${options.history.map(entry => JSON.stringify(entry)).join('\n')}\n`)
+  }
   await utimes(join(dir, 'MANIFEST'), options.enqueuedAt, options.enqueuedAt)
   await utimes(join(dir, 'state'), options.settledAt, options.settledAt)
 }
 
-async function archiveAnswer(port: number): Promise<{ records: { task: string; branch: string; base: { kind: string }; enqueuedAt: string; settledAt: string; livedSeconds: number }[] }> {
+async function archiveAnswer(port: number): Promise<{ records: { task: string; branch: string; base: { kind: string }; enqueuedAt: string; settledAt: string; livedSeconds: number; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }> {
   return JSON.parse(await get('/archive', port))
 }
 
@@ -157,7 +247,7 @@ async function archiveAnswer(port: number): Promise<{ records: { task: string; b
 // Scenario: The archive answer carries one record per archived TASK, each holding the fields read from its own files
 // GIVEN an archive holding one completed TASK, its two write times pinned by hand
 // WHEN the archive's JSON is fetched
-// THEN it carries exactly one record for it — the TASK's name, the branch and base its MANIFEST records, and the two moments and the duration read from its own files' write times
+// THEN it carries exactly one record for it — the TASK's name, the branch and base its MANIFEST records, the two moments and the duration read from its own files' write times, and its phase history and account both absent, the TASK having kept none
 it('answers one record per archived TASK with its own files\' facts', async () => {
   const { repo, served } = await serveOver({})
   await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
@@ -172,7 +262,47 @@ it('answers one record per archived TASK with its own files\' facts', async () =
       enqueuedAt: ENQUEUED_AT.toISOString(),
       settledAt: SETTLED_AT.toISOString(),
       livedSeconds: 90 * 60,
+      phaseHistory: null,
+      phaseAccount: null,
     },
+  ])
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: An archived record carries the TASK's phase history and the account closed at its settled moment
+// GIVEN an archive holding one completed TASK whose entry holds a phase history of two standings, the second begun thirty minutes before it settled
+// WHEN the archive's JSON is fetched
+// THEN the record carries the history exactly as its file holds it, and its account closes every phase — no word live, each run ending where the next standing begins, the last at the settled moment
+it("carries an archived TASK's phase history and its account in its record", async () => {
+  const { repo, served } = await serveOver({})
+  const standings = [
+    { phase: 'test-red', round: 1, since: ENQUEUED_AT.getTime() },
+    { phase: 'build-green', round: 2, since: Date.parse('2025-01-01T10:00:00.000Z') },
+  ]
+  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT, history: standings })
+
+  const answer = await archiveAnswer(served.port)
+
+  expect(answer.records[0]?.phaseHistory).toEqual(standings)
+  expect(answer.records[0]?.phaseAccount).toEqual([
+    { word: 'test-red', totalSeconds: 60 * 60, roundsReached: 1, live: false },
+    { word: 'build-green', totalSeconds: 30 * 60, roundsReached: 2, live: false },
+  ])
+})
+
+// Requirement: The page answers the archive of completed TASKs
+// Scenario: An archived TASK that kept no phase history is answered with the history absent, never invented
+// GIVEN an archive holding one completed TASK whose entry holds no phase history
+// WHEN the archive's JSON is fetched
+// THEN its record carries the history and the account both as null — an ordinary absence, never an account invented from the record's own moments
+it('answers an archived TASK without a phase history as absent, never invented', async () => {
+  const { repo, served } = await serveOver({})
+  await writeArchived(repo.root, 'quiet', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+
+  const answer = await archiveAnswer(served.port)
+
+  expect(answer.records).toEqual([
+    expect.objectContaining({ task: 'quiet', phaseHistory: null, phaseAccount: null }),
   ])
 })
 

@@ -60,7 +60,9 @@ it('answers the docket as JSON on request, carrying the same content', async () 
 // THEN the TASK's line carries the pace word and its round — the question a watching human actually asks, answered in the text a person reads
 it('carries the phase word and its round on the text row', async () => {
   const repo = await makeRepo(FILES)
-  await writePhase(repo.root, 'alpha', 'test-review', 2)
+  // `since` pinned to the fixture's own moment so the file holds the shape `readPhase` answers —
+  // the row's ages are not this test's question.
+  await writePhase(repo.root, 'alpha', { phase: 'test-review', round: 2, since: Date.now() })
 
   const answer = renderAnswer(await docket({ cwd: repo.root, docket: { listSessions: async () => [] } }))
 
