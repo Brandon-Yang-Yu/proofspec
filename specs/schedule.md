@@ -1,17 +1,14 @@
 # schedule
 
-Reads the graph `inflight` computes and acts on it. `inflight`'s own charter says plainly
-that it "holds no queue and dispatches nothing" — it answers a question about work already
-in flight, and "deciding what to do with the answer belongs to something else." This is that
-something else: the one capability with permission to write into the queue directory —
-releasing a TASK held on one that is no longer live, pruning a queue entry nothing points at
-any more, judging a relationship before a human ever sees it, and starting the one executor
-session a ready TASK is owed, within the live-session bound this document sets.
+`inflight` answers what is in flight; this capability is the one that acts on the answer —
+the one with permission to write into the queue directory — releasing a TASK held on one
+that is no longer live, pruning a queue entry nothing points at any more, judging a
+relationship before a human ever sees it, and starting the one executor session a ready TASK
+is owed, within the live-session bound this document sets.
 
 It reads `inflight`'s answer the way `cli` reads a TASK's own MANIFEST and state file: as
 something to act on, not something to recompute. `specs/inflight.md` is not touched by this
-capability — the graph still only reports, and this is the orchestrator its own text names
-but declines to build.
+capability — the graph still only reports.
 
 ### Requirement: A TASK held on another is released once the held-on TASK is no longer live
 
@@ -19,13 +16,10 @@ A TASK whose MANIFEST's `base` names another TASK of kind `task` SHALL be held u
 named TASK is no longer live, and released the moment it is not — whether because the named
 TASK's own state has reached merged, or because the queue holds no record of it at all.
 
-`inflight` already draws exactly this line for its own basedOn edges: a `base` naming a
-merged TASK is read from `main` instead of the old branch, and a `base` naming a TASK the
-queue holds no record of at all is a claim, not a default — both mean the work behind that
-name is settled. A hold with its own separate notion of "still live" could disagree with
-`inflight`'s: held past the moment the graph would already call the block gone, or released
-while the graph still reports it live. There is exactly one graph of what is in flight, and
-both this capability and `inflight` read it the same way.
+There is exactly one graph of what is in flight, and both the hold and the graph read it
+the same way. A hold with its own notion of "still live" could disagree with it: held past
+the moment the graph would call the block gone, or released while the graph still reports it
+live.
 
 <!-- scenarios: generated -->
 - "A TASK based on main carries no hold status at all" → tests/schedule/holds.test.ts
@@ -59,8 +53,7 @@ that could settle is listening. The executor therefore triggers the settle itsel
 `settle_task`, and the pass keeps running the same check so that a TASK the tool never
 settles — a session that died mid-merge, a merge landed by hand — is settled the next
 time a pass runs. Neither caller is trusted on its word: the settle verifies both
-conditions from git itself, which is also why `merged` never comes from a session's
-report — `report_task_state`'s closed set excludes it on purpose (`specs/progress.md`).
+conditions from git itself.
 
 Both conditions are required because each covers the other's blind spot. A branch is an
 ancestor of `main` from the moment it is cut, so ancestry alone would mark a freshly
@@ -77,10 +70,7 @@ detached reaper process with a short delay is what makes an executor-triggered t
 safe — the settle answers its caller first, and the host session dies a moment later, once
 the answer is already out. A worktree left behind is not harmless litter, either: it keeps
 the TASK's branch checked out under its own name, which is exactly the collision a later
-dispatch of that name stumbles over — the first unattended dispatch this queue ever ran
-died precisely there, on a branch held by a leftover worktree. The human's two places in
-this flow — the disposition gate before any of it, and a parked `blocked-on-question`
-during — are both already standing; settling a TASK's residue is mechanics, not judgment,
+dispatch of that name stumbles over. Settling a TASK's residue is mechanics, not judgment,
 and asks nothing of a human.
 
 <!-- scenarios: generated -->
@@ -112,9 +102,8 @@ other TASK's basedOn claim might still ask about it: pruning early is exactly wh
 flip a graceful "based on a TASK that merged" into a false "based on a TASK the queue holds
 no record of at all," naming a TASK that in fact finished cleanly. Once no in-flight TASK
 names it any more, that risk is gone, and the entry leaves the queue for the archive. The
-criterion is answerable from the same graph `inflight` already computes — every in-flight
-TASK's `base` — so pruning needs no bookkeeping of its own to decide when a name has gone
-quiet.
+criterion reads every in-flight TASK's `base`, so pruning needs no bookkeeping of its own
+to decide when a name has gone quiet.
 
 The archive is the record of finished work, and it is kept rather than cleaned: completed
 TASKs stay readable so the work can be read and analyzed later. Deleting a pruned entry
@@ -169,23 +158,19 @@ TASK the bound leaves undispatched SHALL keep its state word `queued` exactly as
 a later pass dispatches it once a session has gone.
 
 Counting sessions on that server is counting exactly the executor sessions this tool started
-and has not itself killed: the socket isolation `startSession` already keeps means nothing
-else runs there, and a session that dies — executor finished, machine rebooted, tmux killed
-by hand — shortens the list on its own, so the pass keeps no count of its own to drift. A
-TASK's state word is the wrong measure, for the same reason the LEASE reads elapsed time
-rather than a process: a session is alive through its whole start-to-`building` window and
-past `mergeable` while it still merges, and a pass counting words would overshoot the bound
-in exactly those windows. A TASK left undispatched keeps `queued` because nothing about the
-TASK changed — only the machine's capacity did, and capacity freeing is no state of the
-TASK's own: the settle step of this same pass already kills a merged TASK's session before
-dispatch runs, so a freed slot is there for the next pass to see, with no producer of its
-own to build. The bound is what a single pass can see: two passes triggered at the same
-instant can each see three live sessions and each start one — five, briefly — and closing
-that window would take a lock over the whole queue, the exact thing the LEASE requirement
-above declines to build; the LEASE already prevents the common double-dispatch, two sessions
-for one TASK. `PROOFSPEC_MAX_SESSIONS` follows the pattern `PROOFSPEC_TMUX_SOCKET` and
-`PROOFSPEC_JUDGE_BIN` already set: a test exercising the bound points at a throwaway socket
-and a bound of one, rather than starting four real sessions on the production server.
+and has not itself killed, and a session that dies — executor finished, machine rebooted,
+tmux killed by hand — shortens the list on its own, so the pass keeps no count of its own to
+drift. A TASK's state word is the wrong measure: a session is alive through its whole
+start-to-`building` window and past `mergeable` while it still merges, and a pass counting
+words would overshoot the bound in exactly those windows. A TASK left undispatched keeps
+`queued` because nothing about the TASK changed — only the machine's capacity did, and
+capacity freeing is no state of the TASK's own: a freed slot is there for the next pass to
+see, with no producer of its own to build. The bound is what a single pass can see: two
+passes triggered at the same instant can each see three live sessions and each start one —
+five, briefly — and closing that window would take a lock over the whole queue, which this
+design declines to build. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
+bound point at a throwaway socket and a bound of one, rather than start four real sessions
+on the production server.
 
 <!-- scenarios: generated -->
 - "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
@@ -219,80 +204,29 @@ rather than the default server — never the user's own default tmux server, and
 other named server — with a default socket name of `proofspec`, overridable through the
 `PROOFSPEC_TMUX_SOCKET` environment variable.
 
-`.proofspec/` is already this tool's own root for exactly this kind of on-disk convention —
-`.proofspec/dispatch/` for the queue, `.proofspec/reviews.jsonl` for the review LEDGER — and
-a worktree `startSession` opens is the same kind of thing: state this repo's own tooling
-keeps, so it belongs there too. A ready TASK can reach this action having had no worktree
-ever opened for it at all, or having had one opened and since torn down independently of
-its queue entry — nothing about a queue entry standing guarantees a worktree still sits
-behind it. Checking the conventional path first and creating on demand covers both without
-needing to ask `git worktree list` a question the path convention already answers. Whether
-the path is a worktree is itself a local fact — the `.git` file a linked worktree keeps at
-its root — so that check stays off `git worktree list` too, while a directory merely
-sitting at the path does not answer it: a `git worktree add` that fails partway can leave
-an empty directory behind, a branch already checked out in another worktree being one real
-way, and reusing whatever merely sits there would start the session in a directory with no
-repository behind it — an executor that can do no work and report no failure, on every
-retry. Carrying git's own stderr into the thrown error exists because a bare "could not
-create" names no cause: the one real failure so far, a branch already in use elsewhere,
-read as nothing anyone could act on. tmux,
-not a bare spawn, is what lets the session stay headed and interactive — something a human
-may need to sit at — without the scheduling pass itself holding a terminal open to keep it
-alive; killing a same-named session before creating a fresh one is what lets a TASK whose
-first session attempt died or never came up get a working session on retry instead of
-colliding with a dead one of the same name.
+A ready TASK may reach this action with no worktree ever opened for it, or with one torn
+down independently of its queue entry — nothing about a queue entry standing guarantees a
+worktree behind it. A creation that fails partway can leave an empty directory behind, and
+a session started in whatever merely sits at the path could do no work and report no
+failure, on every retry — so the path is reused only when it is itself a worktree. A
+creation that fails throws carrying git's own stderr, because a bare "could not create"
+names no cause.
 
-`--no-extensions` exists because `pi` auto-discovers a project's own `.pi/extensions/` unless
-told not to, and the TASK's own worktree carries its own copy of `.pi/extensions/progress.ts`
-— tracked in git, the same file the pinned `--extension` above exists to guard against being
-stale. Without `--no-extensions`, both copies load side by side, and `pi` refuses to start at
-all: two extensions registering the tool `report_task_state` under the same name is a conflict
-it treats as fatal, whether or not the two copies happen to agree. `pi`'s own `-e`/`--extension`
-flags still load an explicit path under `--no-extensions` — only auto-discovery is disabled —
-so the pinned copy is the only one that ever loads.
+The same-named session is killed first so a TASK whose first session attempt died gets a
+working session on retry. Every tmux command reaches the dedicated server so a TASK's name
+can never collide with a session it did not create, and `PROOFSPEC_TMUX_SOCKET` lets a test
+or an acceptance run point at a throwaway, per-run socket.
 
-A tmux session name is global to the whole machine, not scoped to any directory or project —
-`kill-session -t <name>` and `new-session -d -s <name>` on tmux's default server name and act
-on any session with that name, whatever created it. A TASK happening to share a name with a
-session the human already had open, entirely unrelated to this tool, would be silently killed
-and replaced with no warning at all — this is not a hypothetical the way probing a LEASE's
-process is; it is the same shape of real failure this document already declines to risk
-elsewhere. Reaching tmux only through a dedicated server, `-L proofspec` by default, is what
-keeps every session `startSession` ever starts on a server nothing else — not the human's own
-terminal, not any other tool — is using, so a TASK's name can never collide with a session it
-did not create. `PROOFSPEC_TMUX_SOCKET` overrides that socket the same way `PROOFSPEC_JUDGE_BIN`
-already overrides `judge`'s own process (below): so a test, or a future acceptance check that
-runs the real bare CLI against a real tmux binary, can point at a throwaway, per-run socket
-instead of ever touching the real `proofspec` production socket, let alone the user's own
-default one.
+The session starts inside the TASK's own worktree and needs both facts — where the queue
+lives, and which TASK it is — which this action already holds at the moment it starts the
+session, so it hands them down as the two environment variables. The tool that reports
+state must load in a freshly created worktree, and the copy it loads must be the current
+one. `--approve` is what lets the tool load there, and the pinned `--extension` points at
+this tool's own checkout rather than whatever the TASK's branch carries. `--no-extensions`
+keeps the worktree's own copy of the extension from loading beside the pinned one.
 
-`PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` are how the session `startSession` starts learns
-where the queue lives and which TASK it is: `report_task_state` (`specs/progress.md`) runs
-inside that session with only `ExtensionContext.cwd` available to it, and `cwd` there is the
-TASK's own worktree — a different directory from the main checkout `.proofspec/dispatch/`
-lives under, by construction, not by an oversight `ExtensionContext` happens to have.
-`startSession` already holds both facts at the moment it starts the session — the main
-checkout is its own `cwd`, and the TASK is the one it was asked to dispatch — so it hands them
-down as environment variables the same way it already hands down `PROOFSPEC_TMUX_SOCKET`'s
-counterpart, `PROOFSPEC_JUDGE_BIN`, rather than leaving the worktree to infer either fact for
-itself. `--approve` and the pinned `--extension` exist because a session with no way to load
-the tool that reports its state is no better off than one with no tool at all: pi's project
-trust is keyed per directory, and a freshly created worktree is always an unknown path to it,
-defaulting to a startup prompt nobody answers in a detached tmux session — `--approve` sets
-pi's trust override so that prompt never blocks the tool from loading. `.pi/` is tracked in
-git, so a worktree's own copy of `.pi/extensions/progress.ts` is whatever commit its branch
-happened to cut from, which can predate this capability entirely; pinning `--extension` to
-this tool's own checkout guarantees the tool loaded is always the current one, the same way
-`startSession` already reads the executor's system prompt from this checkout rather than the
-worktree's own copy of `.pi/agents/executor.md`.
-
-The positional prompt argument is what makes an unattended session ever begin at all:
-`--append-system-prompt` changes who the model is, never that it should act, and an
-interactive `pi` given no first message sits at its input box indefinitely — loaded,
-healthy, doing nothing. The first fully unattended dispatch sat exactly there, its queue
-state never leaving `queued`, until a human attached and noticed; the kickoff message is
-the one argument that turns a watchable session into a self-starting one, without taking
-the headed TUI a human may still attach to away.
+A session handed no first message never begins working its TASK, so the invocation carries
+one kickoff message.
 
 <!-- scenarios: generated -->
 - "A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead" → tests/schedule/session.test.ts
@@ -311,25 +245,17 @@ the headed TUI a human may still attach to away.
 
 ### Requirement: startSession seeds the executor session with the executor's own system prompt
 
-The bare CLI's `startSession` action SHALL read `.pi/agents/executor.md` from this tool's own
-checkout — never from the TASK's own worktree or branch — strip its YAML frontmatter, and
-pass the remaining prose to `pi` as `--append-system-prompt`, alongside the worktree and
-tmux-socket handling above.
+The bare CLI's `startSession` action SHALL use `.pi/agents/executor.md` — its YAML
+frontmatter stripped — as the executor session's system prompt.
 
-`pi` without a seeded prompt is just the generic coding-assistant default; nothing tells the
-session it is the executor, that its scope starts only after the disposition review, or that
-a wrong judged standard — never a wrong implementation — is the one thing it should park on
-and ask about. `.pi/agents/executor.md` already carries that persona
-in the same shape as this tool's other agent files, written for the `subagent` spawn tool's
-own frontmatter convention; a session `startSession` opens is never spawned that way; it is
-the top-level `pi` process tmux starts directly. Stripping the frontmatter before handing the
-body to `--append-system-prompt` keeps `name:`/`tools:` — metadata for a spawner that never
-runs here — out of the literal prompt text a model would otherwise have to read as prose.
-
-Reading the persona from `cwd`, not from the worktree, is the same choice `DEFAULT_JUDGE_AGENT`
-and `PROOFSPEC_JUDGE_BIN` already make for `judge`: the executor's own instructions are an
-operational convention this tool's checkout keeps, not something a TASK's own branch — cut
-from `main` at some earlier, possibly stale, point — gets to redefine for itself.
+The session must know it is the executor, that its scope starts only after the disposition
+review, and that a wrong judged standard — never a wrong implementation — is the one thing
+it should park on and ask about. `.pi/agents/executor.md` carries that persona; its
+frontmatter is metadata for a spawner, not prompt prose, so it is stripped before the body
+is handed over. The persona is read from this tool's own checkout, never the TASK's
+worktree: the executor's instructions are an operational convention this checkout keeps,
+not something a TASK's own branch — cut from `main` at some earlier, possibly stale, point
+— gets to redefine for itself.
 
 <!-- scenarios: generated -->
 - "A persona file with no frontmatter passes through unchanged" → tests/schedule/session.test.ts
@@ -344,20 +270,12 @@ process's stdin the instant it starts, and SHALL bound its wait for an answer wi
 timeout, so that one relationship's process can never hang the scheduling pass that awaits
 it.
 
-`piJudge()` (`src/cli/judge.ts`) is the real action `startSession` already has a twin of: it
-was written complete but left unwired, so a real run of the bare CLI reached every
-relationship the graph found with no `judge` action at all, refused as cannot-run before a
-fresh agent was ever asked anything. Wiring it into the same object literal that already
-supplies `startSession` — `schedule: { startSession: ..., judge: piJudge() }` — closes that
-gap without touching the domain rules a relationship is judged by: what the fresh agent is
-asked, and how its last line is read, are exactly what the requirements above already say,
-and this one is only about the bare CLI's own choice of process. `pi` reads its stdin when it
-is not a TTY, so a process left connected to nothing blocks waiting for input that will never
-arrive; closing it the instant the process starts is what lets a real run answer instead of
-burning its whole timeout every single time. The timeout itself exists for the same reason a
-LEASE's grace period does — nothing else stops one bad run from hanging everything behind it
-— and `judge` is awaited one relationship at a time, so one hang is enough to hang the whole
-pass without it.
+The bare CLI supplies a real `judge` action for every relationship the graph finds; what the
+fresh agent is asked, and how its answer is read, belong to the requirements above, and
+this one is about the choice of process. The process's stdin is closed the instant it
+starts, so it cannot hang waiting for input that will never arrive. The timeout exists
+because nothing else stops one bad run from hanging everything behind it: `judge` is
+awaited one relationship at a time, so one hang would hang the whole pass.
 
 <!-- scenarios: generated -->
 - "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
@@ -400,11 +318,10 @@ it. A TASK whose intent could not be read SHALL be named as missing in that ask,
 silently dropped, and the same relationship SHALL ask the same question however its two
 TASKs arrive.
 
-`inflight` reports a relationship without judging it by design — it never reads intent,
-only edges over files a graph can see. Most shared ground between two TASKs is
-coincidence, not conflict, and reading both intents is cheap enough to run on every
-relationship the graph finds, which is what keeps a human's attention for the ones that
-actually need it. A process with no tools and no saved session is what makes "authored
+Most shared ground between two TASKs is coincidence, not conflict, and reading both
+intents is cheap enough to run on every relationship the graph finds, which is what keeps
+a human's attention for the ones that actually need it. A process with no tools and no
+saved session is what makes "authored
 neither TASK's work" a fact about the call, not an assumption about who happens to be
 running it — it cannot have touched either TASK's branch, and it remembers nothing from
 one relationship to the next, so the same two TASKs get the same question wherever in
@@ -467,8 +384,8 @@ paraphrased as if the human had said it.
 
 An orchestrator able to generate its own authority is the single most dangerous component a
 design like this one can have. "The human has ruled" has to trace to a record a later reader
-can go and check, the same way a review's verdict traces to a line in the LEDGER — a
-notification may be relayed on the human's behalf, but a verdict may not.
+can go and check — a notification may be relayed on the human's behalf, but a verdict may
+not.
 
 <!-- scenarios: generated -->
 - "A recorded ruling traces to exactly the text given" → tests/schedule/end-to-end.test.ts
@@ -510,19 +427,11 @@ both TASKs it names, and the relationship's own key exactly as `relationshipKey(
 "<key>"` takes to answer it. It SHALL do nothing else: no paging, no proactive alert reaching
 anyone who is not already watching the process a scheduling pass is running in.
 
-`main.ts`'s own comment on `--pretty` already draws the line this has to respect: stdout
-carries "the one line a program parses," unchanged by anything else a command might want to
-say, so a finding written there would corrupt the one answer whatever invoked `schedule` is
-trying to read. stderr is the only channel left that can carry a human-facing message without
-touching that contract, and it reaches exactly one kind of human: whoever is already watching
-the process that ran the scheduling pass — a human sitting at the interactive `pi` session
-that triggered it, say. Actually paging, or proactively alerting a human who is not currently
-watching, is an explicit non-goal of this change, left for later — the same honest limit this
-document already keeps around what it declines to build, like refusing to probe whether a
-LEASE's process is still alive rather than trusting elapsed time instead. This is deliberately
-the minimal version: a finding nobody is watching for goes unheard until the next time someone
-looks, and that is the plain cost of building only as much of `notifyHuman` as this change
-needs.
+stdout carries the one line a program parses, and a finding written there would corrupt it.
+stderr carries a human-facing message without touching that line, and it reaches exactly one
+kind of human: whoever is already watching the process that ran the scheduling pass. This is
+deliberately the minimal version — no paging, no proactive alert — and a finding nobody is
+watching for goes unheard until the next time someone looks.
 
 <!-- scenarios: generated -->
 - "An unresolved relationship's finding is written to stderr, not stdout" → tests/schedule/notify.test.ts
@@ -554,15 +463,11 @@ exactly the `word` given, replacing whatever word the file held before. It SHALL
 file's previous word first, and SHALL NOT judge whether `word` is one any caller has ever used
 before, or a valid step from wherever the state currently stands.
 
-This is the write-side mirror of the same literalism `inflight`'s own requirement already
-keeps on the read side: "A TASK's state is read literally" reads whatever word sits in the
-file without judging it, defaulting an unrecognized one to still in flight rather than
-refusing it — `writeState` writes whatever word it is given without judging that either.
-Validating a transition — that only a TASK already `building` may be marked `merged`, say — is
-a question about what the words mean and which orders make sense, and that question belongs
-entirely to whatever future caller writes a specific verb like `markMerged`. None of those
-verbs are built in this change; only the dumb primitive underneath them is, because nothing
-yet needs more than that.
+The write puts exactly the word in without judging it. Validating a transition — that only a
+TASK already `building` may be marked `merged`, say — is a question about what the words
+mean and which orders make sense, and that question belongs entirely to whatever future
+caller writes a specific verb like `markMerged`. No caller needs more than the primitive
+yet, so no verb is built.
 
 <!-- scenarios: generated -->
 - "writeState overwrites an existing state file with the word it is given, whatever it is" → tests/schedule/queue.test.ts
@@ -580,14 +485,12 @@ of the archive SHALL name the archive in its reason.
 A TASK name is spent once. A name a finished TASK already used stays with that TASK in the
 archive, and is never handed to a new one: two TASKs of one name — one finished in the
 archive, one in flight in the queue — would leave every reader that names TASKs unable to
-say which TASK a name means. Two callers racing to enqueue the same TASK name is the same
-shape of problem two scheduling passes racing to take the same LEASE already is, and
-`enqueue` is built on the same answer: the same `wx`-flag atomic-write idiom `takeLease`
-already uses elsewhere in this file, so the check-then-create step two racing calls could
-otherwise land inside of is collapsed to the one filesystem call the OS already makes
-atomic. There is deliberately no new CLI verb for this — nothing calls `proofspec enqueue`
-from a command line, and none is being added here — `enqueue` ships as a plain exported
-function for a future caller, an "investigator" capability not yet built, to use.
+say which TASK a name means. Two callers racing to enqueue the same TASK name still end
+with exactly one entry, the winner's and not a mix: the create is exclusive, so the loser
+refuses rather than overwrites. There is deliberately no new CLI verb for this — nothing
+calls `proofspec enqueue` from a command line, and none is being added here — `enqueue`
+ships as a plain exported function for a future caller, an "investigator" capability not
+yet built, to use.
 
 <!-- scenarios: generated -->
 - "A TASK name already standing in the archive is refused, naming the archive" → tests/schedule/queue.test.ts

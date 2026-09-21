@@ -58,11 +58,8 @@ The tree, the positions, and the failures are all things another tool will want 
 editor, a CI annotation, and in a later version an MCP server. Each of those should read
 the same answer rather than parse the one meant for a terminal.
 
-An answer SHALL reach its reader whole, however large it is. A pipe holds a fixed number of
-bytes before its writer has to wait, and a process that ends without waiting hands the reader
-an answer cut off mid-token: not a smaller answer, a broken one, and a parser reports it as a
-syntax error rather than as anything the tool said. The command that reads that answer is
-usually a program, and the layout below makes a large answer ordinary.
+An answer SHALL reach its reader whole, however large it is. A cut-off answer is not a
+smaller answer but a broken one, and the reader is usually a program.
 
 The JSON SHALL be given on one line unless a layout is asked for, and indented over several
 lines when it is. One line is what a program parses and what a pipe carries. A person reads
@@ -88,9 +85,7 @@ choice the caller makes, so the answer a script already reads does not change un
 The write command SHALL update each committed CAPABILITY_FILE so its recorded scenarios
 match the tests, and change nothing else.
 
-This is the separate command requirement 1 keeps apart from the check. It is run on
-purpose, and it is what finally writes the generated blocks the tool has until now had
-filled by hand.
+Writing back is the separate command, run on purpose.
 
 It touches only the generated blocks. Headings, descriptions, and every other line come
 back exactly as they were, and a file already in agreement with its tests comes back byte
@@ -117,9 +112,8 @@ The pages are a delivery artifact, not an input: they are regenerated from the t
 demand and read by a person, never read back by the tool. The command writes an index, one
 page per capability, and the full spec as a single page; given no directory it writes them
 under `build/`, and a directory can be given for a repo that keeps the generated pages
-elsewhere. The pages are a generated output, so a project gitignores that directory rather
-than committing it. Inputs it cannot read are refused the way the check and the write refuse
-them.
+elsewhere. The pages are a generated output a repo gitignores rather than commits. Inputs it cannot
+read are refused.
 
 A capability's requirements are headed in the order its CAPABILITY_FILE declares them, not by
 name. A
@@ -140,26 +134,12 @@ The CLI SHALL provide a command that reads the changes to the tests and says whi
 they reached, in one of three shapes: the work list, one requirement in full, or the changed
 lines that fall in no PROOF. Asked for nothing in particular it SHALL give the work list.
 
-Its report SHALL be given as JSON unless another format is named, and the format named SHALL
-be the one used. This report is read by an agent far more often than by a person, and an
-agent should not have to remember a flag to be answered in its own language. The default
-follows the kind of answer rather than being one setting for the tool: a verdict still
-answers as text, because what a person reads in the log of a build that just failed is a
-verdict. A command that could not run answers the way every command reports being unable to
-run, and a caller branches on the exit code rather than on the shape of that answer.
-
 **The work list SHALL count each requirement the change reached rather than write it out**,
 carrying its capability, its name, how many of its scenarios were touched, how many of its
 PROOF were removed, how many of those PROMISE nobody has judged, and the address the rest of
 it is fetched by. It also SHALL carry how many changed runs fall in no PROOF, as a number.
 
-One shape used to carry everything at once, and the reason that stopped working is worth
-writing down. Reviewing is per scenario, so it is a loop, and the work list is read on every
-turn of it — carrying the CLAIM and the proving source there charged the whole branch's worth
-of context for the question "what is left". Measured on this tool's own branch the two shapes
-are 716 bytes and 65 kilobytes. The saving is not in total: a reviewer who works through
-everything reads all of it either way. It is that the reading is now bounded by one
-requirement at a time, and that the answer to "what is left" gets cheaper as the work is done.
+The work list is read on every turn of the review loop, so it carries counts, not contents.
 
 **One requirement asked for by address SHALL carry everything judging it takes**: the prose
 written under it, every scenario of it the change touched with the CLAIM it makes and the
@@ -185,11 +165,11 @@ source, and a run of them that is nothing but whitespace SHALL not be reported a
 the helper, the import and the fixture edits, and they are usually a line or two — the read
 that fetches them costs a reader more than the lines are worth, so they are carried as written.
 But nothing judges them, and on a change that adds tests there are more of them than there are
-PROMISE, so they are not in the work list beyond their number. A blank line is worth nothing
-either way: git hands one back with every block inserted beside it, and they would bury the
-runs worth reading. The file they are in is often not a test, so it is read back for them; one
-git names as changed but that cannot be read is a cannot-run, because reporting those lines as
-blank is a CLAIM about them and a wrong one.
+PROMISE, so they are not in the work list beyond their number. A blank run is worth
+nothing either way: it would bury the runs worth reading. The file they are in is often
+not a test, so it is read back for them; one git names as changed but that cannot be read
+is a cannot-run, because reporting those lines as blank is a CLAIM about them and a wrong
+one.
 
 Requirements SHALL come back in capability then requirement order, and the scenarios under
 each in file order. Git lists what it already tracks ahead of what it has never seen, so the
@@ -209,10 +189,9 @@ A change that removed a PROOF is read from the base revision and named too, so a
 left with nothing behind it is reported rather than silently missing.
 
 It reports what it found and does not judge it. Whatever the change touched — including a
-PROMISE nothing proves any more — that is not this command saying the build is wrong, and the
-command that gives that verdict is the check. What it does hold a gate on is the reviewing,
-which is the requirement below. A repo it cannot read — not a git repository, or a revision it
-cannot resolve — SHALL exit the same cannot-run code the other commands use.
+PROMISE nothing proves any more — that is not this command saying the build is wrong. What it
+does hold a gate on is the reviewing, which is the requirement below. A repo it cannot read —
+not a git repository, or a revision it cannot resolve — SHALL exit the cannot-run code.
 
 <!-- scenarios: generated -->
 - "A KEY no touched requirement carries cannot run" → tests/cli/touched.test.ts
@@ -247,9 +226,7 @@ nothing, SHALL exit zero however much is unjudged.
 
 This is what lets a hook hold the gate: a branch cannot be pushed with a PROMISE on it nobody
 has looked at. It is not the tool judging the change. It is the tool saying nobody has, which
-is a fact about this branch's reviewing rather than about its code — and it is why the check
-keeping its own non-zero code is no ambiguity. The two send a reader to different places: the
-check to the spec, this to the review.
+is a fact about this branch's reviewing rather than about its code.
 
 Only the work list SHALL hold it. Fetching one requirement is how a reviewer collects the work,
 and an agent that read every fetch as a failed tool would stop partway through the very job the
@@ -297,11 +274,10 @@ the PROMISE a changed test or a changed TERM reached — the same shapes, the sa
 comparing each requirement's description against the same base revision the tests are
 measured from.
 
-The description is the STANDARD every scenario under the requirement is judged against, and
-keying already folds it into every key under it: a reworded description is a different
-question being asked of every scenario, and every judgement made under the old wording is
-worth taking again. Reading the change and not re-opening would let a branch change what its
-PROMISE mean with the gate silent.
+The description is the STANDARD every scenario under the requirement is judged against: a
+reworded description is a different question being asked of every scenario, and every
+judgement made under the old wording is worth taking again. Reading the change and not
+re-opening would let a branch change what its PROMISE mean with the gate silent.
 
 <!-- scenarios: generated -->
 - "A PROMISE both a description change and a test change reached is gathered once" → tests/cli/touched-descriptions.test.ts
@@ -366,8 +342,7 @@ along with what to run to record either answer.
 The asking is not incidental. A reviewer asked "is this CLAIM honest?" answers yes; one asked
 to find where the CLAIM promises more than the PROOF asserts goes looking. Only one of those
 two questions finds anything, and which one gets asked cannot be left to whoever remembers to
-ask it — the same argument that put the proving source in the payload rather than an address
-to it.
+ask it.
 
 <!-- scenarios: generated -->
 - "The pass the protocol hands over is one the command line accepts" → tests/cli/review.test.ts
@@ -385,8 +360,8 @@ repository already keeps, or from a file when one is named — which is also how
 one over, since a test cannot index a repository. Being unable to read a graph SHALL be a
 cannot-run: "nothing reaches this change" and "I could not look" must not read the same.
 
-Changed tests are `touched`'s question, so this command reads everything except them. Like
-`touched` it only reports, and exits zero whatever it finds.
+Changed tests are `touched`'s question, so this command reads everything except them. It only
+reports, and exits zero whatever it finds.
 
 <!-- scenarios: generated -->
 - "A change to the tests is not on this tree" → tests/cli/impact.test.ts
@@ -420,14 +395,12 @@ graph this capability computes, as JSON by default, and SHALL exit its ok code w
 finds.
 
 This report is read by another program — an orchestrator, in a later round — far more often
-than by a person, which is this CLI's own rule for when JSON is the default rather than
-something asked for. Like `touched` and `impact`, it reports and holds no gate: a
+than by a person. Like `touched` and `impact`, it reports and holds no gate: a
 relationship the graph found is not a build the graph is entitled to fail, and ranking one
 relationship over another is exactly the judgement this capability refuses to make.
 
-The command carries no sub-verb: add, list, and hold belong to a more ambitious design this
-round deliberately narrowed away, and `inflight` answers the one question this capability
-asks. A sub-verb parser would be built for choices the capability does not make.
+The command carries no sub-verb: it answers the one question this capability asks, and a
+sub-verb parser would be built for choices the capability does not make.
 
 <!-- scenarios: generated -->
 - "The `inflight` command answers JSON by default" → tests/cli/inflight.test.ts
@@ -440,11 +413,8 @@ The CLI SHALL provide a `docket` command that answers the docket view — one ro
 the conventional queue directory, and the relationships raised but not yet ruled — as text
 by default and as JSON on request, and SHALL exit its ok code whatever it finds.
 
-A person at a terminal watching several TASKs run is the reader this command exists for, so
-the default form is the one a person reads — the mirror image of `inflight`'s JSON by
-default, whose reader is a program, and the same rule that command already records: the
-default follows the kind of answer. The JSON form carries the same content, the way every
-other command's does.
+The default form follows the reader, and a person at a terminal watching several TASKs run
+is this command's reader. The JSON form carries the same content.
 
 <!-- scenarios: generated -->
 - "The docket command answers as JSON on request, carrying the same content" → tests/cli/docket.test.ts
@@ -468,8 +438,8 @@ and this machine's ruling debts. Naming an interface with `--host` is the caller
 who reads. `0.0.0.0` is the spelling that answers every interface the machine has, so the
 docket can be watched from another device on the same network. The port is conventional
 so the URL is memorable, and overridable so a second instance can run beside a first.
-The JSON it answers at `/docket` is the same answer the one-shot command's JSON form
-gives, so nothing about the page is a dialect of its own.
+The JSON it answers at `/docket` is the one answer the page reads, so nothing about the
+page is a dialect of its own.
 
 <!-- scenarios: generated -->
 - "A named --host is the interface served on" → tests/cli/docket-serve.test.ts
@@ -486,11 +456,9 @@ The CLI SHALL provide a way to compare two named git revisions without checking 
 out: where their histories last agreed, which paths under a pathspec differ between them,
 every path either one holds, and whether one is an ancestor of the other.
 
-`touched` already reads one revision's diff against a working tree; the inflight graph needs
-the same kind of answer about two revisions neither of which is checked out — a task's own
-branch against another task's, or against `main` — so it is this capability's job to answer
-without disturbing whatever the caller has checked out, the same way `touched` never
-requires the base revision to be the one in the working directory.
+The inflight graph asks this of two revisions neither of which is checked out — a task's own
+branch against another task's, or against `main` — without disturbing whatever the caller
+has checked out.
 
 <!-- scenarios: generated -->
 - "A revision the repository does not have is a refusal naming it" → tests/cli/revisions.test.ts
@@ -507,12 +475,8 @@ it, without checking that revision out, answering nothing — not a refusal — 
 revision does not hold that path, including when the revision itself is not one the
 repository has.
 
-`touched` already reads a capability file's own before-text this way to find a reworded TERM
-or a reworded description; the census `inflight` computes reads a whole capability file's
-text at a TASK's own base and at its branch the same way, to find every requirement and TERM
-the branch rewrote. All three need the same primitive — a path's content as one revision held
-it — without disturbing whatever the caller has checked out, the same way the revisions above
-are compared without either one being checked out.
+Several reads need the same primitive — a path's content as one revision held it — without
+checking anything out.
 
 <!-- scenarios: generated -->
 - "A path a revision does not hold answers nothing, not a refusal" → tests/cli/revisions.test.ts
@@ -533,10 +497,9 @@ in flight. A directory that exists and still cannot be listed — permissions de
 sitting where a directory belongs — is a different fact about the repository, one no TASK's
 absence explains, so it is refused rather than answered as empty.
 
-The same asymmetry `touched` already draws between a repo it cannot run in at all and a file
-inside it that cannot be read applies here one level down: a directory that lists fine but
-holds one unreadable task is a per-task problem — refusing the whole read over one bad TASK
-would be the very defeat the graph's own resilience exists to avoid.
+A directory that lists fine but holds one unreadable TASK is a per-task problem — refusing
+the whole read over one bad TASK would be the very defeat the graph's own resilience exists
+to avoid.
 
 <!-- scenarios: generated -->
 - "A queue directory is read into one entry per task subdirectory" → tests/cli/queue.test.ts
