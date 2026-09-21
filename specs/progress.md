@@ -24,7 +24,9 @@ is the heartbeat: the same extension refreshes a timestamp in the same queue ent
 every move the session makes, so that a view reading the entry can tell a working session
 from a silent one without asking either. The fourth limb is the pace word: the same extension
 registers `report_task_phase`, which writes the executor's own word for where inside its
-pipeline the work stands, beside a round number for the gates that loop. The vocabulary is
+pipeline the work stands, beside a round number for the gates that loop and the moment the
+word began, and it appends every change of standing to a history file, so what the TASK
+has been through stays readable after the word moves on. The vocabulary is
 the executor persona's own (`.pi/agents/executor.md`) — it evolves without the queue's
 permission, and the queue judges none of it. The words and the timestamps are facts a
 session leaves behind, and what anything makes of them belongs to whoever reads them; the
@@ -185,27 +187,54 @@ more defaulting to 1. It SHALL refuse an empty or whitespace-only `phase`, namin
 touching nothing. It SHALL resolve the queue and the TASK exactly as `report_task_state`
 does — from `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK`, never from `ExtensionContext.cwd` —
 and SHALL refuse, naming the missing variable, when either is unset, without writing
-anything. It SHALL write its word and round into a `phase` file in the TASK's queue entry,
-overwriting whatever the file held before, and SHALL touch nothing else in the entry: the
-`state` file, the MANIFEST, the LEASE, and the heartbeat stand exactly as they were. A
-write that fails because the entry no longer exists — pruned by a scheduling pass — SHALL
-be answered as `{ok: false, reason}`, never thrown, the same boundary `report_task_state`
-already keeps. On success it SHALL answer `{ok: true, task, phase, round}`.
+anything. It SHALL write its word and round into a `phase` file in the TASK's queue entry — the
+file's content recording, beside the word and the round, `since`: the moment, in epoch
+milliseconds, the current word began running — and SHALL touch nothing else in the entry:
+the `state` file, the MANIFEST, the LEASE, and the heartbeat stand exactly as they were.
+The write itself SHALL follow what the entry already holds, in three cases. A report whose
+word and round both match the standing the `phase` file records SHALL write nothing at
+all — not the `phase` file, not the history. A report whose word matches and whose round
+differs SHALL rewrite the `phase` file with the new round, keeping the `since` the file
+records. A report whose word differs — including a report into an entry whose `phase` file
+holds no standing to match, whether absent or holding a shape this tool does not write —
+SHALL rewrite the `phase` file with `since` set to now. On every standing change — the
+word changed, or the round changed — it SHALL append one entry to a `phase-history` file
+in the same queue entry: the word, the round, and the moment, in epoch milliseconds, that
+standing began. The history is appended to, never overwritten. A write that fails because
+the entry no longer exists — pruned by a scheduling pass — SHALL be answered as
+`{ok: false, reason}`, never thrown, the same boundary `report_task_state` already keeps.
+On success it SHALL answer `{ok: true, task, phase, round}`; the report that wrote nothing
+is a success, not a refusal — it changed nothing, and nothing failed.
 
 The state word is the machine's closed vocabulary: `building` is what keeps a LEASE from
 being reclaimed, and `mergeable` is what triggers the settle. It answers no human question
 for most of a TASK's life — from the moment work starts to the moment every gate is clean,
 the word just says `building` — and what a person watching ten sessions actually wants to
-know is 「state其实绝大多数时间都是building 我其实并不关心building 我关心的是building到
-哪了」: not that the work is building, but where inside the building it has reached. The
+know is not that the work is building, but where inside the building it has reached. The
 phase word is the executor's answer to that question, written at the executor's own pace,
 in the executor's own words. The vocabulary is free on purpose: the pipeline's words belong
 to the executor persona (`.pi/agents/executor.md`), which evolves without the queue's
 permission, and a closed set here would freeze the persona's pipeline into the queue's
-contract. The round exists because the review gates loop — 「还可以带轮次 比方说第几轮
-test review」 — and the executor that looped is the one that knows which round it is on.
-Like the state word, the phase word is a fact the session leaves behind for whoever reads
-it; the docket carries it on its row (`specs/docket.md`).
+contract. The round exists because the review gates loop, and the executor that looped
+is the one that knows which round of test and review it is on. Like the state word, the
+phase word is a fact the session leaves behind for whoever reads
+it; the docket carries it on its row (`specs/docket.md`) — the word, the round, the time in
+it, and now the history behind it.
+
+The conditional writes and the history exist because the file's content, not its write
+time, is what the docket reads. The `phase` file is rewritten every time the round moves —
+a gate that loops rewrites it once per round — so an age read from the file's write time
+would say how long since the last round, and a TASK that stood four hours in one word
+across two hundred rounds would show minutes. Recording `since` inside the file, and
+moving it only when the word changes, takes the duration out of the writes' reach: how
+often the file is written can no longer change how long the word has stood. The report
+that changes nothing writes nothing: the history records changes of standing, not reports,
+and an entry appended for a report that changed nothing would say a standing began that
+never began. And the history is kept at all because a `phase` file holds only the present —
+once the word moves on, where the time went goes with it — while the questions a watching
+human asks run backwards: which phases this TASK has been through, how long each stood, how
+many rounds a looping one reached. Those are answerable only from a record kept standing
+by standing, and the docket answers them from this one (`specs/docket.md`).
 
 <!-- scenarios: generated -->
 - "A phase report leaves the entry's state, MANIFEST, LEASE, and heartbeat exactly as they were" → tests/progress/extension.test.ts
