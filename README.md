@@ -74,6 +74,9 @@ headed). ProofSpec currently supports TypeScript test suites only.
 npm install -D proofspec   # or: pnpm add -D proofspec
 ```
 
+(Or install a tarball you built from a checkout:
+`npm install /path/to/proofspec-<version>.tgz` — the same layout.)
+
 **2. Copy the personas and the extension glue out of the installed package.** The
 package ships the nine pipeline personas — investigator, executor, intent-writer,
 planner, implementer, test-reviewer, completion-reviewer, guideline-reviewer,
@@ -86,15 +89,21 @@ mkdir -p .pi/agents .pi/extensions
 cp node_modules/proofspec/.pi/agents/*.md .pi/agents/
 cp node_modules/proofspec/.pi/extensions/handoff.ts .pi/extensions/
 cp node_modules/proofspec/.pi/extensions/progress.ts .pi/extensions/
-git add .pi package.json package-lock.json   # or pnpm-lock.yaml
+echo ".proofspec/" >> .gitignore   # the queue and its worktrees are runtime state,
+                                   # never committed
+git add .gitignore .pi package.json package-lock.json   # or pnpm-lock.yaml
 git commit -m "chore: adopt the ProofSpec docket pipeline"
 ```
 
 Commit them: the queue reads the personas from the project root, and a TASK's worktree
-branches from what is committed. Commit your tests too, if they are not yet.
+branches from what is committed. Commit your tests too, if they are not yet. The
+personas ship as this repo runs them — written against its own conventions (pnpm
+scripts, a codebase-memory index, its agent rules); your copies in `.pi/agents/` are
+yours to edit.
 
-**3. Queue the retrofit TASK.** Start pi in the project and ask for the first TASK —
-this one conversation is the whole of your synchronous work:
+**3. Queue the retrofit TASK.** Start pi in the project and ask for the first TASK
+(`--approve` trusts the project-local files for this run). There is no spec prose yet,
+so nothing needs a disposition review — one ask is enough:
 
 ```sh
 pi --approve -p "Queue my first TASK, named retrofit: turn this project into one ProofSpec can run. Do the investigator's setup — a branch and worktree for the TASK, and its INTENT doc in the queue entry — then enqueue it. The TASK's intent: create specs/, write the Gherkin above the existing tests, and get check green. There is no spec prose yet, so this TASK carries an INTENT doc only; there is nothing to settle at a disposition review."
@@ -104,6 +113,10 @@ The session sets the TASK up the way the investigator does — a branch of its o
 INTENT doc in `.proofspec/dispatch/retrofit/INTENT`, then `enqueue_task`. A successful
 enqueue immediately triggers a scheduling pass, which starts the executor session as
 soon as capacity allows.
+
+Every TASK after the first one opens the proper way: start `pi` and talk the intent
+through with the investigator. That conversation — and the disposition review it hands
+you, where you judge the settled prose — is the whole of your synchronous work.
 
 **4. Watch it.**
 
@@ -220,7 +233,7 @@ A judgement is filed under a digest of what it judged — the scenario's identit
 requirement's prose, its claim, and its proving source. Edit any of them and it is no longer
 that key, so it comes back unjudged. There is no staleness rule to get wrong.
 
-**The work list exits non zero while anything it reached is unjudged**, so a pre-push hook can
+**The work list exits non-zero while anything it reached is unjudged**, so a pre-push hook can
 hold the gate. Fetching a requirement always exits zero — collecting the work is not the gate.
 Naming what a change touched is still a report and not a verdict: the command that fails a build
 over drift is `check`.

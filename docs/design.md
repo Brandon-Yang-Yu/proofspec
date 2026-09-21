@@ -265,6 +265,16 @@ has a command, run where its failure is readable. `--host` defaults to the loopb
 because naming an interface is choosing who reads; and an address is an address, not a
 mode — no arm of the code special-cases the all-interfaces spelling.
 
+**The personas and the glue ship in the package, because the way to adopt the pipeline
+is to copy it.** The nine personas and the two one-line extension glue files pack inside
+the npm package — `.pi/agents/`, `.pi/extensions/`, and `src/` for the glue to resolve
+into — and the README's from-zero guide walks an adopter through exactly that copy. The
+glue re-exports `proofspec/src/...` by package name, not a relative path, so a copy
+pasted into another project keeps resolving inside the installed package; in this repo
+the same specifier resolves by self-reference. Shipping `src/` beside `dist/` is the
+cost: the glue targets the entry this repo itself develops against, so the dev flow
+never depends on a build.
+
 ## Where everything else lives
 
 - What the tool does → `specs/*.md`, enforced by `pnpm spec:check`.
