@@ -5,8 +5,8 @@ import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling, PhaseAccountE
  * a server — because the docket reads no files and runs no processes; `cli` owns the socket
  * the page arrives on, the same split the view itself keeps.
  *
- * The page is written with its answer already in it: the rows, the completed records, the
- * problems, and the rulings ship as content a browser shows before any script runs — the
+ * The page is written with its answer already in it: the rows, the problems, the rulings,
+ * and the completed records ship as content a browser shows before any script runs — the
  * page is the view asked again, not an empty shell around a script. The script inline in
  * the page is the whole of the page's behavior after that: it asks `/docket` and `/archive`
  * again on its own, renders exactly the answers it last received, and does nothing else. It
@@ -47,26 +47,27 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   thead th { border-bottom: 1px solid #ddd; }
   tbody td { border-bottom: 1px solid #eee; }
   code { background: #f2f2f2; padding: 0.1rem 0; }
-  .muted { color: #777; }
+  .muted { color: #6b6b6b; }
+  h2 .muted { font-size: 0.8rem; font-weight: normal; }
 </style>
 </head>
 <body>
 <h1>Docket</h1>
-<h2>queue</h2>
+<h2 id="queue-heading">queue</h2>
 <p id="empty"${report.rows.length === 0 ? '' : ' hidden'}>no TASK in the queue</p>
-<table>
+<table aria-labelledby="queue-heading">
   <thead>
     <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th><th scope="col">phase totals</th></tr>
   </thead>
   <tbody id="rows">${report.rows.map(serverRowHtml).join('')}</tbody>
 </table>
 <h2 id="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>problems</h2>
-<ul id="problems">${report.problems.map(serverProblemHtml).join('')}</ul>
+<ul id="problems" aria-labelledby="problems-heading">${report.problems.map(serverProblemHtml).join('')}</ul>
 <h2 id="rulings-heading"${report.outstanding.length === 0 ? ' hidden' : ''}>rulings outstanding</h2>
-<ul id="rulings">${report.outstanding.map(serverRulingHtml).join('')}</ul>
-<h2>completed</h2>
+<ul id="rulings" aria-labelledby="rulings-heading">${report.outstanding.map(serverRulingHtml).join('')}</ul>
+<h2 id="completed-heading">completed <span class="muted">enqueued latest first</span></h2>
 <p id="archive-empty"${archive.length === 0 ? '' : ' hidden'}>no completed TASK yet</p>
-<table>
+<table aria-labelledby="completed-heading">
   <thead>
     <tr><th scope="col">TASK</th><th scope="col">branch</th><th scope="col">enqueued</th><th scope="col">settled</th><th scope="col">lived</th><th scope="col">phase totals</th></tr>
   </thead>
