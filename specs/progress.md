@@ -2,15 +2,21 @@
 
 Lets a running executor session report its own state word back into
 `.proofspec/dispatch/<task>/` — the one gap the persona split left open:
-`startSession` (`specs/schedule.md`) starts a headed `pi` process in the
+`startSession` (`specs/schedule.md`) starts a headed executor session in the
 TASK's own worktree, and nothing after that point ever writes back to the queue entry that
 started it. `writeState(cwd, task, word)` (`src/cli/queue.ts`) already overwrites a TASK's
 `state` file with exactly the word it is given, with no notion of who is calling it or from
 where; this capability is the one hop in front of that write a running session can actually
-take — a `pi` extension tool, `report_task_state`, that resolves where the queue lives and
-which TASK it is reporting for from the environment `startSession` hands it, rather than from
-`ExtensionContext.cwd`, which names the session's own worktree, not the main checkout the
+take — `report_task_state`, a tool that resolves where the queue lives and which TASK it is
+reporting for from the environment `startSession` hands it, rather than from the session's
+own working directory, which names the session's own worktree, not the main checkout the
 queue lives under.
+
+The tool surface this capability builds — `report_task_state`, `report_task_phase`,
+`settle_task`, and the heartbeat — is one contract served over two transports: the
+extension the `pi` harness loads, and the stdio MCP server (`specs/mcp.md`) the Claude Code
+harness loads. Every call, on either transport, reaches one core, and each tool's rules
+live in that core and nowhere else, so the two harnesses answer a tool the same way.
 
 `leaseDecision` (`src/schedule/lease.ts`) already treats the literal word `building` as proof
 a session is live; before this capability, nothing running inside a session ever produced that
@@ -20,10 +26,10 @@ reports at all — a running session is the least impartial judge of its own mer
 capability carries a second limb for it, the settle: `settle_task`, the tool an executor
 calls the moment its own merge lands, which re-verifies the landing from git itself before
 it rewrites the state word and tears the TASK's worktree and session down. The third limb
-is the heartbeat: the same extension refreshes a timestamp in the same queue entry on
-every move the session makes, so that a view reading the entry can tell a working session
-from a silent one without asking either. The fourth limb is the pace word: the same extension
-registers `report_task_phase`, which writes the executor's own word for where inside its
+is the heartbeat: a timestamp refreshed in the same queue entry on every move the session
+makes, so that a view reading the entry can tell a working session from a silent one
+without asking either. The fourth limb is the pace word: `report_task_phase`, which writes
+the executor's own word for where inside its
 pipeline the work stands, beside a round number for the gates that loop and the moment the
 word began, and it appends every change of standing to a history file, so what the TASK
 has been through stays readable after the word moves on. The vocabulary is
@@ -62,21 +68,22 @@ already compares a TASK's own state word against that exact constant; `mergeable
 
 `report_task_state` SHALL resolve the main checkout it writes into, and the TASK it is
 reporting for, from the `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` environment variables —
-never from `ExtensionContext.cwd` — and SHALL refuse, naming whichever variable is missing,
-when either is unset, without writing anything.
+never from the session's own working directory — and SHALL refuse, naming whichever
+variable is missing, when either is unset, without writing anything.
 
-An extension's `ExtensionContext` gives it only `cwd`, and `cwd` for a session `startSession`
-opens is the TASK's own worktree (`.proofspec/worktrees/<task>`), not the main checkout
-`.proofspec/dispatch/` actually lives under — the two are different directories by
-construction, so no path an extension can compute from `cwd` alone ever names the queue. The
-main checkout's path and the TASK's own name are both facts the scheduler already holds at the
-moment it starts the session — it is the one that wrote the queue entry in the first place —
-so `startSession` hands them down explicitly as environment variables (the amended requirement
-in `specs/schedule.md`) rather than asking the worktree to infer them, say, from its own
-directory name or `git rev-parse --git-common-dir`: a statement from the party that already
-knows cannot be wrong the way an inference can. Refusing outright when either is absent, rather
-than falling back to `cwd` or guessing, keeps a session started outside this convention from
-silently writing into the wrong place, or into no place a scheduling pass will ever read.
+The working directory a session runs in is the TASK's own worktree
+(`.proofspec/worktrees/<task>`) — the directory `startSession` opens the session in — not
+the main checkout `.proofspec/dispatch/` actually lives under; the two are different
+directories by construction, so no path a reporting tool can compute from the working
+directory alone ever names the queue. The main checkout's path and the TASK's own name are
+both facts the scheduler already holds at the moment it starts the session — it is the one
+that wrote the queue entry in the first place — so `startSession` hands them down
+explicitly as environment variables (`specs/schedule.md`) rather than asking the worktree
+to infer them, say, from its own directory name or `git rev-parse --git-common-dir`: a
+statement from the party that already knows cannot be wrong the way an inference can.
+Refusing outright when either is absent, rather than falling back to the working directory
+or guessing, keeps a session started outside this convention from silently writing into
+the wrong place, or into no place a scheduling pass will ever read.
 
 <!-- scenarios: generated -->
 - "A report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
@@ -113,7 +120,8 @@ exactly that failure at the boundary and answers it as a value instead, the same
 
 `settle_task` (`src/progress/extension.ts`) SHALL resolve the queue it writes into and the
 TASK it settles the same way `report_task_state` does — from `PROOFSPEC_QUEUE_ROOT` and
-`PROOFSPEC_TASK`, never from `ExtensionContext.cwd` — refusing when either is unset. It
+`PROOFSPEC_TASK`, never from the session's own working directory — refusing when either is
+unset. It
 SHALL never take its caller's word for the settle conditions: on every call it SHALL read
 the TASK's current state word from the queue, and check its MANIFEST's `branch` is an
 ancestor of `main`, fresh from git. Either condition failing, it SHALL refuse as a value —
@@ -149,22 +157,26 @@ before the caller ever saw whether the settle succeeded.
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
 
-### Requirement: The extension refreshes a heartbeat on every move the session makes
+### Requirement: A heartbeat is refreshed on every move the session makes
 
-The session's extension SHALL refresh a `heartbeat` file in its TASK's queue entry whenever
-the session makes any observable move — starting or ending a turn, starting, updating, or
-ending a tool call, or streaming part of a reply — resolving the entry the same way
-`report_task_state` does, from `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK`, and writing
-nothing when either is unset. It SHALL NOT touch the `state` file or any other file in the
-entry.
+The session SHALL refresh a `heartbeat` file in its TASK's queue entry whenever the session
+makes any observable move — any move the harness running the session reports — resolving
+the entry the same way `report_task_state` does, from `PROOFSPEC_QUEUE_ROOT` and
+`PROOFSPEC_TASK`, and writing nothing when either is unset. It SHALL NOT touch the `state`
+file or any other file in the entry. Each harness reports the moves its own way, and both
+triggers end in the same one write: the `pi` transport subscribes its six observable-move
+events — starting or ending a turn, starting, updating, or ending a tool call, or streaming
+part of a reply — and the Claude Code transport fires hooks that call the heartbeat CLI
+entry (`specs/mcp.md`). One write, two triggers, so the file means the same thing
+whichever harness the session runs in.
 
 The heartbeat is a fact, not a word, and the difference is who can lie: a state word is a
 claim that stays put until something rewrites it, while a heartbeat refreshed on every move
 goes stale on its own the moment the moves stop — nobody has to remember to say so. That is
 what lets it carry "how long since the last move" honestly where a `running` state word
 would go silently false the moment the session hung after writing it.
-A subagent is a tool call on this session's own surface: its steps arrive as tool updates,
-so a subagent at work refreshes the heartbeat and one that has stopped does not — while the
+A subagent is dispatched as a tool call on the session's own surface, so a subagent at work
+refreshes the heartbeat and one that has stopped does not — while the
 refresh grain stays per move, not per token, because a session cannot observe inside a child
 process's token stream, and a requirement promising more than the process can observe would
 be lying about its own facts. The heartbeat feeds the docket view (`specs/docket.md`) and
@@ -180,8 +192,8 @@ exactly as it already does, untouched.
 
 ### Requirement: report_task_phase reports the executor's own pace word and round
 
-`report_task_phase` (`src/progress/extension.ts`, registered by the same extension that
-registers `report_task_state`) SHALL take a `phase` argument — any non-empty trimmed word;
+`report_task_phase` (`src/progress/extension.ts`, the same tool surface
+`report_task_state` belongs to) SHALL take a `phase` argument — any non-empty trimmed word;
 the queue enforces no vocabulary of its own — and a `round` argument, an integer of 1 or
 more defaulting to 1. It SHALL refuse an empty or whitespace-only `phase`, naming why,
 touching nothing. It SHALL resolve the queue and the TASK exactly as `report_task_state`
