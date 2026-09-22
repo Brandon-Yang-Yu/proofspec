@@ -68,10 +68,10 @@ function runHeartbeatEntry(env: Readonly<Record<string, string>>): Promise<Entry
 
 /** Writes one file into a TASK's queue entry, the fixture shape every queue-holding test
  *  writes. */
-async function writeEntryFile(root: string, task: string, name: string, bytes: string): Promise<void> {
-  const dir = join(root, '.proofspec', 'dispatch', task)
+async function writeEntryFile(entry: { readonly root: string; readonly task: string; readonly name: string; readonly bytes: string }): Promise<void> {
+  const dir = join(entry.root, '.proofspec', 'dispatch', entry.task)
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, name), bytes)
+  await writeFile(join(dir, entry.name), entry.bytes)
 }
 
 function heartbeatPath(root: string, task: string): string {
@@ -278,27 +278,27 @@ async function withFakeTmux(action: () => Promise<void>): Promise<void> {
  *  a shell, run in the session's own working directory, with the event's payload on stdin
  *  and the session's environment — the same `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` pair a
  *  dispatched session's own start command carries. */
-function fireHook(
-  worktree: string,
-  event: string,
-  command: string,
-  session: { readonly queueRoot: string; readonly task: string },
-): Promise<EntryRun> {
+function fireHook(firing: {
+  readonly worktree: string
+  readonly event: string
+  readonly command: string
+  readonly session: { readonly queueRoot: string; readonly task: string }
+}): Promise<EntryRun> {
   return new Promise(resolve => {
     const env: NodeJS.ProcessEnv = { ...process.env }
     delete env.PROOFSPEC_QUEUE_ROOT
     delete env.PROOFSPEC_TASK
-    env.PROOFSPEC_QUEUE_ROOT = session.queueRoot
-    env.PROOFSPEC_TASK = session.task
-    const child = spawn('sh', ['-c', command], { cwd: worktree, env, stdio: ['pipe', 'pipe', 'pipe'] })
+    env.PROOFSPEC_QUEUE_ROOT = firing.session.queueRoot
+    env.PROOFSPEC_TASK = firing.session.task
+    const child = spawn('sh', ['-c', firing.command], { cwd: firing.worktree, env, stdio: ['pipe', 'pipe', 'pipe'] })
     let stderr = ''
     child.stderr.on('data', chunk => {
       stderr += chunk
     })
-    child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}`, cwd: worktree }))
-    child.once('exit', code => resolve({ code, stderr, cwd: worktree }))
+    child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}`, cwd: firing.worktree }))
+    child.once('exit', code => resolve({ code, stderr, cwd: firing.worktree }))
     child.stdin.end(
-      JSON.stringify({ hook_event_name: event, session_id: 'proofspec-test', transcript_path: '', cwd: worktree, tool_name: 'Bash', tool_input: {} }),
+      JSON.stringify({ hook_event_name: firing.event, session_id: 'proofspec-test', transcript_path: '', cwd: firing.worktree, tool_name: 'Bash', tool_input: {} }),
     )
   })
 }
@@ -312,8 +312,8 @@ function fireHook(
 // THEN it performs the same write — the heartbeat file in that entry is refreshed, its content the same shape the event-triggered write leaves
 it('performs the same heartbeat write into the TASK\'s entry that the pi events trigger', async () => {
   const repo = await makeRepo({})
-  await writeEntryFile(repo.root, 'a', 'MANIFEST', '{}')
-  await writeEntryFile(repo.root, 'a', 'state', 'queued')
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'MANIFEST', bytes: '{}' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'state', bytes: 'queued' })
   // The pi transport's own write, fired for real: the environment names the entry exactly
   // the way a dispatched session's would, and one observable-move event runs its handler.
   process.env.PROOFSPEC_QUEUE_ROOT = repo.root
@@ -347,8 +347,8 @@ it('performs the same heartbeat write into the TASK\'s entry that the pi events 
 // THEN no heartbeat is written anywhere
 it('writes no heartbeat anywhere when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset', async () => {
   const repo = await makeRepo({})
-  await writeEntryFile(repo.root, 'a', 'MANIFEST', '{}')
-  await writeEntryFile(repo.root, 'a', 'state', 'queued')
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'MANIFEST', bytes: '{}' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'state', bytes: 'queued' })
 
   for (const missing of ['PROOFSPEC_QUEUE_ROOT', 'PROOFSPEC_TASK'] as const) {
     const env: Record<string, string> = { PROOFSPEC_QUEUE_ROOT: repo.root, PROOFSPEC_TASK: 'a' }
@@ -374,11 +374,11 @@ it('writes no heartbeat anywhere when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_T
 // THEN only the heartbeat file changes — everything else in the entry stands exactly as it was
 it('changes only the heartbeat file, leaving the rest of the entry exactly as it was', async () => {
   const repo = await makeRepo({})
-  await writeEntryFile(repo.root, 'a', 'MANIFEST', '{"branch":"work/a"}')
-  await writeEntryFile(repo.root, 'a', 'state', 'building')
-  await writeEntryFile(repo.root, 'a', 'LEASE', '2026-01-01T00:00:00.000Z')
-  await writeEntryFile(repo.root, 'a', 'phase', '{"phase":"tests-red","round":1,"since":1700000000000}')
-  await writeEntryFile(repo.root, 'a', 'phase-history', '{"phase":"tests-red","round":1,"since":1700000000000}\n')
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'MANIFEST', bytes: '{"branch":"work/a"}' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'state', bytes: 'building' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'LEASE', bytes: '2026-01-01T00:00:00.000Z' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'phase', bytes: '{"phase":"tests-red","round":1,"since":1700000000000}' })
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'phase-history', bytes: '{"phase":"tests-red","round":1,"since":1700000000000}\n' })
   const before = await entryStanding(repo.root, 'a')
 
   const run = await runHeartbeatEntry({ PROOFSPEC_QUEUE_ROOT: repo.root, PROOFSPEC_TASK: 'a' })
@@ -437,7 +437,7 @@ it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, 
   await mkdir(dirname(hook.entryPath), { recursive: true })
   await copyFile(HEARTBEAT_ENTRY, hook.entryPath)
 
-  const fired = await fireHook(worktree, hook.event, hook.command, { queueRoot: repo.root, task: 'a' })
+  const fired = await fireHook({ worktree, event: hook.event, command: hook.command, session: { queueRoot: repo.root, task: 'a' } })
 
   const heartbeat = await readHeartbeat(repo.root, 'a')
   expect(

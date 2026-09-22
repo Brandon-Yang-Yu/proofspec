@@ -137,7 +137,7 @@ it('carries the MCP server\'s calls to the core unchanged, and answers back unch
 
   for (const { tool, args } of CALLS) {
     // A copy of the arguments, for the same mutation-proofing reason as above.
-    const answer = await mcpCallTool(tool, structuredClone(args), core)
+    const answer = await mcpCallTool(tool, structuredClone(args), { core })
     expect(received.at(-1), `${tool}'s argument reached the core exactly as handed`).toEqual({ tool, args })
     expect(answer, `${tool}'s answer reached the caller exactly as the core produced it`).toEqual(KNOWN_ANSWERS[tool])
   }

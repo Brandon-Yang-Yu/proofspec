@@ -20,9 +20,13 @@ const TOOL_NAMES: readonly ToolName[] = TOOL_SURFACE.map(tool => tool.name)
  * answer exactly what the core produced. Injected with the core it delegates to, so a proof
  * can run it against a core whose answers are known in advance (`tests/mcp/adapter.test.ts`).
  */
-export async function mcpCallTool(tool: string, args: Record<string, unknown>, core?: ToolCore, cwd?: string): Promise<unknown> {
-  const resolved = core ?? createToolCore()
-  return resolved.call(tool, args, cwd)
+export async function mcpCallTool(
+  tool: string,
+  args: Record<string, unknown>,
+  seams: { readonly core?: ToolCore; readonly cwd?: string } = {},
+): Promise<unknown> {
+  const resolved = seams.core ?? createToolCore()
+  return resolved.call(tool, args, seams.cwd)
 }
 
 /** What one line off the wire parsed into, or nothing for a line that is not a message. */
@@ -117,7 +121,7 @@ export function serveMcp(options: {
         return
       }
       const args = (params.arguments ?? {}) as Record<string, unknown>
-      const result = await mcpCallTool(name, args, core, cwd)
+      const result = await mcpCallTool(name, args, { core, cwd })
       const tool = name as ToolName
       respond({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: answerText(tool, result) }], structuredContent: result } })
       return

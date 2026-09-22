@@ -10,13 +10,19 @@ import { join } from 'node:path'
  * exactly this entry, so an unset variable must never fail a session that merely moved.
  *
  * This file is deliberately self-contained — only `node:` builtins, no sibling imports —
- * because it is run from wherever a checkout ships it, planted by hand if it must be, the
- * same way the hooks name it by its own path. The write itself is the same one
- * `refreshHeartbeat` (`src/mcp/core.ts`) performs for the `pi` events: the instant
- * `new Date().toISOString()` written into the TASK's `heartbeat` file, no `mkdir` (the
- * heartbeat is left inside an entry that already stands), and a pruned entry (`ENOENT`) is
- * swallowed — the heartbeat going stale is itself the signal, and a fault the write treats
- * as real (permissions, disk) still surfaces through the exit code.
+ * because a hook runs it as one file wherever a checkout ships it, planted alone if it must
+ * be (the M4d proof plants exactly this one file into a repo that holds none of its
+ * siblings); an import would break at the first checkout that carries the file without the
+ * tree around it. The cost is the queue layout literal below, which mirrors `QUEUE_DIR`/
+ * `HEARTBEAT_FILE` (`src/cli/queue.ts`) — the mirror is checked by the same-write scenario
+ * (`tests/mcp/heartbeat.test.ts`), the one proof that would catch the two drifting apart.
+ *
+ * The write itself is the same one the `pi` events trigger (`refreshHeartbeat`,
+ * `src/mcp/core.ts`): the instant `new Date().toISOString()` into the TASK's `heartbeat`
+ * file, no `mkdir` — the heartbeat is left inside an entry that already stands — and a
+ * pruned entry (`ENOENT`) is swallowed, because the heartbeat going stale is itself the
+ * signal; a fault the write treats as real (permissions, disk) still surfaces through the
+ * exit code.
  */
 const queueRoot = process.env.PROOFSPEC_QUEUE_ROOT
 const task = process.env.PROOFSPEC_TASK

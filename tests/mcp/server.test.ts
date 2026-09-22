@@ -136,13 +136,11 @@ function registerPiTools(core?: ToolCore): ReadonlyMap<string, RegisteredTool> {
 /** Carries one call through the pi transport, against the cwd a segment's world names. */
 async function callThroughPi(
   piTools: ReadonlyMap<string, RegisteredTool>,
-  tool: ToolName,
-  args: Record<string, unknown>,
-  cwd: string,
+  call: { readonly tool: ToolName; readonly args: Record<string, unknown>; readonly cwd: string },
 ): Promise<Answer> {
-  const registered = piTools.get(tool)
-  if (registered === undefined) throw new Error(`the pi extensions registered no ${tool} tool`)
-  const result = await registered.execute(`call-${tool}`, args, undefined, undefined, { cwd } as unknown as ExtensionContext)
+  const registered = piTools.get(call.tool)
+  if (registered === undefined) throw new Error(`the pi extensions registered no ${call.tool} tool`)
+  const result = await registered.execute(`call-${call.tool}`, call.args, undefined, undefined, { cwd: call.cwd } as unknown as ExtensionContext)
   return { content: result.content, structured: result.details }
 }
 
@@ -316,19 +314,17 @@ async function settleWorld(): Promise<string> {
 async function eachInItsOwnWorld(
   piTools: ReadonlyMap<string, RegisteredTool>,
   core: ToolCore,
-  tool: ToolName,
-  args: Record<string, unknown>,
-  buildWorld: () => Promise<string>,
+  call: { readonly tool: ToolName; readonly args: Record<string, unknown>; readonly buildWorld: () => Promise<string> },
 ): Promise<readonly [Answer, Answer]> {
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
-  const viaPi = await callThroughPi(piTools, tool, args, await buildWorld())
+  const viaPi = await callThroughPi(piTools, { ...call, cwd: await call.buildWorld() })
 
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
-  const server = await startMcp({ core, cwd: await buildWorld() })
+  const server = await startMcp({ core, cwd: await call.buildWorld() })
   try {
-    const viaMcp = await server.callTool(tool, args)
+    const viaMcp = await server.callTool(call.tool, call.args)
     return [viaPi, viaMcp]
   } finally {
     await server.close()
@@ -340,14 +336,12 @@ async function eachInItsOwnWorld(
 async function bothInOneWorld(
   piTools: ReadonlyMap<string, RegisteredTool>,
   core: ToolCore,
-  tool: ToolName,
-  args: Record<string, unknown>,
-  root: string,
+  call: { readonly tool: ToolName; readonly args: Record<string, unknown>; readonly root: string },
 ): Promise<readonly [Answer, Answer]> {
-  const viaPi = await callThroughPi(piTools, tool, args, root)
-  const server = await startMcp({ core, cwd: root })
+  const viaPi = await callThroughPi(piTools, { tool: call.tool, args: call.args, cwd: call.root })
+  const server = await startMcp({ core, cwd: call.root })
   try {
-    const viaMcp = await server.callTool(tool, args)
+    const viaMcp = await server.callTool(call.tool, call.args)
     return [viaPi, viaMcp]
   } finally {
     await server.close()
@@ -409,11 +403,11 @@ it('answers the same values whichever transport carries the call, for every tool
   // enqueue_task — a fresh TASK queued (each transport against its own copy, the call
   // being a write), and a TASK name that is not a slug refused before anything is touched.
   {
-    const queued = await eachInItsOwnWorld(piTools, core, 'enqueue_task', { task: 'same-answer', intentRef: 'docs/x.md', branch: 'work/same-answer' }, enqueueWorld)
+    const queued = await eachInItsOwnWorld(piTools, core, { tool: 'enqueue_task', args: { task: 'same-answer', intentRef: 'docs/x.md', branch: 'work/same-answer' }, buildWorld: enqueueWorld })
     expect(queued[0].structured).toMatchObject({ ok: true })
     expect(queued[1], 'enqueue_task result').toEqual(queued[0])
 
-    const refused = await bothInOneWorld(piTools, core, 'enqueue_task', { task: 'not a/slug', intentRef: 'docs/x.md', branch: 'work/anything' }, (await makeRepo({})).root)
+    const refused = await bothInOneWorld(piTools, core, { tool: 'enqueue_task', args: { task: 'not a/slug', intentRef: 'docs/x.md', branch: 'work/anything' }, root: (await makeRepo({})).root })
     expect(refused[0].structured).toMatchObject({ ok: false })
     expect(refused[1], 'enqueue_task refusal').toEqual(refused[0])
   }
@@ -421,11 +415,11 @@ it('answers the same values whichever transport carries the call, for every tool
   // census_in_flight — a census with something to count, and a queue directory that cannot
   // be read at all. Both halves are reads, so one world carries both copies.
   {
-    const counted = await bothInOneWorld(piTools, core, 'census_in_flight', {}, await censusWorld())
+    const counted = await bothInOneWorld(piTools, core, { tool: 'census_in_flight', args: {}, root: await censusWorld() })
     expect(counted[0].structured).toMatchObject({ ok: true })
     expect(counted[1], 'census_in_flight result').toEqual(counted[0])
 
-    const refused = await bothInOneWorld(piTools, core, 'census_in_flight', {}, await unreadableQueueWorld())
+    const refused = await bothInOneWorld(piTools, core, { tool: 'census_in_flight', args: {}, root: await unreadableQueueWorld() })
     expect(refused[0].structured).toMatchObject({ ok: false })
     expect(refused[1], 'census_in_flight refusal').toEqual(refused[0])
   }
@@ -433,11 +427,11 @@ it('answers the same values whichever transport carries the call, for every tool
   // report_task_state — building reported into a real entry (the second copy reports the
   // same word again and answers the same value), and a word outside the reportable set refused.
   {
-    const reported = await bothInOneWorld(piTools, core, 'report_task_state', { state: 'building' }, await reportWorld('queued'))
+    const reported = await bothInOneWorld(piTools, core, { tool: 'report_task_state', args: { state: 'building' }, root: await reportWorld('queued') })
     expect(reported[0].structured).toMatchObject({ ok: true })
     expect(reported[1], 'report_task_state result').toEqual(reported[0])
 
-    const refused = await bothInOneWorld(piTools, core, 'report_task_state', { state: 'queued' }, await reportWorld('queued'))
+    const refused = await bothInOneWorld(piTools, core, { tool: 'report_task_state', args: { state: 'queued' }, root: await reportWorld('queued') })
     expect(refused[0].structured).toMatchObject({ ok: false })
     expect(refused[1], 'report_task_state refusal').toEqual(refused[0])
   }
@@ -445,11 +439,11 @@ it('answers the same values whichever transport carries the call, for every tool
   // report_task_phase — a word and round reported (the second copy finds the standing
   // already matching and answers the same value), and an empty word refused.
   {
-    const reported = await bothInOneWorld(piTools, core, 'report_task_phase', { phase: 'explorer', round: 2 }, await reportWorld('building'))
+    const reported = await bothInOneWorld(piTools, core, { tool: 'report_task_phase', args: { phase: 'explorer', round: 2 }, root: await reportWorld('building') })
     expect(reported[0].structured).toMatchObject({ ok: true })
     expect(reported[1], 'report_task_phase result').toEqual(reported[0])
 
-    const refused = await bothInOneWorld(piTools, core, 'report_task_phase', { phase: '   ' }, await reportWorld('building'))
+    const refused = await bothInOneWorld(piTools, core, { tool: 'report_task_phase', args: { phase: '   ' }, root: await reportWorld('building') })
     expect(refused[0].structured).toMatchObject({ ok: false })
     expect(refused[1], 'report_task_phase refusal').toEqual(refused[0])
   }
@@ -457,11 +451,11 @@ it('answers the same values whichever transport carries the call, for every tool
   // settle_task — a mergeable, landed TASK settled (each transport against its own copy,
   // the settle being a teardown), and a TASK whose word is not mergeable refused untouched.
   {
-    const settled = await eachInItsOwnWorld(piTools, core, 'settle_task', {}, settleWorld)
+    const settled = await eachInItsOwnWorld(piTools, core, { tool: 'settle_task', args: {}, buildWorld: settleWorld })
     expect(settled[0].structured).toMatchObject({ ok: true })
     expect(settled[1], 'settle_task result').toEqual(settled[0])
 
-    const refused = await bothInOneWorld(piTools, core, 'settle_task', {}, await reportWorld('building'))
+    const refused = await bothInOneWorld(piTools, core, { tool: 'settle_task', args: {}, root: await reportWorld('building') })
     expect(refused[0].structured).toMatchObject({ ok: false })
     expect(refused[1], 'settle_task refusal').toEqual(refused[0])
   }
@@ -481,7 +475,7 @@ it("answers the changed way on both transports together when one tool's rule cha
     const server = await startMcp({ core, cwd: (await makeRepo({})).root })
     try {
       const args = SAMPLE_ARGS[tool]
-      const beforePi = await callThroughPi(piTools, tool, args, (await makeRepo({})).root)
+      const beforePi = await callThroughPi(piTools, { tool, args, cwd: (await makeRepo({})).root })
       const beforeMcp = await server.callTool(tool, args)
       expect(beforeMcp, `${tool} before the change`).toEqual(beforePi)
 
@@ -489,7 +483,7 @@ it("answers the changed way on both transports together when one tool's rule cha
       // the rule hidden anywhere on the MCP side answers the old way and fails the pair below.
       core[tool] = async () => ({ ok: false, reason: 'changed once, in the core' })
 
-      const afterPi = await callThroughPi(piTools, tool, args, (await makeRepo({})).root)
+      const afterPi = await callThroughPi(piTools, { tool, args, cwd: (await makeRepo({})).root })
       const afterMcp = await server.callTool(tool, args)
       expect(afterMcp, `${tool} after the change`).toEqual(afterPi)
       expect(afterPi, `${tool} did not actually change`).not.toEqual(beforePi)
