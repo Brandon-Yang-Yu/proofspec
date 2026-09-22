@@ -310,6 +310,10 @@ it('never fires a scheduling pass on a refusal', async () => {
   expect(await stateOf(noEnv.root, 'refused-env')).toBe('mergeable')
   expect(await worktreeStands(noEnv.root, 'refused-env')).toBe(true)
   await expect(hasSession('refused-env')).resolves.toBe(true)
+  // Re-asserted after the reads, which pump the event loop: a wrong implementation that
+  // deferred the fire past its refusal answer — a timer rather than an inline call — must
+  // fail here too, not only at the earlier empty check.
+  expect(fired).toEqual([])
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
