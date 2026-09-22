@@ -171,7 +171,8 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi
 // GIVEN a tmux session already named for the TASK
 // WHEN the tmux commands to start its session are built
-// THEN the first kills that stale session, and the second starts a fresh one running pi under the same name
+// THEN the first kills that stale session, and the second starts a fresh one running pi
+//      under the same name, in the TASK's own worktree, detached
 it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', async () => {
   const [kill, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
@@ -181,6 +182,13 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
   // runner script, so "running pi" is read from that script's own content.
   const nameIndex = start.args.indexOf('-s')
   expect(start.args[nameIndex + 1]).toBe('a')
+  // Detached, so the fresh session stands with no client attached to the scheduling pass
+  // that started it; and its working directory is the TASK's own worktree — the flag that
+  // sets a new session's directory, immediately followed by the worktree the build was
+  // handed, never the directory the builder itself ran in.
+  expect(start.args).toContain('-d')
+  const worktreeDirIndex = start.args.indexOf('-c')
+  expect(start.args[worktreeDirIndex + 1]).toBe('/repo/.proofspec/worktrees/a')
   await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec pi\b/)
 })
 
@@ -214,27 +222,42 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
-// Scenario: The pi invocation carries --approve and --extension pinned to this checkout's own progress extension
+// Scenario: The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
-// THEN the pi invocation carries --approve and --extension pinned to this checkout's own progress extension
-it('carries --approve and --extension pinned to this checkout\'s own progress extension', async () => {
+// THEN the pi invocation carries --approve, and pins two extensions by path: this checkout's
+//      own progress extension, and the subagent extension shipped inside the pi package
+//      under the queue root's node_modules — never a file under .pi/extensions/, so the
+//      extension and the pi that runs it cannot drift apart
+it('carries --approve and --extension pinned twice over — this checkout\'s own progress extension, and the subagent extension inside the installed pi package', async () => {
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
   const words = (await runnerScriptFrom(start)).trim().split(' ')
 
   // Slices at the flags' own positions in pi's invocation, not arrayContaining — proves
-  // --approve immediately follows pi and --extension is immediately followed by exactly the
-  // environment variable, never a path spelled out inside the script itself.
+  // --approve immediately follows pi and each --extension is immediately followed by
+  // exactly an environment variable, never a path spelled out inside the script itself.
   const piIndex = words.indexOf('pi')
   expect(words.slice(piIndex, piIndex + 2)).toEqual(['pi', '--approve'])
   const extensionIndex = words.indexOf('--extension')
   expect(words.slice(extensionIndex, extensionIndex + 2)).toEqual(['--extension', '"$PROOFSPEC_PROGRESS_EXTENSION"'])
-  // The value that variable receives is what pins the extension to this checkout's own
-  // progress tool — one -e environment entry on the start command (the flag immediately
-  // before its value), resolved from the queue root, not from whatever the TASK's branch carries.
+  const subagentIndex = words.indexOf('--extension', extensionIndex + 1)
+  expect(words.slice(subagentIndex, subagentIndex + 2)).toEqual(['--extension', '"$PROOFSPEC_SUBAGENT_EXTENSION"'])
+  // The values those variables receive are what pin the two extensions — one -e
+  // environment entry each on the start command (the flag immediately before its value),
+  // resolved from the queue root, not from whatever the TASK's branch carries.
   const extensionEnvIndex = start.args.indexOf('PROOFSPEC_PROGRESS_EXTENSION=/repo/.pi/extensions/progress.ts')
   expect(extensionEnvIndex).toBeGreaterThan(0)
   expect(start.args[extensionEnvIndex - 1]).toBe('-e')
+  const subagentExtensionPath = '/repo/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts'
+  const subagentEnvIndex = start.args.indexOf(`PROOFSPEC_SUBAGENT_EXTENSION=${subagentExtensionPath}`)
+  expect(subagentEnvIndex).toBeGreaterThan(0)
+  expect(start.args[subagentEnvIndex - 1]).toBe('-e')
+  // The never-clause is load-bearing: pi injects its virtual modules into an extension's
+  // entry file only, so a wrapper under .pi/extensions/ re-exporting the example hangs pi
+  // at startup instead of loading it. The value must sit inside the installed pi
+  // package's own node_modules tree, never under .pi/extensions/.
+  expect(sitsUnderPath('/repo/node_modules/@earendil-works/pi-coding-agent', subagentExtensionPath)).toBe(true)
+  expect(sitsUnderPath('/repo/.pi/extensions', subagentExtensionPath)).toBe(false)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -246,7 +269,7 @@ it('disables extension auto-discovery so the worktree\'s own progress.ts never l
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   // The flag lives in pi's own invocation inside the runner script — auto-discovery is what
-  // would load the worktree's own copy of the extension beside the pinned one.
+  // would load the worktree's own copy of the extension beside the pinned ones.
   await expect(runnerScriptFrom(start)).resolves.toContain('--no-extensions')
 })
 
@@ -302,6 +325,7 @@ writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2))
     expect(existsSync(argvFile), `pi never ran (${tmuxFailure || 'tmux exited 0 without starting it'})`).toBe(true)
     expect(JSON.parse(await readFile(argvFile, 'utf8'))).toEqual([
       '--approve', '--no-extensions', '--extension', join(base, '.pi', 'extensions', 'progress.ts'),
+      '--extension', join(base, 'node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'),
       '--append-system-prompt', systemPrompt,
       "Begin: work your TASK a now - read the MANIFEST's intentRef (the reserved name INTENT names the TASK's own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.",
     ])
