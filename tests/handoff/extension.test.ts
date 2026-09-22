@@ -164,12 +164,15 @@ it('never runs a scheduling pass when the enqueue itself is refused', async () =
   await runEnqueueTask(repo.root, VALID_INPUT, {})
   const refusing: ScheduleActions = {
     startSession: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
+    countSessions: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
     judge: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
     notifyHuman: async () => { throw new Error('a refused enqueue must never reach a scheduling pass') },
   }
 
   const result = await runEnqueueTask(repo.root, VALID_INPUT, refusing)
-
+  // A wrongly-triggered pass now fails loudly, not silently: the first action it asks over
+  // this one-ready-TASK queue is `countSessions`, wired to throw above — without it, a pass
+  // that ran would return cannot-run behind the refusal and nothing would notice.
   expect(result.ok).toBe(false)
 })
 
