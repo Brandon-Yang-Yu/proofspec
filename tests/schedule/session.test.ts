@@ -384,8 +384,8 @@ function sitsUnderPath(root: string, path: string): boolean {
 // GIVEN PROOFSPEC_EXECUTOR naming claude
 // WHEN the tmux start command is built
 // THEN it carries `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` as environment variables
-//      naming the main checkout and the TASK, and ends in one positional kickoff message
-//      telling the session to begin working its TASK
+//      naming the main checkout and the TASK, and hands claude one positional kickoff
+//      message telling the session to begin working its TASK
 it('carries the same environment variables and the same positional kickoff message on the claude invocation', async () => {
   process.env.PROOFSPEC_EXECUTOR = 'claude'
 
@@ -410,7 +410,11 @@ it('carries the same environment variables and the same positional kickoff messa
   expect(piKickoff).toMatch(/begin/i)
   expect(piKickoff).toContain('intentRef')
   const script = await runnerScriptFrom(start)
-  expect(script.trim().endsWith('"$PROOFSPEC_KICKOFF"')).toBe(true)
+  // The kickoff is claude's one positional prompt argument, leading the flags — `--mcp-config`
+  // takes space-separated values, so a trailing positional after it would be read as one
+  // more config path and the session would die before starting (the acceptance run caught
+  // exactly that).
+  expect(script.trim().startsWith('exec claude "$PROOFSPEC_KICKOFF"')).toBe(true)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed

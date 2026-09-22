@@ -253,9 +253,12 @@ const RUNNER_SCRIPT =
  *  because an unattended session has nobody attached to answer an approval, and a generated
  *  MCP config naming the queue root's own MCP server — the transport that puts the five
  *  tools in the session's hands. The config rides a file for the same size reason every
- *  other payload does, and its path — not its contents — is what the environment carries. */
+ *  other payload does, and its path — not its contents — is what the environment carries.
+ *  The kickoff rides FIRST, before every flag: `--mcp-config` takes space-separated values,
+ *  so a trailing positional after it is read as one more config path and the session dies
+ *  before it ever starts. */
 const CLAUDE_RUNNER_SCRIPT =
-  'exec claude --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG" "$PROOFSPEC_KICKOFF"'
+  'exec claude "$PROOFSPEC_KICKOFF" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG"'
 
 /** A Claude Code MCP config naming the queue root's own server — the one config every
  *  Claude Code session this product starts is handed (`specs/schedule.md`, `specs/mcp.md`).
