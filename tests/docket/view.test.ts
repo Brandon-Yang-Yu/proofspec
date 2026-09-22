@@ -475,13 +475,16 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 // WHEN the docket is answered
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
-  // Three rows, not two: with the ages and the words each scrambled against the names, an
-  // oldest-first sort, a newest-first sort, and a word-priority sort each answer a different
-  // order, so every one of them fails against the name order the THEN pins.
+  // Three readable rows plus one unreadable TASK, with the ages and the words each
+  // scrambled against the names: an oldest-first sort, a newest-first sort, and a
+  // word-priority sort each answer a different order among the readable rows, and the
+  // problem TASK never reaches the rows at all — every wrong rule fails against the
+  // name order the THEN pins.
   const repo = await makeRepo({
     ...queueEntry('zulu', { state: 'queued' }),
     ...queueEntry('mike', { state: 'blocked-on-question' }),
     ...queueEntry('alpha', { state: 'queued' }),
+    ...queueEntry('bravo', { manifest: '{' }),
   })
   await writtenAgo(repo, '.proofspec/dispatch/zulu/state', 86_400)
   await writtenAgo(repo, '.proofspec/dispatch/alpha/state', 3_600)
