@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'
 import { piExecute, registrationsFor, resolveCore } from '../mcp/core.ts'
-import type { CoreInjection, PiToolResult, ToolName } from '../mcp/core.ts'
+import type { CoreInjection, ToolName } from '../mcp/core.ts'
 
 /**
  * The `pi` adapter for the handoff tools (`specs/handoff.md`, `specs/mcp.md`). Every rule —
