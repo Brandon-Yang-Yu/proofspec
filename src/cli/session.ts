@@ -1,5 +1,7 @@
-import { readFile, rm, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { readFile, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
@@ -209,29 +211,65 @@ export type SessionStart = {
   readonly systemPrompt: string
 }
 
+/** The one line the session's runner script runs: `pi`'s whole invocation, with every value
+ *  that can vary — the extension path, the system prompt, the kickoff — taken from the
+ *  session environment rather than spelled out inside it, because a script file is a channel
+ *  a shell parses, and only quoted variable references keep arbitrary bytes intact through
+ *  it. The system prompt arrives through `$(cat ...)` inside double quotes, where command
+ *  substitution output is never word-split or re-parsed, so the persona's backticks,
+ *  quotes, `$()`, and redirections reach `pi` as one argument, same bytes. `--approve` and
+ *  the pinned `--extension` are what let the executor actually load the tool that reports
+ *  to the queue — a freshly created worktree is an unknown path to `pi`'s own project
+ *  trust, and `.pi/` being tracked in git means the TASK's own branch can carry a stale (or
+ *  missing) copy of `progress.ts`. `--no-extensions` disables `pi`'s own auto-discovery of
+ *  the worktree's copy of that same file — without it, `pi` loads both, and refuses to start
+ *  at all: two extensions registering the same tool name, `report_task_state`, is a conflict
+ *  `pi` treats as fatal, pinned copy or not; the pinned `--extension` path still loads
+ *  under `--no-extensions`, same as `pi`'s own help text says an explicit `-e` does. The
+ *  trailing `"$PROOFSPEC_KICKOFF"` is the kickoff message from `kickoffFor` above — the
+ *  last argument after every flag/value pair, which is exactly how `pi` reads a first
+ *  prompt. */
+const RUNNER_SCRIPT =
+  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
+
+/** Writes the two files a session start hands `pi` through, and answers their paths: the
+ *  system prompt (far past tmux's command-size cap, so it can only ride a file) and the
+ *  fixed runner script above. Both go in a fresh throwaway directory: a detached session
+ *  reads them when it starts, possibly after the process that wrote them is gone, so nothing
+ *  is left that could clean them up — and separate directories keep one start from
+ *  overwriting files a session has yet to read. */
+function writeSessionHandoff(systemPrompt: string): { readonly promptFile: string; readonly runnerScript: string } {
+  const directory = mkdtempSync(join(tmpdir(), 'proofspec-session-'))
+  const promptFile = join(directory, 'system-prompt.txt')
+  writeFileSync(promptFile, systemPrompt)
+  const runnerScript = join(directory, 'runner.sh')
+  writeFileSync(runnerScript, `${RUNNER_SCRIPT}\n`)
+  return { promptFile, runnerScript }
+}
+
 /**
  * The tmux commands that (re)start a TASK's pi executor: killing whatever tmux session
  * already carries the TASK's name before creating a fresh one, so retrying a TASK whose LEASE
  * went stale (schedule's own reclaim requirement) replaces a dead session rather than
  * colliding with its name. The kill is expected to fail the ordinary way — no such session —
- * which is why it is a command of its own rather than folded into one call. `systemPrompt` is
- * appended to `pi`'s own default coding-assistant prompt (`--append-system-prompt`), not a
- * replacement for it — the executor still needs everything that default already grants.
- * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` are how the session later addresses the queue from
- * inside its own worktree (`specs/progress.md`); `--approve` and the pinned `--extension` are
- * what let it actually load the tool that reports there — a freshly created worktree is an
- * unknown path to `pi`'s own project trust, and `.pi/` being tracked in git means the TASK's
- * own branch can carry a stale (or missing) copy of `progress.ts`. `--no-extensions` disables
- * `pi`'s own auto-discovery of the worktree's copy of that same file — without it, `pi` loads
- * both, and refuses to start at all: two extensions registering the same tool name,
- * `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not. The pinned
- * `--extension` path still loads under `--no-extensions`, same as `pi`'s own help text says
- * an explicit `-e` does. The trailing positional argument is the kickoff message above: the
- * last thing after every flag/value pair, which is exactly how `pi` reads a first prompt.
+ * which is why it is a command of its own rather than folded into one call.
+ *
+ * The start command's own words are nothing but `sh <runner script>` — a plain path, no
+ * metacharacter in it. tmux packs the command words it is handed and refuses ones past its
+ * own size cap ("command too long"; the executor persona is far larger), and older tmux runs
+ * the joined words through a shell, substituting every metacharacter they carry — so the
+ * system prompt, the kickoff, and `pi`'s own flags can never ride the words. Every payload
+ * instead reaches the session through a channel no shell parses as syntax: the `-e` flags
+ * set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
+ * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
+ * worktree, `specs/progress.md`), and the runner script assembles `pi`'s argv from them,
+ * reading the system prompt from its file — so `pi` is handed the persona and the kickoff
+ * exactly as passed, one argument each, same bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
   const extension = join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)
+  const handoff = writeSessionHandoff(start.systemPrompt)
   return [
     tmuxKillSessionCommand(task),
     {
@@ -239,8 +277,10 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
-        'pi', '--approve', '--no-extensions', '--extension', extension, '--append-system-prompt', start.systemPrompt,
-        kickoffFor(task),
+        '-e', `PROOFSPEC_KICKOFF=${kickoffFor(task)}`,
+        '-e', `PROOFSPEC_SYSTEM_PROMPT_FILE=${handoff.promptFile}`,
+        '-e', `PROOFSPEC_PROGRESS_EXTENSION=${extension}`,
+        'sh', handoff.runnerScript,
       ],
     },
   ]
