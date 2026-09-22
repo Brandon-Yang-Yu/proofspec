@@ -1,11 +1,14 @@
 // Capability: schedule
 
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import { liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import type { TmuxCommand } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 const execFileAsync = promisify(execFile)
@@ -153,27 +156,30 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   }
 }, 10000)
 
+// The start command's own command words are `sh <runner script path>` — pi's whole
+// invocation, with every flag and text it needs, lives in that script's content, so every
+// promise below about pi's own argv is read from the file those words name.
+async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
+  const scriptPath = start.args[start.args.indexOf('sh') + 1]
+  expect(scriptPath).toBeDefined()
+  return readFile(scriptPath!, 'utf8')
+}
+
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi
 // GIVEN a tmux session already named for the TASK
 // WHEN the tmux commands to start its session are built
 // THEN the first kills that stale session, and the second starts a fresh one running pi under the same name
-it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', () => {
-  const commands = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
+it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', async () => {
+  const [kill, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
-  expect(commands).toEqual([
-    { command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] },
-    {
-      command: 'tmux',
-      args: [
-        '-L', 'proofspec', 'new-session', '-d', '-s', 'a', '-c', '/repo/.proofspec/worktrees/a',
-        '-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a',
-        'pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts',
-        '--append-system-prompt', 'you are the executor',
-        'Begin: work your TASK a now - read the MANIFEST\'s intentRef (the reserved name INTENT names the TASK\'s own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.',
-      ],
-    },
-  ])
+  expect(kill).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'kill-session', '-t', 'a'] })
+  // The fresh session carries the same name as the stale one just killed — the pair replaces
+  // a dead session rather than colliding with it — and its command words are nothing but the
+  // runner script, so "running pi" is read from that script's own content.
+  const nameIndex = start.args.indexOf('-s')
+  expect(start.args[nameIndex + 1]).toBe('a')
+  await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec pi\b/)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
@@ -195,14 +201,23 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
 // THEN the pi invocation carries --approve and --extension pinned to this checkout's own progress extension
-it('carries --approve and --extension pinned to this checkout\'s own progress extension', () => {
+it('carries --approve and --extension pinned to this checkout\'s own progress extension', async () => {
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+  const words = (await runnerScriptFrom(start)).trim().split(' ')
 
-  // A slice starting at 'pi' itself, not arrayContaining — proves --approve immediately
-  // follows pi and --extension is immediately followed by exactly this path, not merely that
-  // all five tokens appear somewhere in args.
-  const piIndex = start.args.indexOf('pi')
-  expect(start.args.slice(piIndex, piIndex + 5)).toEqual(['pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts'])
+  // Slices at the flags' own positions in pi's invocation, not arrayContaining — proves
+  // --approve immediately follows pi and --extension is immediately followed by exactly the
+  // environment variable, never a path spelled out inside the script itself.
+  const piIndex = words.indexOf('pi')
+  expect(words.slice(piIndex, piIndex + 2)).toEqual(['pi', '--approve'])
+  const extensionIndex = words.indexOf('--extension')
+  expect(words.slice(extensionIndex, extensionIndex + 2)).toEqual(['--extension', '"$PROOFSPEC_PROGRESS_EXTENSION"'])
+  // The value that variable receives is what pins the extension to this checkout's own
+  // progress tool — one -e environment entry on the start command (the flag immediately
+  // before its value), resolved from the queue root, not from whatever the TASK's branch carries.
+  const extensionEnvIndex = start.args.indexOf('PROOFSPEC_PROGRESS_EXTENSION=/repo/.pi/extensions/progress.ts')
+  expect(extensionEnvIndex).toBeGreaterThan(0)
+  expect(start.args[extensionEnvIndex - 1]).toBe('-e')
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
@@ -210,11 +225,74 @@ it('carries --approve and --extension pinned to this checkout\'s own progress ex
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
 // THEN the pi invocation carries --no-extensions, so only the pinned --extension path loads
-it('disables extension auto-discovery so the worktree\'s own progress.ts never loads alongside the pinned one', () => {
+it('disables extension auto-discovery so the worktree\'s own progress.ts never loads alongside the pinned one', async () => {
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
-  expect(start.args).toContain('--no-extensions')
+  // The flag lives in pi's own invocation inside the runner script — auto-discovery is what
+  // would load the worktree's own copy of the extension beside the pinned one.
+  await expect(runnerScriptFrom(start)).resolves.toContain('--no-extensions')
 })
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Scenario: pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry
+// GIVEN a system prompt at the executor persona's own scale, whose text carries shell metacharacters
+// WHEN the tmux start command runs on a real tmux server and the session's pi starts
+// THEN pi is handed the system prompt and the kickoff exactly as passed — one argument each, same bytes, no substitution, no redirection, no word-splitting
+it('hands pi the system prompt and kickoff exactly as passed, whatever shell metacharacters they carry', async () => {
+  // A pi of this test's own on a throwaway PATH slot: it answers the one question this scenario
+  // turns on — the exact argv pi itself was handed — and nothing else. The path is baked into the
+  // script rather than passed by environment: the whole point is to observe what survives the
+  // trip through tmux, and an environment variable is one more thing that trip could lose.
+  const base = await mkdtemp(join(tmpdir(), 'proofspec-session-handoff-'))
+  const argvFile = join(base, 'argv.json')
+  await mkdir(join(base, 'worktree'))
+  await writeFile(join(base, 'pi'), `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs'
+writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2)))
+`)
+  await chmod(join(base, 'pi'), 0o755)
+  const socket = 'proofspec-test-shell-handoff'
+  process.env.PROOFSPEC_TMUX_SOCKET = socket
+  // The PATH reaches the session's pi through the server, which a fresh socket starts from
+  // this very client — hence the kill-server first, so no older server with an older PATH answers.
+  const env = { ...process.env, PATH: `${base}:${process.env.PATH}` }
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', socket, ...args], { env })
+  await tmux(['kill-server']).catch(() => {})
+  try {
+    const paragraph = [
+      'You are the executor. Measure the digest before you build anything:',
+      '`git diff --name-only "$(git merge-base HEAD <base>)" HEAD -- specs/` - the MANIFEST',
+      "names the base. Quotes are text here, both 'single' and \"double\", as are | pipes, & ampersands,",
+      '; semicolons, $(git rev-parse HEAD) substitutions, ${HOME} expansions, `backticks`, and the',
+      'redirections <in and >out that a shell would otherwise act on.',
+    ].join('\n')
+    // Persona scale, not a token handful: tmux packs the command words it is handed and refuses
+    // ones past its own size cap, so a prompt shorter than the real persona would pass this
+    // test where the dispatch it stands for still dies.
+    const systemPrompt = Array.from({ length: 50 }, () => paragraph).join('\n\n')
+    const [, start] = tmuxSessionCommands('a', { worktree: join(base, 'worktree'), queueRoot: base, systemPrompt })
+    let tmuxFailure = ''
+    try {
+      await execFileAsync(start.command, [...start.args], { env })
+    } catch (error) {
+      const failureInfo = error as { code?: number; stderr?: string }
+      tmuxFailure = `tmux exited ${failureInfo.code ?? '?'}: ${(failureInfo.stderr ?? '').trim()}`
+    }
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline && !existsSync(argvFile)) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    expect(existsSync(argvFile), `pi never ran (${tmuxFailure || 'tmux exited 0 without starting it'})`).toBe(true)
+    expect(JSON.parse(await readFile(argvFile, 'utf8'))).toEqual([
+      '--approve', '--no-extensions', '--extension', join(base, '.pi', 'extensions', 'progress.ts'),
+      '--append-system-prompt', systemPrompt,
+      "Begin: work your TASK a now - read the MANIFEST's intentRef (the reserved name INTENT names the TASK's own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.",
+    ])
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+    await rm(base, { recursive: true, force: true })
+  }
+}, 15000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
 // Scenario: The tmux commands run against a dedicated server, never the user's default or any other named one
@@ -234,15 +312,14 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
 // GIVEN a TASK ready to build
 // WHEN the tmux start command is built
 // THEN the pi invocation ends in a positional prompt argument — a non-empty message naming the TASK and telling the session to begin working it
-it('hands pi one positional kickoff message telling the session to begin working its TASK', () => {
-  const systemPrompt = 'you are the executor'
-  const [, start] = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt })
+it('hands pi one positional kickoff message telling the session to begin working its TASK', async () => {
+  const [, start] = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
-  // The arg before the kickoff is the --append-system-prompt value itself, so the last arg
-  // cannot be filling any flag's slot — it can only be pi's positional prompt argument, the
-  // one argument that makes an unattended session begin rather than sit at its input box.
-  const kickoff = start.args[start.args.length - 1]
-  expect(start.args[start.args.length - 2]).toBe(systemPrompt)
+  // The kickoff text rides PROOFSPEC_KICKOFF verbatim — everything after the variable name
+  // in the -e entry is the message itself, never a mangled or truncated stand-in.
+  const envEntry = start.args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
+  expect(envEntry).toBeDefined()
+  const kickoff = envEntry!.slice('PROOFSPEC_KICKOFF='.length)
   expect(kickoff).not.toMatch(/^-/)
   expect(kickoff).toMatch(/begin/i)
   expect(kickoff).toContain('dispatch-me')
@@ -253,6 +330,12 @@ it('hands pi one positional kickoff message telling the session to begin working
   expect(kickoff).toContain('INTENT')
   expect(kickoff).toMatch(/queue entry/)
   expect(kickoff).toMatch(/branch/)
+  // And the runner script hands exactly that variable to pi as its last word — after every
+  // flag/value pair, quoted so it expands to one argument — the one slot pi reads as its
+  // positional prompt, the argument that makes an unattended session begin rather than sit
+  // at its input box.
+  const words = (await runnerScriptFrom(start)).trim().split(' ')
+  expect(words[words.length - 1]).toBe('"$PROOFSPEC_KICKOFF"')
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
