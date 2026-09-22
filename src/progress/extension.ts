@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import type { FireSchedulingPass } from '../cli/settle.ts'
 import { createToolCore, piExecute, registrationsFor, resolveCore, refreshHeartbeat } from '../mcp/core.ts'
 import type { CoreInjection, PiToolResult, ToolCore, ToolName } from '../mcp/core.ts'
 
@@ -36,8 +37,8 @@ const PROGRESS_TOOLS: readonly ToolName[] = ['report_task_state', 'report_task_p
  * them behaves exactly like calling the registered tool: same rules, same answers, with no
  * test-injected core in between.
  */
-function defaultCore(): ToolCore {
-  return createToolCore()
+function defaultCore(fireSchedulingPass?: FireSchedulingPass): ToolCore {
+  return createToolCore({ fireSchedulingPass })
 }
 
 /** `report_task_state`'s pi boundary — pulled out so a test can call it directly with a
@@ -76,8 +77,9 @@ export function executeSettleTask(
   signal: AbortSignal | undefined,
   onUpdate: unknown,
   ctx: ExtensionContext,
+  fireSchedulingPass?: FireSchedulingPass,
 ): Promise<PiToolResult> {
-  return piExecute(defaultCore(), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
+  return piExecute(defaultCore(fireSchedulingPass), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
 }
 
 /**

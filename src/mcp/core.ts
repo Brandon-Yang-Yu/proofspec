@@ -6,7 +6,7 @@ import { appendPhaseHistory, enqueue, readPhase, writeHeartbeat, writePhase, wri
 import { schedule } from '../cli/run.ts'
 import { liveSessionCount, tmuxStartSession } from '../cli/session.ts'
 import { settleTask } from '../cli/settle.ts'
-import type { SettleResult } from '../cli/settle.ts'
+import type { FireSchedulingPass, SettleResult } from '../cli/settle.ts'
 import type { Outcome } from '../cli/types.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
 import { BUILDING } from '../schedule/types.ts'
@@ -187,8 +187,8 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
  * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` the same way `report_task_state` does, refusing
  * rather than guessing when either is missing — is the rule's, here in the core.
  */
-export function runSettleTask(env: ReportEnv): Promise<SettleResult> {
-  return settleTask({ queueRoot: env.queueRoot, task: env.task })
+export function runSettleTask(env: ReportEnv, fireSchedulingPass?: FireSchedulingPass): Promise<SettleResult> {
+  return settleTask({ queueRoot: env.queueRoot, task: env.task, fireSchedulingPass })
 }
 
 /**
@@ -499,7 +499,7 @@ export function piExecute(core: ToolCore, tool: ToolName) {
  * them under. The scheduling actions the enqueue rule's triggered pass runs are injectable,
  * so a proof can keep that pass from ever touching tmux (`tests/mcp/server.test.ts`).
  */
-export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions }): ToolCore {
+export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions; readonly fireSchedulingPass?: FireSchedulingPass }): ToolCore {
   const core: ToolCore = {
     enqueue_task: async ({ args, cwd }) => runEnqueueTask(cwd, args as unknown as EnqueueTaskInput, options?.scheduleActions),
     census_in_flight: async ({ cwd }) => runCensusInFlight(cwd),
@@ -517,7 +517,7 @@ export function createToolCore(options?: { readonly scheduleActions?: ScheduleAc
     settle_task: async () => {
       const envResult = resolveReportEnv(process.env)
       if (!envResult.ok) return envResult
-      return runSettleTask(envResult.env)
+      return runSettleTask(envResult.env, options?.fireSchedulingPass)
     },
     call(tool, args, cwd = process.cwd()) {
       // Read through the object's own field, never a closure copy: a rule changed on the core

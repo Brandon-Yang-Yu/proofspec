@@ -19,10 +19,38 @@ import { teardownTask } from './session.ts'
  * session cannot answer, and it stays the pass's own move.
  */
 
-/** What a settle answers its caller: it happened, or the reason it refused — never a throw. */
+/** What a settle answers its caller: it happened — carrying a finding only when the
+ *  scheduling pass a successful settle fires could not even be started — or the reason it
+ *  refused — never a throw. */
 export type SettleResult =
-  | { readonly ok: true; readonly task: string }
+  | { readonly ok: true; readonly task: string; readonly finding?: string }
   | { readonly ok: false; readonly reason: string }
+
+/** The one scheduling pass a successful settle fires against the queue root: the same
+ *  command the merge hooks run — `pnpm --dir <queue root> proofspec schedule`
+ *  (`.githooks/post-merge`) — carried as a pure plan value the way the reaper's is
+ *  (`reaperFor`/`ReaperPlan`, `src/cli/session.ts`), so a proof can check which command a
+ *  settle fires, and how it is started, without ever starting it. */
+export type SchedulingPassPlan = {
+  readonly command: 'pnpm'
+  readonly args: readonly ['--dir', string, 'proofspec', 'schedule']
+  /** The process-group escape: the pass is started detached, in a process group of its
+   *  own, so the delayed reaper's group-kill — the one that takes the settle's own session
+   *  — cannot reach it. The escape is the point, not spawn syntax. */
+  readonly detached: true
+}
+
+/** The pass a settle fires for `queueRoot`: the merge hooks' own scheduling command, run
+ *  against that root, detached so it survives the settle's teardown. */
+export function schedulingPassFor(queueRoot: string): SchedulingPassPlan {
+  return { command: 'pnpm', args: ['--dir', queueRoot, 'proofspec', 'schedule'], detached: true }
+}
+
+/** The action that starts the pass, handed the plan it is to run. Injectable — the house
+ *  `RunOptions` pattern — so a proof can observe or refuse the fire without a real pass
+ *  ever being started; the failure the real action can meet (a pass that cannot even be
+ *  started) is a reported finding, never a failed settle. */
+export type FireSchedulingPass = (plan: SchedulingPassPlan) => void | Promise<void>
 
 /**
  * Settles one TASK once both conditions hold, refusing as a value and touching nothing when
@@ -31,7 +59,7 @@ export type SettleResult =
  * worktree and the session, which are residue — the session killed by the reaper inside
  * `teardownTask`, a short delay after this call has already answered.
  */
-export async function settleTask(options: { readonly queueRoot: string; readonly task: string }): Promise<SettleResult> {
+export async function settleTask(options: { readonly queueRoot: string; readonly task: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<SettleResult> {
   const manifest = await manifestFor(options.queueRoot, options.task)
   if (manifest === undefined) {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its queue entry has no readable MANIFEST` }
