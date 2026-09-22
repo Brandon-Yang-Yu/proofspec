@@ -267,25 +267,28 @@ function mcpConfigFor(queueRoot: string): string {
 }
 
 /** The files a session start hands its harness through, and their paths: the system prompt
- *  (far past tmux's command-size cap, so it can only ride a file), the fixed runner script
- *  for the harness the session runs in, and — for `claude` only — the generated MCP config.
- *  All go in a fresh throwaway directory: a detached session reads them when it starts,
- *  possibly after the process that wrote them is gone, so nothing is left that could clean
- *  them up — and separate directories keep one start from overwriting files a session has
- *  yet to read. */
-function writeSessionHandoff(
-  executor: ExecutorName,
-  start: SessionStart,
-): { readonly promptFile: string; readonly runnerScript: string; readonly mcpConfig?: string } {
+ *  (far past tmux's command-size cap, so it can only ride a file) and the fixed runner script
+ *  for the harness the session runs in; the `claude` shape additionally carries the generated
+ *  MCP config, whose path — not its contents — is what the environment hands the runner. The
+ *  union is discriminated by the harness itself, so which env entries a start command carries
+ *  is read off the shape, never re-derived from a field's presence. All files go in a fresh
+ *  throwaway directory: a detached session reads them when it starts, possibly after the
+ *  process that wrote them is gone, so nothing is left that could clean them up — and
+ *  separate directories keep one start from overwriting files a session has yet to read. */
+type SessionHandoff =
+  | { readonly executor: 'pi'; readonly promptFile: string; readonly runnerScript: string }
+  | { readonly executor: 'claude'; readonly promptFile: string; readonly runnerScript: string; readonly mcpConfig: string }
+
+function writeSessionHandoff(executor: ExecutorName, start: SessionStart): SessionHandoff {
   const directory = mkdtempSync(join(tmpdir(), 'proofspec-session-'))
   const promptFile = join(directory, 'system-prompt.txt')
   writeFileSync(promptFile, start.systemPrompt)
   const runnerScript = join(directory, 'runner.sh')
   writeFileSync(runnerScript, `${executor === 'claude' ? CLAUDE_RUNNER_SCRIPT : RUNNER_SCRIPT}\n`)
-  if (executor !== 'claude') return { promptFile, runnerScript }
+  if (executor !== 'claude') return { executor: 'pi', promptFile, runnerScript }
   const mcpConfig = join(directory, 'mcp-config.json')
   writeFileSync(mcpConfig, mcpConfigFor(start.queueRoot))
-  return { promptFile, runnerScript, mcpConfig }
+  return { executor: 'claude', promptFile, runnerScript, mcpConfig }
 }
 
 /**
@@ -311,11 +314,11 @@ function writeSessionHandoff(
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
   const handoff = writeSessionHandoff(executorName(), start)
-  // Which harness env the session carries is told by the handoff itself: a generated MCP
-  // config stands only for the `claude` runner, the pinned extension path only for `pi`.
-  const harnessEnv = handoff.mcpConfig === undefined
-    ? [`-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`]
-    : [`-e`, `PROOFSPEC_MCP_CONFIG=${handoff.mcpConfig}`]
+  // Which harness env the session carries follows the handoff's own shape — the harness it
+  // was built for is the discriminator, not a field's presence.
+  const harnessEnv = handoff.executor === 'claude'
+    ? [`-e`, `PROOFSPEC_MCP_CONFIG=${handoff.mcpConfig}`]
+    : [`-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`]
   return [
     tmuxKillSessionCommand(task),
     {

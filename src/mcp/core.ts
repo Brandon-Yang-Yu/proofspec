@@ -36,19 +36,23 @@ export type ToolRule = (call: ToolCall) => Promise<unknown>
  * register them under; `call` is the one dispatch every adapter carries through. A rule field
  * is optional only so a proof can stand in a core of its own (`tests/mcp/adapter.test.ts`
  * injects a recording core that has nothing but `call`); the core `createToolCore` builds
- * always carries all five.
+ * always carries all five. The fields are mutable on purpose — a landed change to one tool's
+ * behavior is exactly one field (`tests/mcp/server.test.ts` proves the one-core property by
+ * replacing a rule once and watching both transports move).
  */
 export type ToolCore = {
-  readonly enqueue_task?: ToolRule
-  readonly census_in_flight?: ToolRule
-  readonly report_task_state?: ToolRule
-  readonly report_task_phase?: ToolRule
-  readonly settle_task?: ToolRule
+  enqueue_task?: ToolRule
+  census_in_flight?: ToolRule
+  report_task_state?: ToolRule
+  report_task_phase?: ToolRule
+  settle_task?: ToolRule
   call(tool: string, args: Readonly<Record<string, unknown>>, cwd?: string): Promise<unknown>
 }
 
 /** What an adapter may be handed beside its transport API: the core itself, or an options
- *  object carrying one. Either way the adapter reaches every rule through the core it names. */
+ *  object carrying one — both shapes are load-bearing seams the proofs drive (`adapter.test.ts`
+ * passes the core bare, `server.test.ts` wraps it as `{ core }`), so one adapter signature
+ * serves both. Either way the adapter reaches every rule through the core it names. */
 export type CoreInjection = ToolCore | { readonly core?: ToolCore }
 
 /** The core an adapter answers from: the one injected, or a fresh real one. */

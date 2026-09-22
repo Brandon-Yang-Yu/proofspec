@@ -101,7 +101,7 @@ export function serveMcp(options: {
     }
   }
 
-  async function answer(request: WireRequest): Promise<void> {
+  const answer = async (request: WireRequest): Promise<void> => {
     const { id } = request
     const method = typeof request.method === 'string' ? request.method : ''
     const params = (request.params ?? {}) as Record<string, unknown>
