@@ -73,15 +73,17 @@ it('runs the session\'s MCP server from the queue root\'s own checkout, never th
   process.env.PROOFSPEC_EXECUTOR = 'claude'
 
   // The one place the server a dispatched Claude Code session loads is named: the start
-  // command such a session runs. How the config reaches the argv — inline JSON, or a file
-  // resolved against the queue root — is wiring this claim leaves to the implementation;
-  // which server it names is not.
+  // command such a session runs. The config rides a generated file whose path the session
+  // environment carries (the same size reason every payload rides a file); how the config
+  // reaches the harness is wiring this claim leaves to the implementation — which server it
+  // names is not.
   const [, start] = tmuxSessionCommands('a', { worktree, queueRoot, systemPrompt: 'you are the executor' })
-  const configIndex = start.args.indexOf('--mcp-config')
-  // Where the absence shows while no claude invocation is built at all: no config is
+  const configEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_MCP_CONFIG='))
+  // Where the absence shows while no claude invocation is built at all: no config path is
   // carried, so this assertion fires before anything downstream is ever reached.
-  expect(configIndex).toBeGreaterThan(-1)
-  const carried = start.args[configIndex + 1]!
+  expect(configEnvIndex).toBeGreaterThan(-1)
+  expect(start.args[configEnvIndex - 1]).toBe('-e')
+  const carried = start.args[configEnvIndex]!.slice('PROOFSPEC_MCP_CONFIG='.length)
   const configText = carried.trimStart().startsWith('{') ? carried : await readFile(resolve(queueRoot, carried), 'utf8')
   const config = JSON.parse(configText) as { mcpServers?: Record<string, ServerStart> }
   const servers = Object.values(config.mcpServers ?? {})

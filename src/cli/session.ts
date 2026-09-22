@@ -1,15 +1,18 @@
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
 
 /**
- * The real `startSession` action: a headed, interactive executor session, started in the
- * TASK's own worktree in whichever agent harness `PROOFSPEC_EXECUTOR` names (`pi` by
- * default). `schedule`'s own core never starts one itself (see its tests) — this is the one
- * place that actually does, using tmux as the one thing on this machine that can hand a real
- * pty to a human without taking over the terminal the scheduling pass itself is running in.
+ * The real `startSession` action: a headed,
+ * interactive executor session in the harness `PROOFSPEC_EXECUTOR` names, started in the
+ * TASK's own worktree. `schedule`'s own core never starts one itself (see its tests) — this
+ * is the one place that actually does, using tmux as the one thing on this machine that can
+ * hand a real pty to a human without taking over the terminal the scheduling pass itself is
+ * running in.
  */
 
 const WORKTREES_DIR = ['.proofspec', 'worktrees'] as const
@@ -101,17 +104,6 @@ const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
  *  path, so the config naming it can never drift from the file it names. */
 const MCP_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
 
-/**
- * A Claude Code MCP config naming the queue root's own server — the one config every Claude
- * Code session this product starts is handed (`specs/schedule.md`, `specs/mcp.md`). The
- * server it names runs from the queue root's own checkout, never the TASK's worktree, for
- * the same freshness reason the `pi` invocation pins its `--extension`.
- */
-function mcpConfigFor(queueRoot: string): string {
-  const server = { command: 'node', args: ['--experimental-transform-types', join(queueRoot, ...MCP_SERVER_ENTRY_PATH)] }
-  return JSON.stringify({ mcpServers: { proofspec: server } })
-}
-
 /** The two harnesses an executor session can run in. Subscription auth lives only inside
  *  the Claude Code harness, and `pi` is the default — the choice is operational
  *  (`PROOFSPEC_EXECUTOR`), never something a TASK or its branch gets a say in. */
@@ -123,45 +115,9 @@ function executorName(): ExecutorName {
   return process.env.PROOFSPEC_EXECUTOR === 'claude' ? 'claude' : 'pi'
 }
 
-/**
- * The agent argv a dispatched session runs, per harness. The `pi` argv is pinned exactly as
- * `specs/schedule.md` pins it; the `claude` argv appends the same executor persona
- * (`--append-system-prompt`), skips permissions (`--dangerously-skip-permissions` — nobody is
- * attached to an unattended session to answer an approval), and carries a generated MCP
- * config naming the queue root's own MCP server — the transport that puts the five tools in
- * the session's hands. The kickoff message is the same positional prompt argument either
- * harness runs: an unattended session handed no first message sits at its input box
- * indefinitely, loaded and healthy but doing nothing.
- */
-function executorArgv(task: string, start: SessionStart): readonly string[] {
-  if (executorName() === 'claude') {
-    return [
-      'claude',
-      '--append-system-prompt', start.systemPrompt,
-      '--dangerously-skip-permissions',
-      '--mcp-config', mcpConfigFor(start.queueRoot),
-      kickoffFor(task),
-    ]
-  }
-  const extension = join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)
-  // `--approve` and the pinned `--extension` are what let the session actually load the tool
-  // that reports to the queue — a freshly created worktree is an unknown path to `pi`'s own
-  // project trust, and `.pi/` being tracked in git means the TASK's own branch can carry a
-  // stale (or missing) copy of `progress.ts`. `--no-extensions` disables `pi`'s own
-  // auto-discovery of the worktree's copy of that same file — without it, `pi` loads both,
-  // and refuses to start at all: two extensions registering the same tool name,
-  // `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not. The pinned
-  // `--extension` path still loads under `--no-extensions`, same as `pi`'s own help text says
-  // an explicit `-e` does.
-  return [
-    'pi', '--approve', '--no-extensions', '--extension', extension, '--append-system-prompt', start.systemPrompt,
-    kickoffFor(task),
-  ]
-}
-
-/** The one initial user message the harness is handed as its positional prompt argument. Its
- *  exact words are this implementation's own choice; what is not negotiable is that it exists — an
- * unattended session with no first message sits at the harness's input box indefinitely, loaded and
+/** The one initial user message `pi` is handed as its positional prompt argument. Its exact
+ * words are this implementation's own choice; what is not negotiable is that it exists — an
+ * unattended session with no first message sits at `pi`'s input box indefinitely, loaded and
  * healthy but doing nothing, because `--append-system-prompt` changes who the model is,
  * never that it should act. Naming the TASK keeps the message self-contained rather than
  * leaning on the `PROOFSPEC_TASK` environment variable alone, and naming the `intentRef`'s
@@ -271,20 +227,95 @@ export type SessionStart = {
   readonly systemPrompt: string
 }
 
+/** The one line the session's runner script runs: `pi`'s whole invocation, with every value
+ *  that can vary — the extension path, the system prompt, the kickoff — taken from the
+ *  session environment rather than spelled out inside it, because a script file is a channel
+ *  a shell parses, and only quoted variable references keep arbitrary bytes intact through
+ *  it. The system prompt arrives through `$(cat ...)` inside double quotes, where command
+ *  substitution output is never word-split or re-parsed, so the persona's backticks,
+ *  quotes, `$()`, and redirections reach `pi` as one argument, same bytes. `--approve` and
+ *  the pinned `--extension` are what let the executor actually load the tool that reports
+ *  to the queue — a freshly created worktree is an unknown path to `pi`'s own project
+ *  trust, and `.pi/` being tracked in git means the TASK's own branch can carry a stale (or
+ *  missing) copy of `progress.ts`. `--no-extensions` disables `pi`'s own auto-discovery of
+ *  the worktree's copy of that same file — without it, `pi` loads both, and refuses to start
+ *  at all: two extensions registering the same tool name, `report_task_state`, is a conflict
+ *  `pi` treats as fatal, pinned copy or not; the pinned `--extension` path still loads
+ *  under `--no-extensions`, same as `pi`'s own help text says an explicit `-e` does. The
+ *  trailing `"$PROOFSPEC_KICKOFF"` is the kickoff message from `kickoffFor` above — the
+ *  last argument after every flag/value pair, which is exactly how `pi` reads a first
+ *  prompt. */
+const RUNNER_SCRIPT =
+  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
+
+/** The same one line for the `claude` harness: the same executor persona
+ *  (`--append-system-prompt`, read from the same prompt file), `--dangerously-skip-permissions`
+ *  because an unattended session has nobody attached to answer an approval, and a generated
+ *  MCP config naming the queue root's own MCP server — the transport that puts the five
+ *  tools in the session's hands. The config rides a file for the same size reason every
+ *  other payload does, and its path — not its contents — is what the environment carries. */
+const CLAUDE_RUNNER_SCRIPT =
+  'exec claude --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG" "$PROOFSPEC_KICKOFF"'
+
+/** A Claude Code MCP config naming the queue root's own server — the one config every
+ *  Claude Code session this product starts is handed (`specs/schedule.md`, `specs/mcp.md`).
+ *  The server it names runs from the queue root's own checkout, never the TASK's worktree,
+ *  for the same freshness reason the `pi` invocation pins its `--extension`. */
+function mcpConfigFor(queueRoot: string): string {
+  const server = { command: 'node', args: ['--experimental-transform-types', join(queueRoot, ...MCP_SERVER_ENTRY_PATH)] }
+  return `${JSON.stringify({ mcpServers: { proofspec: server } }, null, 2)}\n`
+}
+
+/** The files a session start hands its harness through, and their paths: the system prompt
+ *  (far past tmux's command-size cap, so it can only ride a file), the fixed runner script
+ *  for the harness the session runs in, and — for `claude` only — the generated MCP config.
+ *  All go in a fresh throwaway directory: a detached session reads them when it starts,
+ *  possibly after the process that wrote them is gone, so nothing is left that could clean
+ *  them up — and separate directories keep one start from overwriting files a session has
+ *  yet to read. */
+function writeSessionHandoff(
+  executor: ExecutorName,
+  start: SessionStart,
+): { readonly promptFile: string; readonly runnerScript: string; readonly mcpConfig?: string } {
+  const directory = mkdtempSync(join(tmpdir(), 'proofspec-session-'))
+  const promptFile = join(directory, 'system-prompt.txt')
+  writeFileSync(promptFile, start.systemPrompt)
+  const runnerScript = join(directory, 'runner.sh')
+  writeFileSync(runnerScript, `${executor === 'claude' ? CLAUDE_RUNNER_SCRIPT : RUNNER_SCRIPT}\n`)
+  if (executor !== 'claude') return { promptFile, runnerScript }
+  const mcpConfig = join(directory, 'mcp-config.json')
+  writeFileSync(mcpConfig, mcpConfigFor(start.queueRoot))
+  return { promptFile, runnerScript, mcpConfig }
+}
+
 /**
  * The tmux commands that (re)start a TASK's executor session in the harness
  * `PROOFSPEC_EXECUTOR` names: killing whatever tmux session already carries the TASK's name
  * before creating a fresh one, so retrying a TASK whose LEASE went stale (schedule's own
- * reclaim requirement) replaces a dead session rather than colliding with its name. The kill
- * is expected to fail the ordinary way — no such session — which is why it is a command of
- * its own rather than folded into one call. `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` are how
- * the session later addresses the queue from inside its own worktree (`specs/progress.md`),
- * and the per-harness argv (`executorArgv` above) is what lets it actually load the tools that
- * report there. The trailing positional argument is the kickoff message: the last thing
- * after every flag/value pair, which is exactly how either harness reads a first prompt.
+ * reclaim requirement) replaces a dead session rather than colliding with its name. The
+ * kill is expected to fail the ordinary way — no such session — which is why it is a
+ * command of its own rather than folded into one call.
+ *
+ * The start command's own words are nothing but `sh <runner script>` — a plain path, no
+ * metacharacter in it. tmux packs the command words it is handed and refuses ones past its
+ * own size cap ("command too long"; the executor persona is far larger), and older tmux runs
+ * the joined words through a shell, substituting every metacharacter they carry — so the
+ * system prompt, the kickoff, and the harness's own flags can never ride the words. Every
+ * payload instead reaches the session through a channel no shell parses as syntax: the `-e`
+ * flags set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
+ * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
+ * worktree, `specs/progress.md`), and the runner script assembles the harness's argv from
+ * them, reading the system prompt from its file — so the harness is handed the persona and
+ * the kickoff exactly as passed, one argument each, same bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
+  const handoff = writeSessionHandoff(executorName(), start)
+  // Which harness env the session carries is told by the handoff itself: a generated MCP
+  // config stands only for the `claude` runner, the pinned extension path only for `pi`.
+  const harnessEnv = handoff.mcpConfig === undefined
+    ? [`-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`]
+    : [`-e`, `PROOFSPEC_MCP_CONFIG=${handoff.mcpConfig}`]
   return [
     tmuxKillSessionCommand(task),
     {
@@ -292,7 +323,10 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
-        ...executorArgv(task, start),
+        '-e', `PROOFSPEC_KICKOFF=${kickoffFor(task)}`,
+        '-e', `PROOFSPEC_SYSTEM_PROMPT_FILE=${handoff.promptFile}`,
+        ...harnessEnv,
+        'sh', handoff.runnerScript,
       ],
     },
   ]
