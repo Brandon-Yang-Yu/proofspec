@@ -193,7 +193,10 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 is not itself a worktree, reusing it unchanged only when it is — and start the executor
 agent there in a detached tmux session named for the TASK, first killing any same-named
 session already there. A creation that fails SHALL throw an error carrying git's own
-stderr in its message, never a bare "could not create" summary in stderr's place. Which
+stderr in its message, never a bare "could not create" summary in stderr's place. A
+session start that fails SHALL throw an error carrying tmux's own stderr in its
+message, never a bare exit-code summary in its place — the same standard a failed
+worktree creation keeps. Which
 agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
 variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
 SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as environment
