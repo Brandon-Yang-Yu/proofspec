@@ -2,3 +2,11 @@
 {"kind":"ruled","key":"capability:schedule:executor-kickoff,merged-producer","at":"2026-09-16T05:38:00.364Z","ruling":"approved"}
 {"kind":"raised","key":"capability:cli:dispatch-intent,docket-page","at":"2026-09-16T23:59:39.653Z"}
 {"kind":"raised","key":"capability:docket:dispatch-intent,docket-page","at":"2026-09-16T23:59:39.653Z"}
+{"kind":"ruled","key":"capability:cli:dispatch-intent,docket-page","at":"2026-09-21T11:19:19.236Z","ruling":"approved — both landed clean; docket-page stacked after dispatch-intent"}
+{"kind":"ruled","key":"capability:docket:dispatch-intent,docket-page","at":"2026-09-21T11:19:19.572Z","ruling":"approved — both landed clean; docket-page stacked after dispatch-intent"}
+{"kind":"raised","key":"capability:cli:per-repo-defaults,settable-main-branch","at":"2026-09-22T07:46:00.017Z"}
+{"kind":"raised","key":"capability:docket:settable-main-branch,socket-per-repo","at":"2026-09-22T07:46:00.018Z"}
+{"kind":"raised","key":"capability:progress:claude-code-harness,settable-main-branch","at":"2026-09-22T07:46:00.018Z"}
+{"kind":"raised","key":"capability:schedule:claude-code-harness,per-repo-defaults,session-start-stderr,settable-main-branch,socket-per-repo","at":"2026-09-22T07:46:00.018Z"}
+{"kind":"raised","key":"capability:handoff:claude-code-harness,settable-main-branch","at":"2026-09-22T07:49:05.356Z"}
+{"kind":"ruled","key":"capability:handoff:claude-code-harness,settable-main-branch","at":"2026-09-22T11:51:14.514Z","ruling":"independent: different requirements in specs/handoff.md — claude-code-harness owns the scheduling-pass requirement, settable-main-branch changed one phrase in the census requirement's rationale; no shared row"}
