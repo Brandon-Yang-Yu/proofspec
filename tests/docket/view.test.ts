@@ -475,16 +475,21 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 // WHEN the docket is answered
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
+  // Three rows, not two: with the ages and the words each scrambled against the names, an
+  // oldest-first sort, a newest-first sort, and a word-priority sort each answer a different
+  // order, so every one of them fails against the name order the THEN pins.
   const repo = await makeRepo({
     ...queueEntry('zulu', { state: 'queued' }),
-    ...queueEntry('alpha', { state: 'blocked-on-question' }),
+    ...queueEntry('mike', { state: 'blocked-on-question' }),
+    ...queueEntry('alpha', { state: 'queued' }),
   })
   await writtenAgo(repo, '.proofspec/dispatch/zulu/state', 86_400)
-  await writtenAgo(repo, '.proofspec/dispatch/alpha/state', 5)
+  await writtenAgo(repo, '.proofspec/dispatch/alpha/state', 3_600)
+  await writtenAgo(repo, '.proofspec/dispatch/mike/state', 5)
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
-  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['alpha', 'zulu'])
+  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['alpha', 'mike', 'zulu'])
 })
 
 // Requirement: The docket reports, and judges nothing

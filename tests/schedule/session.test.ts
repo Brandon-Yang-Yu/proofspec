@@ -194,14 +194,16 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
   process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
-  // A slice at the flags' own position, not arrayContaining — proves each -e immediately
-  // precedes the value it names, not just that all six tokens appear somewhere in args.
-  const envFlagIndex = start.args.indexOf('-c') + 2
-  expect(start.args.slice(envFlagIndex, envFlagIndex + 6)).toEqual([
-    '-e', 'PROOFSPEC_QUEUE_ROOT=/repo',
-    '-e', 'PROOFSPEC_TASK=a',
-    '-e', 'PROOFSPEC_BASE_BRANCH=bDev',
-  ])
+  // Pairwise slices, not a positional one — the STANDARD and the CLAIM name three variables
+  // without ordering them, and a flag appended after another -e (KICKOFF, say) still satisfies
+  // both. Each slice proves its -e immediately precedes the value it names.
+  const pairs = (flag: string, value: string): boolean => {
+    const at = start.args.indexOf(flag)
+    return at !== -1 && start.args[at + 1] === value
+  }
+  expect(pairs('-e', 'PROOFSPEC_QUEUE_ROOT=/repo')).toBe(true)
+  expect(pairs('-e', 'PROOFSPEC_TASK=a')).toBe(true)
+  expect(pairs('-e', 'PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
