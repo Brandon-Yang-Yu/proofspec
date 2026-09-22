@@ -306,15 +306,55 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
   // A generated MCP config naming the queue root's own MCP server. Which server the config
   // names is the promise; where the file sits is the implementation's choice — so the value
   // is read as inline JSON when it is JSON, and as a file otherwise, resolved against the
-  // queue root wherever the implementation wrote it.
+  // queue root or the TASK's worktree, whichever of the two the implementation wrote it
+  // under.
   const configIndex = start.args.indexOf('--mcp-config')
   expect(configIndex).toBeGreaterThan(-1)
   const carried = start.args[configIndex + 1]!
-  const configText = carried.trimStart().startsWith('{') ? carried : await readFile(resolve(queueRoot, carried), 'utf8')
-  const named = JSON.stringify(JSON.parse(configText))
-  expect(named).toContain(queueRoot)
-  expect(named).not.toContain(`${queueRoot}/.proofspec/worktrees`)
+  const worktree = start.args[start.args.indexOf('-c') + 1]!
+  const configText = carried.trimStart().startsWith('{')
+    ? carried
+    : await readFirstStanding([resolve(queueRoot, carried), resolve(worktree, carried)])
+  const config = JSON.parse(configText) as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> }
+  // Each server the config names must name the queue root's own server: some path-bearing
+  // word of its command line sits under the queue root, and none sits under the TASK's
+  // worktree — a bare substring of the queue root anywhere in the JSON would be satisfied
+  // by an env value while the server itself ran from the worktree's copy.
+  const servers = Object.values(config.mcpServers ?? {})
+  expect(servers.length, 'the config names no MCP server').toBeGreaterThan(0)
+  for (const server of servers) {
+    const words = [server.command, ...(Array.isArray(server.args) ? server.args : [])]
+      .filter((word): word is string => typeof word === 'string')
+    const paths = words.filter(word => word.includes('/'))
+    expect(
+      paths.some(path => sitsUnderPath(queueRoot, path)),
+      `no path in ${JSON.stringify(words)} names the queue root's own server`,
+    ).toBe(true)
+    expect(
+      paths.every(path => !sitsUnderPath(`${queueRoot}/.proofspec/worktrees`, path)),
+      `a path in ${JSON.stringify(words)} names the TASK's worktree, not the queue root`,
+    ).toBe(true)
+  }
 })
+
+/** Whether `path` names something strictly under `root` — path tokens are read as they
+ *  stand, the way a harness reading its config would hold an absolute one. */
+function sitsUnderPath(root: string, path: string): boolean {
+  return path.startsWith(`${root}/`) && path.slice(root.length + 1) !== ''
+}
+
+/** The first readable of the candidate paths — a config file the implementation may write
+ *  under the queue root or inside the TASK's worktree, whichever it chose. */
+async function readFirstStanding(candidates: readonly string[]): Promise<string> {
+  for (const candidate of candidates) {
+    try {
+      return await readFile(candidate, 'utf8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+  throw new Error(`none of the candidate config paths stand: ${candidates.join(', ')}`)
+}
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries

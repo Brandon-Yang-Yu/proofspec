@@ -30,6 +30,11 @@ afterEach(() => {
  *  harness fires it, environment and all. */
 const HEARTBEAT_ENTRY = fileURLToPath(new URL('../../src/mcp/heartbeat.ts', import.meta.url))
 
+/** Where the entry ships inside a checkout of this product — the one repo-relative path a
+ *  conforming hook command may name, pinned by the intent ("the heartbeat CLI entry under
+ *  src/mcp/"). */
+const SHIPPED_ENTRY_RELATIVE = relativePath(resolve(HEARTBEAT_ENTRY, '..', '..'), HEARTBEAT_ENTRY)
+
 /** How one drive of the entry ended: its exit code, the stderr that names the cause in a
  *  failing assertion's message, and the throwaway working directory the entry ran in. */
 type EntryRun = { readonly code: number | null; readonly stderr: string; readonly cwd: string }
@@ -159,12 +164,13 @@ async function fireObservableMove(handlers: ReadonlyMap<string, PiHandler>, even
 
 /** The events Claude Code reports a session's moves through — the hook-bearing counterparts
  *  of the `pi` transport's six observable moves. Which of them a dispatch wires is the
- *  wiring's own choice; that at least one move-bearing event carries a command hook is not. */
+ *  wiring's own choice; that at least one move-bearing event carries a command hook that
+ *  runs the heartbeat entry is not. */
 const REPORTED_MOVE_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const
 
-/** The first command hook a settings object carries for an event the harness reports a move
+/** The command hook a settings object carries for an event the harness reports a move
  *  through, with that event's name — or nothing when the settings carry no such hook. */
-function moveHookFrom(settings: unknown): { readonly event: string; readonly command: string } | undefined {
+function commandHookFrom(settings: unknown): { readonly event: string; readonly command: string } | undefined {
   if (typeof settings !== 'object' || settings === null) return undefined
   const hooks = (settings as { hooks?: Record<string, unknown> }).hooks
   if (typeof hooks !== 'object' || hooks === null) return undefined
@@ -179,6 +185,35 @@ function moveHookFrom(settings: unknown): { readonly event: string; readonly com
         if (typeof hook !== 'object' || hook === null) continue
         const command = (hook as { command?: unknown }).command
         if (typeof command === 'string' && command.trim() !== '') return { event, command }
+      }
+    }
+  }
+  return undefined
+}
+
+/** The first command hook, across every move-bearing event, whose command names the
+ *  heartbeat CLI entry — a dispatch may wire other hooks to other events, and the entry's
+ *  hook is the one this claim is about. */
+function entryHookFrom(
+  settings: unknown,
+  session: { readonly worktree: string; readonly queueRoot: string },
+): { readonly event: string; readonly command: string; readonly entryPath: string } | undefined {
+  if (typeof settings !== 'object' || settings === null) return undefined
+  const hooks = (settings as { hooks?: Record<string, unknown> }).hooks
+  if (typeof hooks !== 'object' || hooks === null) return undefined
+  for (const event of REPORTED_MOVE_EVENTS) {
+    const groups = hooks[event]
+    if (!Array.isArray(groups)) continue
+    for (const group of groups) {
+      if (typeof group !== 'object' || group === null) continue
+      const hookList = (group as { hooks?: unknown }).hooks
+      if (!Array.isArray(hookList)) continue
+      for (const hook of hookList) {
+        if (typeof hook !== 'object' || hook === null) continue
+        const command = (hook as { command?: unknown }).command
+        if (typeof command !== 'string' || command.trim() === '') continue
+        const entryPath = namedEntryPath(command, session)
+        if (entryPath !== undefined) return { event, command, entryPath }
       }
     }
   }
@@ -383,20 +418,24 @@ it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, 
   const settingsPath = join(worktree, '.claude', 'settings.json')
   const settings = await readSettings(settingsPath)
   expect(settings, `the dispatched Claude Code session carries no hooks config at ${settingsPath}`).toBeDefined()
-  const hook = settings === undefined ? undefined : moveHookFrom(settings)
-  expect(hook, 'no hook is wired to any event the harness reports a move through').toBeDefined()
-  if (hook === undefined) return
+  const anyHook = settings === undefined ? undefined : commandHookFrom(settings)
+  expect(anyHook, 'no hook is wired to any event the harness reports a move through').toBeDefined()
+  const hook = settings === undefined ? undefined : entryHookFrom(settings, { worktree, queueRoot: repo.root })
+  expect(hook, 'no move-bearing hook runs the heartbeat CLI entry').toBeDefined()
+  if (anyHook === undefined || hook === undefined) return
 
   // The STANDARD's own sentence is "the Claude Code harness's hooks call it" — the hook
   // must run the heartbeat CLI entry itself, not refresh a heartbeat by its own means. So
-  // the command has to name the entry file, and that file — planted from this repo's real
-  // entry, wherever under the queue root the command points — is what runs when the hook
-  // fires. A command that writes an instant by its own means names no such file and fails here.
-  const entryPath = namedEntryPath(hook.command, { worktree, queueRoot: repo.root })
-  expect(entryPath, `the move hook's command names no heartbeat CLI entry (it reads: ${hook.command})`).toBeDefined()
-  if (entryPath === undefined) return
-  await mkdir(dirname(entryPath), { recursive: true })
-  await copyFile(HEARTBEAT_ENTRY, entryPath)
+  // the command has to name the entry file at the location this product ships it (the same
+  // repo-relative path the real entry holds here), and that file — planted from this repo's
+  // real entry — is what runs when the hook fires. A command that writes an instant by its
+  // own means, or names an entry-shaped path where no file will ever ship, fails here.
+  expect(
+    relativePath(repo.root, hook.entryPath),
+    `the hook names the entry at a path this product does not ship (${hook.command})`,
+  ).toBe(SHIPPED_ENTRY_RELATIVE)
+  await mkdir(dirname(hook.entryPath), { recursive: true })
+  await copyFile(HEARTBEAT_ENTRY, hook.entryPath)
 
   const fired = await fireHook(worktree, hook.event, hook.command, { queueRoot: repo.root, task: 'a' })
 
