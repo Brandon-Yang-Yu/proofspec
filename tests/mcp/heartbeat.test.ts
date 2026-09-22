@@ -33,7 +33,7 @@ const HEARTBEAT_ENTRY = fileURLToPath(new URL('../../src/mcp/heartbeat.ts', impo
 /** Where the entry ships inside a checkout of this product — the one repo-relative path a
  *  conforming hook command may name, pinned by the intent ("the heartbeat CLI entry under
  *  src/mcp/"). */
-const SHIPPED_ENTRY_RELATIVE = relativePath(resolve(HEARTBEAT_ENTRY, '..', '..'), HEARTBEAT_ENTRY)
+const SHIPPED_ENTRY_RELATIVE = relativePath(resolve(dirname(HEARTBEAT_ENTRY), '..', '..'), HEARTBEAT_ENTRY)
 
 /** How one drive of the entry ended: its exit code, the stderr that names the cause in a
  *  failing assertion's message, and the throwaway working directory the entry ran in. */
