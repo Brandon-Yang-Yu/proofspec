@@ -471,7 +471,8 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 
 // Requirement: The docket reports, and judges nothing
 // Scenario: The docket orders TASKs by name alone, whatever their ages or words
-// GIVEN a queue whose oldest TASK sorts after its youngest by name
+// GIVEN a queue whose oldest TASK sorts after its youngest by name, whose state words cut
+//      across that order, and one of whose entries cannot be read at all
 // WHEN the docket is answered
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
