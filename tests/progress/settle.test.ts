@@ -161,8 +161,8 @@ it('settles a mergeable TASK whose branch has landed, rewriting the state and re
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
-// Scenario: The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never ExtensionContext.cwd
-// GIVEN the environment naming a mergeable, landed TASK, and an ExtensionContext whose cwd names an unrelated directory
+// Scenario: The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory
+// GIVEN the environment naming a mergeable, landed TASK, and a session whose own working directory names an unrelated directory
 // WHEN the registered settle tool's execute runs
 // THEN the TASK named by the environment is settled, and nothing was written under the unrelated directory
 it('settles the TASK named by the environment, never ExtensionContext.cwd', async () => {
