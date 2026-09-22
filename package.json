@@ -56,7 +56,8 @@
     "proofspec": "node --experimental-transform-types src/cli/main.ts",
     "spec:check": "pnpm proofspec check",
     "spec:write": "pnpm proofspec write",
-    "investigator": "pi --extension .pi/extensions/handoff.ts --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\""
+    "investigator": "pi --extension .pi/extensions/handoff.ts --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\"",
+    "investigator:claude": "claude --mcp-config '{\"mcpServers\":{\"proofspec\":{\"command\":\"node\",\"args\":[\"--experimental-transform-types\",\"src/mcp/serve.ts\"]}}}' --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\""
   },
   "dependencies": {
     "oxc-parser": "^0.141.0"
