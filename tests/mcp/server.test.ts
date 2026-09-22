@@ -300,6 +300,13 @@ async function settleWorld(): Promise<string> {
   await enterTask(repo, 'same-answer', { edit: 'a.txt' })
   await repo.git(['merge', 'work/same-answer'])
   await repo.write('.proofspec/dispatch/same-answer/state', 'mergeable')
+  // Named through the environment the way a dispatched session's environment names it: the
+  // settle resolves its queue from PROOFSPEC_QUEUE_ROOT/PROOFSPEC_TASK, never from a
+  // working directory — a cwd-named world would demand the exact fallback the settle
+  // STANDARD refuses ("never from the session's own working directory"), making the
+  // result limb unpassable for a conforming core.
+  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  process.env.PROOFSPEC_TASK = 'same-answer'
   return repo.root
 }
 

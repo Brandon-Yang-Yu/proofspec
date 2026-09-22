@@ -1,8 +1,9 @@
 // Capability: mcp
 
 import { spawn } from 'node:child_process'
-import { chmod, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, isAbsolute, join, relative as relativePath, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
@@ -29,26 +30,32 @@ afterEach(() => {
  *  harness fires it, environment and all. */
 const HEARTBEAT_ENTRY = fileURLToPath(new URL('../../src/mcp/heartbeat.ts', import.meta.url))
 
-/** How one drive of the entry ended: its exit code, and the stderr that names the cause in a
- *  failing assertion's message. */
-type EntryRun = { readonly code: number | null; readonly stderr: string }
+/** How one drive of the entry ended: its exit code, the stderr that names the cause in a
+ *  failing assertion's message, and the throwaway working directory the entry ran in. */
+type EntryRun = { readonly code: number | null; readonly stderr: string; readonly cwd: string }
 
 /** Runs the heartbeat CLI entry as a real process under exactly the environment named and
  *  nothing else — no ambient variable can stand in for one the harness did not carry, which
  *  is the whole difference between "refused because unset" and "answered from the test
- *  runner's own environment". */
+ *  runner's own environment". The process runs in a fresh throwaway directory, not the
+ *  test runner's own cwd: an entry that wrongly falls back to its working directory for a
+ *  missing variable writes there, and that directory is reported back so the walk can see
+ *  it — "no heartbeat anywhere" cannot be satisfied by writing somewhere un-walked. */
 function runHeartbeatEntry(env: Readonly<Record<string, string>>): Promise<EntryRun> {
   return new Promise(resolve => {
-    const child = spawn(process.execPath, ['--experimental-transform-types', HEARTBEAT_ENTRY], {
-      env: { ...env },
-      stdio: ['ignore', 'pipe', 'pipe'],
+    mkdtemp(join(tmpdir(), 'proofspec-heartbeat-')).then(cwd => {
+      const child = spawn(process.execPath, ['--experimental-transform-types', HEARTBEAT_ENTRY], {
+        env: { ...env },
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let stderr = ''
+      child.stderr.on('data', chunk => {
+        stderr += chunk
+      })
+      child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}`, cwd }))
+      child.once('exit', code => resolve({ code, stderr, cwd }))
     })
-    let stderr = ''
-    child.stderr.on('data', chunk => {
-      stderr += chunk
-    })
-    child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}` }))
-    child.once('exit', code => resolve({ code, stderr }))
   })
 }
 
@@ -178,6 +185,33 @@ function moveHookFrom(settings: unknown): { readonly event: string; readonly com
   return undefined
 }
 
+/** Whether `path` names something under `root` — the one path relation both "the config
+ *  names the queue root's checkout" and "the entry the hook names belongs to the queue
+ *  root" turn on. */
+const sitsUnder = (root: string, path: string): boolean => {
+  const relative = relativePath(root, path)
+  return relative !== '' && !relative.startsWith('..') && !isAbsolute(relative)
+}
+
+/** The path of the heartbeat CLI entry a hook command names, resolved the way the shell
+ *  that runs the command would resolve it — absolute tokens as they stand, relative tokens
+ *  against the session's own working directory. The entry belongs under the queue root's
+ *  checkout (the same freshness rule the MCP server carries), so only a token that both
+ *  names the entry file (`mcp/heartbeat`) and sits under the queue root counts; the first
+ *  such token wins, and none means the hook does not call the entry at all. */
+function namedEntryPath(
+  command: string,
+  session: { readonly worktree: string; readonly queueRoot: string },
+): string | undefined {
+  for (const raw of command.split(/\s+/)) {
+    const token = raw.replace(/^["']|["']$/g, '')
+    if (!token.includes('mcp/heartbeat')) continue
+    const resolved = isAbsolute(token) ? token : resolve(session.worktree, token)
+    if (sitsUnder(session.queueRoot, resolved)) return resolved
+  }
+  return undefined
+}
+
 /** The session's `.claude/settings.json`, parsed, or nothing while none stands. */
 async function readSettings(path: string): Promise<unknown> {
   try {
@@ -226,8 +260,8 @@ function fireHook(
     child.stderr.on('data', chunk => {
       stderr += chunk
     })
-    child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}` }))
-    child.once('exit', code => resolve({ code, stderr }))
+    child.once('error', error => resolve({ code: null, stderr: `${stderr}\n${String(error)}`, cwd: worktree }))
+    child.once('exit', code => resolve({ code, stderr, cwd: worktree }))
     child.stdin.end(
       JSON.stringify({ hook_event_name: event, session_id: 'proofspec-test', transcript_path: '', cwd: worktree, tool_name: 'Bash', tool_input: {} }),
     )
@@ -290,7 +324,11 @@ it('writes no heartbeat anywhere when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_T
     // the pi trigger swallows the unset case silently, and a hook fired on every move must
     // not fail the session for it.
     expect(run.code, `the heartbeat CLI entry did not run with ${missing} unset: ${run.stderr.trim()}`).toBe(0)
+    // "Anywhere" includes the entry's own working directory: a wrong entry falls back to
+    // its cwd for the missing variable, and the spawned cwd is a throwaway directory the
+    // walk then covers — a fallback write cannot hide outside the walked roots.
     expect(await findHeartbeats(repo.root), `a heartbeat was written with ${missing} unset`).toEqual([])
+    expect(await findHeartbeats(run.cwd), `a heartbeat was written under the entry's own working directory with ${missing} unset`).toEqual([])
   }
 })
 
@@ -348,6 +386,17 @@ it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, 
   const hook = settings === undefined ? undefined : moveHookFrom(settings)
   expect(hook, 'no hook is wired to any event the harness reports a move through').toBeDefined()
   if (hook === undefined) return
+
+  // The STANDARD's own sentence is "the Claude Code harness's hooks call it" — the hook
+  // must run the heartbeat CLI entry itself, not refresh a heartbeat by its own means. So
+  // the command has to name the entry file, and that file — planted from this repo's real
+  // entry, wherever under the queue root the command points — is what runs when the hook
+  // fires. A command that writes an instant by its own means names no such file and fails here.
+  const entryPath = namedEntryPath(hook.command, { worktree, queueRoot: repo.root })
+  expect(entryPath, `the move hook's command names no heartbeat CLI entry (it reads: ${hook.command})`).toBeDefined()
+  if (entryPath === undefined) return
+  await mkdir(dirname(entryPath), { recursive: true })
+  await copyFile(HEARTBEAT_ENTRY, entryPath)
 
   const fired = await fireHook(worktree, hook.event, hook.command, { queueRoot: repo.root, task: 'a' })
 

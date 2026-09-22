@@ -165,7 +165,7 @@ it('settles a mergeable TASK whose branch has landed, rewriting the state and re
 // GIVEN the environment naming a mergeable, landed TASK, and a session whose own working directory names an unrelated directory
 // WHEN the registered settle tool's execute runs
 // THEN the TASK named by the environment is settled, and nothing was written under the unrelated directory
-it('settles the TASK named by the environment, never ExtensionContext.cwd', async () => {
+it('settles the TASK named by the environment, never the session\'s own working directory', async () => {
   const repo = await makeSettlableTask({ task: 'registered', landed: true, word: 'mergeable' })
   const unrelated = await makeRepo({})
   process.env.PROOFSPEC_QUEUE_ROOT = repo.root

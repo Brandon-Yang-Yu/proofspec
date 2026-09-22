@@ -95,12 +95,16 @@ it('runs the session\'s MCP server from the queue root\'s own checkout, never th
   for (const server of servers) {
     for (const token of startTokens(server)) {
       if (isAbsolute(token)) {
-        if (sitsUnder(queueRoot, token)) {
-          await plant(token, FROM_QUEUE_ROOT)
-          await plant(join(worktree, relative(queueRoot, token)), FROM_WORKTREE)
-        } else if (sitsUnder(worktree, token)) {
+        // The worktree sits under the queue root, so the deeper relation is tested first:
+        // a token naming the TASK's worktree is exactly the violation this requirement
+        // exists to catch, and it must carry the worktree's differing marker — not be
+        // swallowed by the queue-root branch it also sits under.
+        if (sitsUnder(worktree, token)) {
           await plant(token, FROM_WORKTREE)
           await plant(join(queueRoot, relative(worktree, token)), FROM_QUEUE_ROOT)
+        } else if (sitsUnder(queueRoot, token)) {
+          await plant(token, FROM_QUEUE_ROOT)
+          await plant(join(worktree, relative(queueRoot, token)), FROM_WORKTREE)
         }
       } else if (token.includes('/')) {
         // A relative path is resolved by the runner against its working directory — the
