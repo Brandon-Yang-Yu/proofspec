@@ -31,7 +31,7 @@ you started.
 
 ## The pipeline at a glance
 
-    explorer → claim-writer → claim-reviewer → ui-design → ui-review → tests-red → test-review ⇄ (digest to fixpoint) → build-green → guideline-review + completion-check (parallel) → review-gate → acceptance-check → merge
+    explorer → claim-writer → claim-reviewer → ui-design → ui-review → tests-red → test-review ⇄ (digest to fixpoint) → build-green → guideline-review + completion-review (parallel) → acceptance-check → merge
 
 claim-reviewer runs immediately after claim-writer, **before** the UI steps. The
 paper-to-paper loop is the cheapest loop, so it closes first, before UI work is paid for —
@@ -132,7 +132,7 @@ the PLAN carried now happens to the tests. When the PLAN's partition table parti
 cleanly into disjoint test files — no two requirements share a file, none edits a file
 another worker touches — fan out: one implementer per requirement in one parallel dispatch.
 Any overlap keeps a single serial implementer. Implementation never fans out: build-green
-is one worker holding the whole plan. Whatever wrote them, the tests are reviewed as one
+is one worker holding the whole PLAN. Whatever wrote them, the tests are reviewed as one
 set — the join is the reaction.
 
 ## The review reaction — a rule, not a stage
@@ -169,7 +169,7 @@ weaken the test, so a test edited during build-green is the one edit that must n
 review.
 
 ## Build to green
-One worker — the implementer persona (`.pi/agents/implementer.md`) — holding the whole plan.
+One worker — the implementer persona (`.pi/agents/implementer.md`) — holding the whole PLAN.
 Every test edit it makes on the way to green is the reaction's trigger, and the reaction's
 digest is what catches the edit nobody reported.
 

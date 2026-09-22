@@ -50,8 +50,7 @@ It also carries the partition table tests-red fans out on (requirement → test 
 the UI decision: whether this TASK adds or changes user-facing UI.
 
 **Hard rule:** every row the PROOF MAP marks carries a proof disposition, or the PLAN is
-incomplete. A row found without one makes the PLAN incomplete — finish it before
-returning.
+incomplete — finish it before returning.
 
 ## UNTRANSLATABLE — the exit you may take
 If no faithful CLAIM can be written for a STANDARD — the STANDARD is vague, unfalsifiable,
