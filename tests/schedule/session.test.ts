@@ -199,9 +199,6 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 // THEN it hands the session the queue's checkout, the TASK's name, and that branch as
 //      environment variables, so a session that settles measures against the same branch
 //      its queue was built on
-// THEN it hands the session the queue's checkout, the TASK's name, and that branch as
-//      environment variables, so a session that settles measures against the same branch
-//      its queue was built on
 it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables on the start command', () => {
   process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
@@ -252,12 +249,9 @@ it('carries --approve and --extension pinned twice over — this checkout\'s own
   const subagentEnvIndex = start.args.indexOf(`PROOFSPEC_SUBAGENT_EXTENSION=${subagentExtensionPath}`)
   expect(subagentEnvIndex).toBeGreaterThan(0)
   expect(start.args[subagentEnvIndex - 1]).toBe('-e')
-  // The never-clause is load-bearing: pi injects its virtual modules into an extension's
-  // entry file only, so a wrapper under .pi/extensions/ re-exporting the example hangs pi
-  // at startup instead of loading it. The value must sit inside the installed pi
-  // package's own node_modules tree, never under .pi/extensions/.
-  expect(sitsUnderPath('/repo/node_modules/@earendil-works/pi-coding-agent', subagentExtensionPath)).toBe(true)
-  expect(sitsUnderPath('/repo/.pi/extensions', subagentExtensionPath)).toBe(false)
+  // The exact-equality env pin above carries the never-clause on its own: a value under
+  // .pi/extensions/ - a wrapper, say - is a different string and fails the equality, so
+  // the pin can only ever name the subagent example inside the installed pi package.
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -345,14 +339,20 @@ it('starts the pi invocation whenever PROOFSPEC_EXECUTOR is unset, and when it n
   const build = () => tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   // Each GIVEN case built and read on its own — the default must survive the harness choice
-  // being added, not silently drift the moment the variable starts being read.
+  // being added, not silently drift the moment the variable starts being read. Naming pi
+  // must reach the same invocation, not a pi-shaped shortcut: the pi-named build's runner
+  // script is the unset build's own script, byte for byte — pins included, since the
+  // scenarios above prove what the unset build's script carries.
   delete process.env.PROOFSPEC_EXECUTOR
-  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  const unsetScript = await runnerScriptFrom(build()[1])
+  await expect(unsetScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
 
   process.env.PROOFSPEC_EXECUTOR = 'pi'
-  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  const namedPiScript = await runnerScriptFrom(build()[1])
+  await expect(namedPiScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
+  expect(namedPiScript, 'naming pi must carry the unset build\'s own pinned runner script').toBe(unsetScript)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -396,11 +396,20 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
   expect(start.args[configIndex - 1]).toBe('-e')
   const configPath = start.args[configIndex]!.slice('PROOFSPEC_MCP_CONFIG='.length)
   const config = JSON.parse(await readFile(configPath, 'utf8')) as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> }
-  const servers = Object.values(config.mcpServers ?? {})
-  expect(servers.length, 'the config names no MCP server').toBeGreaterThan(0)
-  for (const server of servers) {
+  // Which server the config names is the promise, so identity is asserted, not just
+  // location: the one server it names is the queue root's own MCP server — the stdio
+  // server entry this checkout ships, `src/mcp/serve.ts` under the queue root. A config
+  // naming a different entry, or a second server beside the real one, is a different
+  // answer than the one claimed.
+  const entries = Object.entries(config.mcpServers ?? {})
+  expect(entries.length, 'the config must name exactly one MCP server').toBe(1)
+  for (const [, server] of entries) {
     const words = [server.command, ...(Array.isArray(server.args) ? server.args : [])]
       .filter((word): word is string => typeof word === 'string')
+    expect(
+      words,
+      `the server the config names is not the queue root's own MCP server entry`,
+    ).toContain(join(queueRoot, 'src', 'mcp', 'serve.ts'))
     const paths = words.filter(word => word.includes('/'))
     expect(
       paths.some(path => sitsUnderPath(queueRoot, path)),
