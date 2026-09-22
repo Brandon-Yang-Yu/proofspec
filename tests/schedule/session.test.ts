@@ -335,8 +335,19 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
   // Permissions skipped: an unattended session has nobody attached to answer an approval.
   expect(script).toContain('--dangerously-skip-permissions')
   // The persona rides the same prompt file the pi runner reads — same bytes, one argument,
-  // whatever metacharacters the persona carries (the scenario above proves the trip).
+  // whatever metacharacters the persona carries (the scenario above proves the trip). The
+  // start command must carry the file's path beside it, and the file must hold the persona
+  // itself: without either, the runner's $(cat …) expands to nothing and claude starts with
+  // an empty persona while every other check stays green.
   expect(script).toContain('--append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")"')
+  const promptEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_SYSTEM_PROMPT_FILE='))
+  expect(promptEnvIndex, 'the start command carries no prompt file path in its environment').toBeGreaterThan(-1)
+  expect(start.args[promptEnvIndex - 1]).toBe('-e')
+  await expect(readFile(start.args[promptEnvIndex]!.slice('PROOFSPEC_SYSTEM_PROMPT_FILE='.length), 'utf8')).resolves.toBe('you are the executor')
+  // And the runner hands the config to claude: the flag names the same environment entry the
+  // start command carries — a config written and carried but never loaded leaves the session
+  // without the five tools, and nothing downstream would notice.
+  expect(script).toContain('--mcp-config "$PROOFSPEC_MCP_CONFIG"')
   // A generated MCP config naming the queue root's own MCP server. Which server the config
   // names is the promise; where the file sits is the implementation's choice — so the config
   // is read from the path the environment names.
@@ -387,11 +398,17 @@ it('carries the same environment variables and the same positional kickoff messa
   // The kickoff rides the same environment entry the pi runner reads, and the claude runner
   // hands it to claude as the one positional prompt argument — the last argument after every
   // flag/value pair, exactly how the pi runner hands it to pi. An unattended session handed
-  // no first message never begins working its TASK.
+  // no first message never begins working its TASK. The same message, read literally: the
+  // claude build's kickoff is the pi build's kickoff, byte for byte.
+  delete process.env.PROOFSPEC_EXECUTOR
+  const piKickoff = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })[1].args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
   const kickoffEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
   expect(kickoffEnvIndex).toBeGreaterThan(-1)
   expect(start.args[kickoffEnvIndex - 1]).toBe('-e')
-  expect(start.args[kickoffEnvIndex]).toContain('dispatch-me')
+  expect(start.args[kickoffEnvIndex]).toBe(piKickoff)
+  expect(piKickoff).toMatch(/begin/i)
+  expect(piKickoff).toContain('intentRef')
   const script = await runnerScriptFrom(start)
   expect(script.trim().endsWith('"$PROOFSPEC_KICKOFF"')).toBe(true)
 })
