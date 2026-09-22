@@ -194,16 +194,19 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
   process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
-  // Pairwise slices, not a positional one — the STANDARD and the CLAIM name three variables
-  // without ordering them, and a flag appended after another -e (KICKOFF, say) still satisfies
-  // both. Each slice proves its -e immediately precedes the value it names.
-  const pairs = (flag: string, value: string): boolean => {
-    const at = start.args.indexOf(flag)
-    return at !== -1 && start.args[at + 1] === value
+  // Pairwise scans, not a positional slice — the STANDARD and the CLAIM name three
+  // variables without ordering them, and a flag appended after another -e (KICKOFF,
+  // say) still satisfies both. Each scan proves some -e immediately precedes the value
+  // it names.
+  const carries = (value: string): boolean => {
+    for (let i = 0; i + 1 < start.args.length; i++) {
+      if (start.args[i] === '-e' && start.args[i + 1] === value) return true
+    }
+    return false
   }
-  expect(pairs('-e', 'PROOFSPEC_QUEUE_ROOT=/repo')).toBe(true)
-  expect(pairs('-e', 'PROOFSPEC_TASK=a')).toBe(true)
-  expect(pairs('-e', 'PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
+  expect(carries('PROOFSPEC_QUEUE_ROOT=/repo')).toBe(true)
+  expect(carries('PROOFSPEC_TASK=a')).toBe(true)
+  expect(carries('PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

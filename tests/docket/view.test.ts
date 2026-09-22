@@ -476,10 +476,9 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
   // Three readable rows plus one unreadable TASK, with the ages and the words each
-  // scrambled against the names: an oldest-first sort, a newest-first sort, and a
-  // word-priority sort each answer a different order among the readable rows, and the
-  // problem TASK never reaches the rows at all — every wrong rule fails against the
-  // name order the THEN pins.
+  // scrambled against the names: neither age direction, nor any word-priority rule,
+  // can reproduce the name order the THEN pins, and the problem TASK never reaches
+  // the rows at all.
   const repo = await makeRepo({
     ...queueEntry('zulu', { state: 'queued' }),
     ...queueEntry('mike', { state: 'blocked-on-question' }),
