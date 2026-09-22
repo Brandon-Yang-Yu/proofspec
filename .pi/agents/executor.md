@@ -67,9 +67,13 @@ reopened. Both maps feed the claim-writer.
 
 ## Claim-writer — the PLAN gets written
 Dispatch a fresh claim-writer (`.pi/agents/claim-writer.md`) with the intent, the
-`specs/*.md` on this branch, the explorer's two maps, and the PLAN's path in the TASK's
+**affected spec files**, the explorer's two maps, and the PLAN's path in the TASK's
 queue entry (the main checkout's `.proofspec/dispatch/<task>/`, named by
-`$PROOFSPEC_QUEUE_ROOT` and `$PROOFSPEC_TASK`). It translates each affected requirement's
+`$PROOFSPEC_QUEUE_ROOT` and `$PROOFSPEC_TASK`). The affected spec files are the
+`specs/*.md` this branch changes against the base it forked from
+(`git diff --name-only "$(git merge-base HEAD <base>)" HEAD -- specs/` — the MANIFEST
+names the base), always plus `specs/glossary.md`. Never hand a worker the whole
+`specs/` tree when a few files carry the changes. It translates each affected requirement's
 STANDARD into CLAIM drafts, reconciles old proof per the PROOF MAP, names each
 requirement's one test file, and writes the PLAN itself — the drafter writes, nobody
 scribes.
@@ -91,7 +95,20 @@ fix to make.
 Dispatch a fresh claim-reviewer (`.pi/agents/claim-reviewer.md`) immediately after the
 claim-writer, before any UI work. It cold-reads the PLAN and the STANDARDs behind it, and
 judges one thing: every CLAIM faithful to its STANDARD — not narrower, not broader, no
-leakage into implementation detail. A fidelity finding goes back to the claim-writer, which
+leakage into implementation detail.
+
+Scope both sides of that judgment, and never pay for the whole tree:
+
+- **STANDARDs** — the same affected spec files the claim-writer received: the ones this
+  branch changed against its base, plus `specs/glossary.md`. Name them in the dispatch;
+  never hand the reviewer "the `specs/*.md` on the branch" — a file with no CLAIM
+  against it cannot produce a finding, only cost.
+- **CLAIMs** — the first pass judges every CLAIM in the PLAN, all of them new. Every
+  later pass judges only what the claim-writer just wrote or revised in answering the
+  findings — the rows its fix report names; rows a clean pass already accepted are not
+  re-hunted. The dispatch says which.
+
+A fidelity finding goes back to the claim-writer, which
 fixes the PLAN — the loop runs until the gate is clean. An UNTRANSLATABLE finding parks the
 TASK through the QUESTION file; you have no discretion there, and neither does the
 claim-writer.
@@ -257,7 +274,8 @@ this session through a delayed reaper, so the TASK leaves nothing checked out be
 refusal is a finding to act on, like any review finding.
 
 ## Do
-- Read the MANIFEST's intent and the `specs/*.md` before dispatching a single worker — the
+- Read the MANIFEST's intent and the affected `specs/*.md` — the files this branch
+  changes plus the glossary — before dispatching a single worker; the
   `intentRef` resolves one way: the reserved name `INTENT` names the TASK's own queue entry
   file `.proofspec/dispatch/<task>/INTENT` in the main checkout, and any other value names
   a file on this branch.
