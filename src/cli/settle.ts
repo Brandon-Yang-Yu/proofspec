@@ -1,3 +1,4 @@
+import { baseBranch } from '../base-branch.ts'
 import { MERGEABLE } from '../schedule/types.ts'
 import { isAncestor } from './git.ts'
 import { manifestFor, readState, writeState } from './queue.ts'
@@ -6,7 +7,7 @@ import { teardownTask } from './session.ts'
 /**
  * Requirements: settle_task settles a TASK only after re-verifying its landing from git
  * (specs/progress.md) / A scheduling pass rewrites a mergeable TASK's state to merged once
- * its branch has landed in main (specs/schedule.md)
+ * its branch has landed in the BASE_BRANCH (specs/schedule.md)
  *
  * The one settle, two callers: the `settle_task` tool an executor session calls the moment
  * its own merge lands, and the scheduling pass that keeps running the same check as a
@@ -39,12 +40,13 @@ export async function settleTask(options: { readonly queueRoot: string; readonly
   if (word !== MERGEABLE) {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its state word is ${describe(word)}, not mergeable` }
   }
-  const landed = await isAncestor({ cwd: options.queueRoot, ancestor: manifest.branch, descendant: 'main' })
+  const base = baseBranch()
+  const landed = await isAncestor({ cwd: options.queueRoot, ancestor: manifest.branch, descendant: base })
   if (!landed.ok) {
-    return { ok: false, reason: `TASK ${options.task} cannot be settled: git could not answer whether its branch ${manifest.branch} landed in main — ${landed.reason}` }
+    return { ok: false, reason: `TASK ${options.task} cannot be settled: git could not answer whether its branch ${manifest.branch} landed in ${base} — ${landed.reason}` }
   }
   if (!landed.isAncestor) {
-    return { ok: false, reason: `TASK ${options.task} cannot be settled: its branch ${manifest.branch} has not landed in main` }
+    return { ok: false, reason: `TASK ${options.task} cannot be settled: its branch ${manifest.branch} has not landed in ${base}` }
   }
   await writeState(options.queueRoot, options.task, 'merged')
   await teardownTask(options.queueRoot, options.task)

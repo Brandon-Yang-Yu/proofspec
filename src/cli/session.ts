@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { baseBranch } from '../base-branch.ts'
 import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
 
@@ -262,9 +263,11 @@ function writeSessionHandoff(systemPrompt: string): { readonly promptFile: strin
  * instead reaches the session through a channel no shell parses as syntax: the `-e` flags
  * set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
  * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
- * worktree, `specs/progress.md`), and the runner script assembles `pi`'s argv from them,
- * reading the system prompt from its file — so `pi` is handed the persona and the kickoff
- * exactly as passed, one argument each, same bytes.
+ * worktree, `specs/progress.md`; `PROOFSPEC_BASE_BRANCH` hands down the base branch the queue
+ * measures against, so a session that settles reads the same name its queue was built on), and
+ * the runner script assembles `pi`'s argv from them, reading the system prompt from its file —
+ * so `pi` is handed the persona and the kickoff exactly as passed, one argument each, same
+ * bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
@@ -277,6 +280,7 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
+        '-e', `PROOFSPEC_BASE_BRANCH=${baseBranch()}`,
         '-e', `PROOFSPEC_KICKOFF=${kickoffFor(task)}`,
         '-e', `PROOFSPEC_SYSTEM_PROMPT_FILE=${handoff.promptFile}`,
         '-e', `PROOFSPEC_PROGRESS_EXTENSION=${extension}`,

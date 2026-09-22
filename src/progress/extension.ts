@@ -307,7 +307,7 @@ export default function progressExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     name: 'settle_task',
     label: 'Settle Task',
-    description: 'Settles this session\'s own TASK once its merge has landed in main: re-verifies from git that the TASK is mergeable and its branch is an ancestor of main, then rewrites the state to merged, removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
+    description: 'Settles this session\'s own TASK once its merge has landed in the BASE_BRANCH: re-verifies from git that the TASK is mergeable and its branch is an ancestor of that branch, then rewrites the state to merged, removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
     parameters: SETTLE_TASK_PARAMETERS,
     execute: executeSettleTask,
   })
