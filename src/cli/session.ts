@@ -101,6 +101,14 @@ function tmuxSocket(): string {
 
 const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
 
+/** Where the installed `pi` package itself ships the `subagent` extension — under the queue
+ *  root's `node_modules`, never a file under `.pi/extensions/`. pi injects the virtual modules
+ *  that example imports only into an entry extension file, so a wrapper under
+ *  `.pi/extensions/` re-exporting it hangs pi at startup, silently (measured three ways);
+ *  pinning the package's own copy also keeps the extension and the pi that runs it from
+ *  drifting apart — they version together. */
+const SUBAGENT_EXTENSION_PATH = ['node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'] as const
+
 /** Where the queue root's own checkout ships the stdio MCP server entry — one repo-relative
  *  path, so the config naming it can never drift from the file it names. */
 const MCP_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
@@ -229,25 +237,28 @@ export type SessionStart = {
 }
 
 /** The one line the session's runner script runs: `pi`'s whole invocation, with every value
- *  that can vary — the extension path, the system prompt, the kickoff — taken from the
+ *  that can vary — the extension paths, the system prompt, the kickoff — taken from the
  *  session environment rather than spelled out inside it, because a script file is a channel
  *  a shell parses, and only quoted variable references keep arbitrary bytes intact through
  *  it. The system prompt arrives through `$(cat ...)` inside double quotes, where command
  *  substitution output is never word-split or re-parsed, so the persona's backticks,
  *  quotes, `$()`, and redirections reach `pi` as one argument, same bytes. `--approve` and
- *  the pinned `--extension` are what let the executor actually load the tool that reports
- *  to the queue — a freshly created worktree is an unknown path to `pi`'s own project
- *  trust, and `.pi/` being tracked in git means the TASK's own branch can carry a stale (or
- *  missing) copy of `progress.ts`. `--no-extensions` disables `pi`'s own auto-discovery of
- *  the worktree's copy of that same file — without it, `pi` loads both, and refuses to start
- *  at all: two extensions registering the same tool name, `report_task_state`, is a conflict
- *  `pi` treats as fatal, pinned copy or not; the pinned `--extension` path still loads
+ *  the pinned `--extension`s are what let the executor actually load the tools it works
+ *  with — `--approve` because a freshly created worktree is an unknown path to `pi`'s own
+ *  project trust; the `progress.ts` pin because `.pi/` being tracked in git means the
+ *  TASK's own branch can carry a stale (or missing) copy; the `subagent` pin because the
+ *  executor's work reaches its personas through fresh subagents, and it points into
+ *  `node_modules` for the reason `SUBAGENT_EXTENSION_PATH` records. `--no-extensions`
+ *  disables `pi`'s own auto-discovery of the worktree's own copy of `progress.ts` — without
+ *  it, `pi` loads both, and refuses to start at all: two extensions registering the same
+ *  tool name, `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not.
+ *  The two pinned paths coexist (no tool-name overlap between them), and both still load
  *  under `--no-extensions`, same as `pi`'s own help text says an explicit `-e` does. The
  *  trailing `"$PROOFSPEC_KICKOFF"` is the kickoff message from `kickoffFor` above — the
  *  last argument after every flag/value pair, which is exactly how `pi` reads a first
  *  prompt. */
 const RUNNER_SCRIPT =
-  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
+  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --extension "$PROOFSPEC_SUBAGENT_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
 
 /** The same one line for the `claude` harness: the same executor persona
  *  (`--append-system-prompt`, read from the same prompt file), `--dangerously-skip-permissions`
@@ -324,7 +335,10 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
   // was built for is the discriminator, not a field's presence.
   const harnessEnv = handoff.executor === 'claude'
     ? [`-e`, `PROOFSPEC_MCP_CONFIG=${handoff.mcpConfig}`]
-    : [`-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`]
+    : [
+      `-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`,
+      `-e`, `PROOFSPEC_SUBAGENT_EXTENSION=${join(start.queueRoot, ...SUBAGENT_EXTENSION_PATH)}`,
+    ]
   return [
     tmuxKillSessionCommand(task),
     {
