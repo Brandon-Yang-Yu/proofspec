@@ -396,10 +396,10 @@ it('carries the same environment variables and the same positional kickoff messa
   const envFlagIndex = start.args.indexOf('-c') + 2
   expect(start.args.slice(envFlagIndex, envFlagIndex + 4)).toEqual(['-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=dispatch-me'])
   // The kickoff rides the same environment entry the pi runner reads, and the claude runner
-  // hands it to claude as the one positional prompt argument — the last argument after every
-  // flag/value pair, exactly how the pi runner hands it to pi. An unattended session handed
-  // no first message never begins working its TASK. The same message, read literally: the
-  // claude build's kickoff is the pi build's kickoff, byte for byte.
+  // hands it to claude as the one positional prompt argument, leading every flag. An
+  // unattended session handed no first message never begins working its TASK. The same
+  // message, read literally: the claude build's kickoff is the pi build's kickoff, byte
+  // for byte.
   delete process.env.PROOFSPEC_EXECUTOR
   const piKickoff = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })[1].args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
   process.env.PROOFSPEC_EXECUTOR = 'claude'
@@ -413,8 +413,10 @@ it('carries the same environment variables and the same positional kickoff messa
   // The kickoff is claude's one positional prompt argument, leading the flags — `--mcp-config`
   // takes space-separated values, so a trailing positional after it would be read as one
   // more config path and the session would die before starting (the acceptance run caught
-  // exactly that).
+  // exactly that). Exactly one occurrence of the kickoff reference: a bad merge that kept a
+  // trailing copy beside the new lead would pass every other check and die live.
   expect(script.trim().startsWith('exec claude "$PROOFSPEC_KICKOFF"')).toBe(true)
+  expect(script.split('PROOFSPEC_KICKOFF').length - 1, 'the kickoff must appear exactly once in the claude runner').toBe(1)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
