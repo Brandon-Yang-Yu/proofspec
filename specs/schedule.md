@@ -247,13 +247,16 @@ one kickoff message.
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
+- "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
+- "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
 - "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK" → tests/schedule/session.test.ts
+- "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
@@ -301,6 +304,10 @@ rule: the question and the reading stay the one shared thing.
 - "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never answers is not waited on past the configured timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never closes its own stdin still returns instead of hanging, because judge closes it first" → tests/schedule/judge-cli.test.ts
+- "PROOFSPEC_JUDGE_BIN naming claude runs one headless one-shot claude process" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the answer is read to the same verdict" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the same relationship is asked the same question" → tests/schedule/judge-cli.test.ts
+- "With PROOFSPEC_JUDGE_BIN unset, or naming pi, the judge process is the pinned one-shot pi process" → tests/schedule/judge-cli.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process

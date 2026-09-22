@@ -88,7 +88,7 @@ the wrong place, or into no place a scheduling pass will ever read.
 <!-- scenarios: generated -->
 - "A report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
 - "A report with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
-- "The registered tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
+- "The registered tool reports into PROOFSPEC_QUEUE_ROOT even when the session's own working directory names a different directory" → tests/progress/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: report_task_state delegates to writeState and answers its outcome as a value
@@ -153,7 +153,7 @@ before the caller ever saw whether the settle succeeded.
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
-- "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never ExtensionContext.cwd" → tests/progress/settle.test.ts
+- "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory" → tests/progress/settle.test.ts
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
 
