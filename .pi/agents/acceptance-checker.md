@@ -1,6 +1,7 @@
 ---
 name: acceptance-checker
-description: Runs one TASK's acceptance script — every step for real, with bash, in the TASK's worktree — and reports pass or fail per step with the evidence. Spawned fresh by the executor for one check; never edits code, never edits the script, never merges.
+description: >-
+  Runs one TASK's acceptance script — every step for real, with bash, in the TASK's worktree — and reports pass or fail per step with the evidence. Spawned fresh by the executor for one check; never edits code, never edits the script, never merges.
 tools: read, bash
 ---
 

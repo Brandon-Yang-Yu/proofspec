@@ -185,25 +185,31 @@ on the production server.
 - "The live-session bound is four by default" → tests/schedule/bound.test.ts
 <!-- /scenarios -->
 
-### Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+### Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 
 The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its
 `branch`, ensure a worktree for that branch exists at the conventional path
 `.proofspec/worktrees/<task>` — creating one with `git worktree add` whenever that path
-is not itself a worktree, reusing it unchanged only when it is — and start `pi` there in
-a detached tmux session named for the TASK, first killing any same-named session already
-there. A creation that fails SHALL throw an error carrying git's own stderr in its
-message, never a bare "could not create" summary in stderr's place. That `pi`
-invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and
-`-e PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
-command, SHALL be run with `--approve`,
-`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`, and SHALL be handed
-one initial user message as `pi`'s positional prompt argument — a message telling the
-session to begin working its TASK, whose exact words are the implementation's to choose. Every tmux command this action runs
-SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L <socket>` flag
-rather than the default server — never the user's own default tmux server, and never any
-other named server — with a default socket name of `proofspec`, overridable through the
-`PROOFSPEC_TMUX_SOCKET` environment variable.
+is not itself a worktree, reusing it unchanged only when it is — and start the executor
+agent there in a detached tmux session named for the TASK, first killing any same-named
+session already there. A creation that fails SHALL throw an error carrying git's own
+stderr in its message, never a bare "could not create" summary in stderr's place. Which
+agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
+variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
+SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
+PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
+command, and SHALL be handed one initial user message as the agent's positional prompt
+argument — a message telling the session to begin working its TASK, whose exact words
+are the implementation's to choose. The `pi` invocation SHALL be run with `--approve`,
+`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`. The `claude`
+invocation SHALL be run with `--append-system-prompt` carrying the executor's own
+system prompt, with `--dangerously-skip-permissions`, and with a generated MCP config
+naming the queue root's own MCP server (`specs/mcp.md`); where that generated config
+file is written is the implementation's choice, and which server it names is not. Every
+tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
+named by tmux's own `-L <socket>` flag rather than the default server — never the user's
+own default tmux server, and never any other named server — with a default socket name
+of `proofspec`, overridable through the `PROOFSPEC_TMUX_SOCKET` environment variable.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
@@ -218,14 +224,21 @@ working session on retry. Every tmux command reaches the dedicated server so a T
 can never collide with a session it did not create, and `PROOFSPEC_TMUX_SOCKET` lets a test
 or an acceptance run point at a throwaway, per-run socket.
 
+The choice is one environment variable because everything else about starting a session
+is the same act either way, and the default stays `pi` so a queue that never names a
+harness runs exactly as it ran before.
+
 The session starts inside the TASK's own worktree and needs three facts — where the
 queue lives, which TASK it is, and which branch its queue measures against — which this
 action already holds at the moment it starts the session, so it hands them down as the
 three environment variables. The tool that reports
 state must load in a freshly created worktree, and the copy it loads must be the current
-one. `--approve` is what lets the tool load there, and the pinned `--extension` points at
-this tool's own checkout rather than whatever the TASK's branch carries. `--no-extensions`
-keeps the worktree's own copy of the extension from loading beside the pinned one.
+one. On the `pi` side, `--approve` is what lets the tool load there, the pinned
+`--extension` points at this tool's own checkout rather than whatever the TASK's branch
+carries, and `--no-extensions` keeps the worktree's own copy of the extension from loading
+beside the pinned one. On the `claude` side, the generated config carries the same
+freshness reasoning for the MCP server (`specs/mcp.md`), and `--dangerously-skip-permissions`
+stands because an unattended session has nobody attached to answer an approval.
 
 A session handed no first message never begins working its TASK, so the invocation carries
 one kickoff message.
@@ -235,13 +248,16 @@ one kickoff message.
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
+- "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
+- "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
 - "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
+- "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
@@ -265,25 +281,35 @@ not something a TASK's own branch — cut from `main` at some earlier, possibly 
 - "The executor persona's YAML frontmatter is stripped before it is used as a system prompt" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
-### Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
+### Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
 
-The bare CLI's `judge` action SHALL run a fresh, one-shot `pi` process for every relationship
+The bare CLI's `judge` action SHALL run a fresh, one-shot process for every relationship
 it is handed — never a saved session, never reused across relationships — closing that
 process's stdin the instant it starts, and SHALL bound its wait for an answer with a
-timeout, so that one relationship's process can never hang the scheduling pass that awaits
-it.
+timeout, so that one relationship's process can never hang the scheduling pass that
+awaits it. The process's binary SHALL be named by the `PROOFSPEC_JUDGE_BIN` environment
+variable, defaulting to `pi`, and the argv SHALL be built for the binary it names:
+`claude` runs as one headless one-shot process, `pi` as the one-shot process the
+requirements above pin. Which binary runs changes nothing about what is asked or how the
+answer is read.
 
-The bare CLI supplies a real `judge` action for every relationship the graph finds; what the
-fresh agent is asked, and how its answer is read, belong to the requirements above, and
-this one is about the choice of process. The process's stdin is closed the instant it
+The bare CLI supplies a real `judge` action for every relationship the graph finds; what
+the fresh agent is asked, and how its answer is read, belong to the requirements above,
+and this one is about the choice of process. The process's stdin is closed the instant it
 starts, so it cannot hang waiting for input that will never arrive. The timeout exists
 because nothing else stops one bad run from hanging everything behind it: `judge` is
-awaited one relationship at a time, so one hang would hang the whole pass.
+awaited one relationship at a time, so one hang would hang the whole pass. The binary is
+an environment variable's choice because which process asks is an operational fact, not a
+rule: the question and the reading stay the one shared thing.
 
 <!-- scenarios: generated -->
 - "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never answers is not waited on past the configured timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never closes its own stdin still returns instead of hanging, because judge closes it first" → tests/schedule/judge-cli.test.ts
+- "PROOFSPEC_JUDGE_BIN naming claude runs one headless one-shot claude process" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the answer is read to the same verdict" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the same relationship is asked the same question" → tests/schedule/judge-cli.test.ts
+- "With PROOFSPEC_JUDGE_BIN unset, or naming pi, the judge process is the pinned one-shot pi process" → tests/schedule/judge-cli.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process

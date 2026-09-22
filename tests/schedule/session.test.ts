@@ -20,10 +20,11 @@ afterEach(cleanupRepos)
 // against. The same pattern `judge-cli.test.ts` already uses for its own env overrides.
 afterEach(() => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
+  delete process.env.PROOFSPEC_EXECUTOR
   delete process.env.PROOFSPEC_BASE_BRANCH
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A ready TASK whose worktree has never been checked out gets one created at its conventional path
 // GIVEN a ready TASK whose worktree has never been checked out
 // WHEN startSession runs
@@ -38,7 +39,7 @@ it('creates a worktree at the TASK\'s conventional path when none has ever been 
   expect(await repo.git(['-C', worktree, 'branch', '--show-current'])).toBe('work/a')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A ready TASK whose worktree already exists at its conventional path has it reused, not recreated
 // GIVEN a ready TASK whose worktree already exists at its conventional path
 // WHEN startSession runs
@@ -58,7 +59,7 @@ it('reuses a TASK\'s worktree once it already exists, rather than recreating it'
   await expect(readFile(join(worktree, 'untracked-marker.txt'), 'utf8')).resolves.toBe('still here')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead
 // GIVEN a TASK whose conventional path holds an empty directory with no .git file at its root
 // WHEN startSession runs
@@ -77,7 +78,7 @@ it('treats a directory merely sitting at the conventional path as no worktree, c
   expect(await repo.git(['-C', worktree, 'branch', '--show-current'])).toBe('work/a')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A worktree creation that fails throws an error carrying git's own stderr
 // GIVEN a TASK whose branch is already checked out in another worktree, so git worktree add refuses
 // WHEN startSession runs
@@ -166,7 +167,7 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
   return readFile(scriptPath!, 'utf8')
 }
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi
 // GIVEN a tmux session already named for the TASK
 // WHEN the tmux commands to start its session are built
@@ -183,10 +184,13 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
   await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec pi\b/)
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against
 // GIVEN a ready TASK whose queue measures against a BASE_BRANCH other than main
 // WHEN the tmux start command is built
+// THEN it hands the session the queue's checkout, the TASK's name, and that branch as
+//      environment variables, so a session that settles measures against the same branch
+//      its queue was built on
 // THEN it hands the session the queue's checkout, the TASK's name, and that branch as
 //      environment variables, so a session that settles measures against the same branch
 //      its queue was built on
@@ -209,7 +213,7 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
   expect(carries('PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation carries --approve and --extension pinned to this checkout's own progress extension
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
@@ -233,7 +237,7 @@ it('carries --approve and --extension pinned to this checkout\'s own progress ex
   expect(start.args[extensionEnvIndex - 1]).toBe('-e')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
@@ -246,7 +250,7 @@ it('disables extension auto-discovery so the worktree\'s own progress.ts never l
   await expect(runnerScriptFrom(start)).resolves.toContain('--no-extensions')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry
 // GIVEN a system prompt at the executor persona's own scale, whose text carries shell metacharacters
 // WHEN the tmux start command runs on a real tmux server and the session's pi starts
@@ -307,7 +311,131 @@ writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2))
   }
 }, 15000)
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi
+// GIVEN PROOFSPEC_EXECUTOR unset, and then set to name pi
+// WHEN the tmux commands to start a TASK's session are built
+// THEN each time the start command's agent is the pi invocation — the same pinned runner
+//      script the pi scenarios above carry
+it('starts the pi invocation whenever PROOFSPEC_EXECUTOR is unset, and when it names pi', async () => {
+  const build = () => tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+
+  // Each GIVEN case built and read on its own — the default must survive the harness choice
+  // being added, not silently drift the moment the variable starts being read.
+  delete process.env.PROOFSPEC_EXECUTOR
+  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
+
+  process.env.PROOFSPEC_EXECUTOR = 'pi'
+  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server
+// GIVEN PROOFSPEC_EXECUTOR naming claude, a TASK, its worktree, and the queue root
+// WHEN the tmux start command is built
+// THEN the agent it starts is claude, run with `--append-system-prompt` carrying the
+//      executor's own system prompt, with `--dangerously-skip-permissions`, and with a
+//      generated MCP config naming the queue root's own MCP server
+it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async () => {
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  const queueRoot = '/repo'
+
+  const [, start] = tmuxSessionCommands('a', { worktree: `${queueRoot}/.proofspec/worktrees/a`, queueRoot, systemPrompt: 'you are the executor' })
+
+  // The agent the runner script starts is claude itself — a different harness, not pi with
+  // claude's flags bolted onto it.
+  const script = await runnerScriptFrom(start)
+  expect(script).toMatch(/^exec claude\b/)
+  // Permissions skipped: an unattended session has nobody attached to answer an approval.
+  expect(script).toContain('--dangerously-skip-permissions')
+  // The persona rides the same prompt file the pi runner reads — same bytes, one argument,
+  // whatever metacharacters the persona carries (the scenario above proves the trip). The
+  // start command must carry the file's path beside it, and the file must hold the persona
+  // itself: without either, the runner's $(cat …) expands to nothing and claude starts with
+  // an empty persona while every other check stays green.
+  expect(script).toContain('--append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")"')
+  const promptEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_SYSTEM_PROMPT_FILE='))
+  expect(promptEnvIndex, 'the start command carries no prompt file path in its environment').toBeGreaterThan(-1)
+  expect(start.args[promptEnvIndex - 1]).toBe('-e')
+  await expect(readFile(start.args[promptEnvIndex]!.slice('PROOFSPEC_SYSTEM_PROMPT_FILE='.length), 'utf8')).resolves.toBe('you are the executor')
+  // And the runner hands the config to claude: the flag names the same environment entry the
+  // start command carries — a config written and carried but never loaded leaves the session
+  // without the five tools, and nothing downstream would notice.
+  expect(script).toContain('--mcp-config "$PROOFSPEC_MCP_CONFIG"')
+  // A generated MCP config naming the queue root's own MCP server. Which server the config
+  // names is the promise; where the file sits is the implementation's choice — so the config
+  // is read from the path the environment names.
+  const configIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_MCP_CONFIG='))
+  expect(configIndex, 'the start command carries no MCP config path in its environment').toBeGreaterThan(-1)
+  expect(start.args[configIndex - 1]).toBe('-e')
+  const configPath = start.args[configIndex]!.slice('PROOFSPEC_MCP_CONFIG='.length)
+  const config = JSON.parse(await readFile(configPath, 'utf8')) as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> }
+  const servers = Object.values(config.mcpServers ?? {})
+  expect(servers.length, 'the config names no MCP server').toBeGreaterThan(0)
+  for (const server of servers) {
+    const words = [server.command, ...(Array.isArray(server.args) ? server.args : [])]
+      .filter((word): word is string => typeof word === 'string')
+    const paths = words.filter(word => word.includes('/'))
+    expect(
+      paths.some(path => sitsUnderPath(queueRoot, path)),
+      `no path in ${JSON.stringify(words)} names the queue root's own server`,
+    ).toBe(true)
+    expect(
+      paths.every(path => !sitsUnderPath(`${queueRoot}/.proofspec/worktrees`, path)),
+      `a path in ${JSON.stringify(words)} names the TASK's worktree, not the queue root`,
+    ).toBe(true)
+  }
+})
+
+/** Whether `path` names something strictly under `root` — path tokens are read as they
+ *  stand, the way a harness reading its config would hold an absolute one. */
+function sitsUnderPath(root: string, path: string): boolean {
+  return path.startsWith(`${root}/`) && path.slice(root.length + 1) !== ''
+}
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries
+// GIVEN PROOFSPEC_EXECUTOR naming claude
+// WHEN the tmux start command is built
+// THEN it carries `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` as environment variables
+//      naming the main checkout and the TASK, and hands claude one positional kickoff
+//      message telling the session to begin working its TASK
+it('carries the same environment variables and the same positional kickoff message on the claude invocation', async () => {
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+
+  const [, start] = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })
+
+  // The same slice at the flags' own position the pi scenario carries — each -e immediately
+  // precedes the value it names, on the same tmux new-session command either harness runs.
+  const envFlagIndex = start.args.indexOf('-c') + 2
+  expect(start.args.slice(envFlagIndex, envFlagIndex + 4)).toEqual(['-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=dispatch-me'])
+  // The kickoff rides the same environment entry the pi runner reads, and the claude runner
+  // hands it to claude as the one positional prompt argument, leading every flag. An
+  // unattended session handed no first message never begins working its TASK. The same
+  // message, read literally: the claude build's kickoff is the pi build's kickoff, byte
+  // for byte.
+  delete process.env.PROOFSPEC_EXECUTOR
+  const piKickoff = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })[1].args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  const kickoffEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
+  expect(kickoffEnvIndex).toBeGreaterThan(-1)
+  expect(start.args[kickoffEnvIndex - 1]).toBe('-e')
+  expect(start.args[kickoffEnvIndex]).toBe(piKickoff)
+  expect(piKickoff).toMatch(/begin/i)
+  expect(piKickoff).toContain('intentRef')
+  const script = await runnerScriptFrom(start)
+  // The kickoff is claude's one positional prompt argument, leading the flags — `--mcp-config`
+  // takes space-separated values, so a trailing positional after it would be read as one
+  // more config path and the session would die before starting (the acceptance run caught
+  // exactly that). Exactly one occurrence of the kickoff reference: a bad merge that kept a
+  // trailing copy beside the new lead would pass every other check and die live.
+  expect(script.trim().startsWith('exec claude "$PROOFSPEC_KICKOFF"')).toBe(true)
+  expect(script.split('PROOFSPEC_KICKOFF').length - 1, 'the kickoff must appear exactly once in the claude runner').toBe(1)
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux commands run against a dedicated server, never the user's default or any other named one
 // GIVEN the default socket name has not been overridden
 // WHEN the tmux commands to start a TASK's session are built
@@ -320,7 +448,7 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK
 // GIVEN a TASK ready to build
 // WHEN the tmux start command is built
@@ -351,7 +479,7 @@ it('hands pi one positional kickoff message telling the session to begin working
   expect(words[words.length - 1]).toBe('"$PROOFSPEC_KICKOFF"')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target
 // GIVEN PROOFSPEC_TMUX_SOCKET names a different socket
 // WHEN the tmux commands to start a TASK's session are built
@@ -408,7 +536,7 @@ it('reads the live count from the sessions standing on the server itself', async
   }
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree
 // GIVEN startSession's own cwd and a TASK's worktree path
 // WHEN the SessionStart is built

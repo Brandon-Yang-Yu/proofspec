@@ -1,7 +1,7 @@
 # handoff
 
-Wraps `enqueue()`'s already-tested queue write behind one tool call a coding agent inside
-`pi` can make directly, instead of a human hand-writing a MANIFEST by hand. `enqueue(cwd,
+Wraps `enqueue()`'s already-tested queue write behind one tool call a coding agent can
+make directly, instead of a human hand-writing a MANIFEST by hand. `enqueue(cwd,
 task, manifest)` (`src/cli/queue.ts`) already creates a TASK's queue entry once and refuses
 to overwrite one already there — this capability is not that write, but the one hop in front
 of it: validating a TASK name is safe to touch the filesystem with at all, and turning the
@@ -10,8 +10,9 @@ flattened shape a model can produce into the exact `Manifest`/`ManifestBase` `re
 entry already there — one triggered pass over work already dispatched; `inflight` only ever
 reads a queue entry once one exists. Creating the entry in the first place, from a human's
 intent spoken to an agent rather than typed into a file, is a different act, and this is
-where it lives: `enqueue_task` (`src/handoff/extension.ts`), the pi extension tool this
-capability builds.
+where it lives: `enqueue_task` (`src/handoff/extension.ts`), the tool this capability
+builds — the same contract whether the agent reaches it through the `pi` extension or
+through the stdio MCP server (`specs/mcp.md`).
 
 ### Requirement: A TASK name that is not a plain kebab-case slug is refused before the filesystem is touched
 
@@ -123,7 +124,8 @@ it can read and relay to the human, not an exception it has to catch.
 Once `enqueue()` reports a TASK newly queued, `enqueue_task` (`src/handoff/extension.ts`) SHALL
 run one scheduling pass over the queue — the same `schedule` (`src/cli/run.ts`) a human would
 otherwise have to run by hand — using the same real `startSession`/`judge`/`notifyHuman`
-actions the bare CLI supplies (`tmuxStartSession`, `piJudge()`, `stderrNotifyHuman()`), before
+actions the bare CLI supplies (`tmuxStartSession`, the real judge `src/cli/judge.ts`
+supplies, `stderrNotifyHuman()`), before
 `enqueue_task` returns its own result. A refusal to enqueue — the `task` name failed
 validation, or a TASK of that name already exists — SHALL NOT trigger a pass at all: nothing
 new entered the queue, so there is nothing for a pass to react to.
