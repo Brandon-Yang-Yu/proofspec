@@ -1,32 +1,44 @@
 #!/usr/bin/env bash
-# Post-commit hook: refresh the codebase-memory index after each commit.
+# Post-commit hook: refresh the codebase-memory index after each commit, and run a scheduling
+# pass when the commit concludes a merge into main.
 #
-# Runs in the background with `fast` mode (no similarity/semantic edges) so it
-# never delays the commit. If the indexer binary is absent, this is a no-op.
-# Output goes to codebase-memory-index.log inside the git directory.
+# The index refresh runs in the background with `fast` mode (no similarity/semantic edges) so it
+# never delays the commit. If the indexer binary is absent, only that job is skipped.
+# Output goes to codebase-memory-index.log inside the git directory. It only reads the repo and
+# writes to an external index; it never touches the working tree, so it is always safe to run.
 #
-# This hook only reads the repo and writes to an external index; it never
-# touches the working tree, so it is always safe to run.
+# The scheduling pass closes a gap post-merge leaves: a merge that `git merge` does not finish
+# itself — a resolved conflict, or `--no-commit` followed by `git commit` — lands through
+# `git commit` and never fires post-merge. There is no double-firing: a commit made by
+# `git merge` itself fires only post-merge, and a merge concluded by `git commit` fires only
+# post-commit. See specs/handoff.md.
 
 set -euo pipefail
 
-BIN="${CODEBASE_MEMORY_BIN:-$HOME/.local/bin/codebase-memory-mcp}"
-[ -x "$BIN" ] || exit 0
-
-# The index tracks the main checkout, so a linked worktree refreshes nothing.
-# Indexing one would register its path as a project of its own, and that project
-# outlives the worktree: removing the directory leaves an entry pointing nowhere.
-# Work landing on the main checkout is what refreshes the index.
+# Both jobs act on the main checkout only. The index tracks the main checkout, so a linked
+# worktree refreshes nothing: indexing one would register its path as a project of its own, and
+# that project outlives the worktree, leaving an entry pointing nowhere. The queue lives under the
+# main checkout too (specs/schedule.md) — a linked worktree has no .proofspec/dispatch/ to act on.
 [ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ] || exit 0
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # Not "$REPO_ROOT/.git": in a worktree that path is a file, not a directory.
-LOG="$(git rev-parse --absolute-git-dir)/codebase-memory-index.log"
+GIT_DIR_ABS="$(git rev-parse --absolute-git-dir)"
 
-# Detach so the commit returns immediately; the refresh runs on its own.
-nohup "$BIN" cli index_repository \
-  --repo-path "$REPO_ROOT" \
-  --mode fast \
-  >"$LOG" 2>&1 &
+BIN="${CODEBASE_MEMORY_BIN:-$HOME/.local/bin/codebase-memory-mcp}"
+if [ -x "$BIN" ]; then
+  # Detach so the commit returns immediately; the refresh runs on its own.
+  nohup "$BIN" cli index_repository \
+    --repo-path "$REPO_ROOT" \
+    --mode fast \
+    >"$GIT_DIR_ABS/codebase-memory-index.log" 2>&1 &
+fi
+
+# Only a merge commit landing on main triggers a pass — the same branch post-merge watches.
+# HEAD^2 exists only when the commit just made has a second parent.
+if [ "$(git branch --show-current)" = "main" ] && git rev-parse --verify -q HEAD^2 >/dev/null; then
+  # Detach so the commit returns immediately; the pass runs on its own.
+  nohup pnpm --dir "$REPO_ROOT" proofspec schedule >"$GIT_DIR_ABS/schedule.log" 2>&1 &
+fi
 
 exit 0
