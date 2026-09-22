@@ -77,11 +77,11 @@ and asks nothing of a human.
 - "A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it" → tests/schedule/end-to-end.test.ts
 - "A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
 - "A landed branch alone does not settle a TASK whose word is not mergeable" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has landed in main is named for settling" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has not landed in main is not named for settling" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
-- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main" → tests/schedule/end-to-end.test.ts
-- "The landed-in-main check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
+- "A mergeable TASK whose branch has landed in the BASE_BRANCH is named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in the BASE_BRANCH is not named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in the BASE_BRANCH keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH" → tests/schedule/end-to-end.test.ts
+- "The landed check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
 - "The pass's settle kills the TASK's session through the reaper, so the pass has already answered when the kill lands" → tests/schedule/end-to-end.test.ts
 - "The settled TASK's tmux session is killed on the dedicated server" → tests/schedule/session.test.ts
 - "The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch" → tests/schedule/session.test.ts
@@ -194,8 +194,9 @@ is not itself a worktree, reusing it unchanged only when it is — and start `pi
 a detached tmux session named for the TASK, first killing any same-named session already
 there. A creation that fails SHALL throw an error carrying git's own stderr in its
 message, never a bare "could not create" summary in stderr's place. That `pi`
-invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
-environment variables on the tmux `new-session` command, SHALL be run with `--approve`,
+invocation SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and
+`-e PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
+command, SHALL be run with `--approve`,
 `--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`, and SHALL be handed
 one initial user message as `pi`'s positional prompt argument — a message telling the
 session to begin working its TASK, whose exact words are the implementation's to choose. Every tmux command this action runs
@@ -217,9 +218,10 @@ working session on retry. Every tmux command reaches the dedicated server so a T
 can never collide with a session it did not create, and `PROOFSPEC_TMUX_SOCKET` lets a test
 or an acceptance run point at a throwaway, per-run socket.
 
-The session starts inside the TASK's own worktree and needs both facts — where the queue
-lives, and which TASK it is — which this action already holds at the moment it starts the
-session, so it hands them down as the two environment variables. The tool that reports
+The session starts inside the TASK's own worktree and needs three facts — where the
+queue lives, which TASK it is, and which branch its queue measures against — which this
+action already holds at the moment it starts the session, so it hands them down as the
+three environment variables. The tool that reports
 state must load in a freshly created worktree, and the copy it loads must be the current
 one. `--approve` is what lets the tool load there, and the pinned `--extension` points at
 this tool's own checkout rather than whatever the TASK's branch carries. `--no-extensions`
@@ -239,7 +241,7 @@ one kickoff message.
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
-- "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK" → tests/schedule/session.test.ts
+- "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->

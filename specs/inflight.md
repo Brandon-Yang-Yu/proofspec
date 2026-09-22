@@ -60,10 +60,10 @@ already holds. A TASK already merged has nothing left to place on a graph of wha
 still in flight; it is not a TASK with an empty answer, it is not asked.
 
 <!-- scenarios: generated -->
-- "A TASK based on a merged TASK measures against main even though its own branch was" → tests/inflight/end-to-end.test.ts
-- "A TASK whose `base` is `main` is read from its merge-base with `main`" → tests/inflight/bases.test.ts
+- "A TASK based on a merged TASK measures against the BASE_BRANCH even though its own branch was" → tests/inflight/end-to-end.test.ts
+- "A TASK whose `base` is of the `main` shape is read from its merge-base with the BASE_BRANCH" → tests/inflight/bases.test.ts
 - "A TASK whose `base` names a TASK not present in the queue at all carries an" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names a TASK that has merged is read from `main` instead" → tests/inflight/bases.test.ts
+- "A TASK whose `base` names a TASK that has merged is read from the BASE_BRANCH instead" → tests/inflight/bases.test.ts
 - "A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch" → tests/inflight/bases.test.ts
 - "A TASK whose own state has reached merged is not read into the graph at all" → tests/inflight/bases.test.ts
 <!-- /scenarios -->

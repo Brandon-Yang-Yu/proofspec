@@ -139,9 +139,9 @@ whose tool call this is, and a kill that took effect at once would cut the answe
 before the caller ever saw whether the settle succeeded.
 
 <!-- scenarios: generated -->
-- "A settle for a TASK whose branch has not landed in main is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
+- "A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
-- "A settle for a mergeable TASK whose branch has landed in main rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
+- "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts

@@ -188,7 +188,7 @@ it('dispatches a TASK once the TASK it was held on has merged', async () => {
 // GIVEN a TASK whose state word is mergeable, whose branch has already landed in the BASE_BRANCH
 // WHEN a scheduling pass runs
 // THEN the TASK's state word is rewritten to merged
-it('rewrites a mergeable TASK to merged once its branch has landed in main', async () => {
+it('rewrites a mergeable TASK to merged once its branch has landed in the BASE_BRANCH', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   await repo.git(['merge', 'work/a'])
@@ -210,13 +210,25 @@ it('rewrites a mergeable TASK to merged once its branch has landed in main', asy
 // THEN its state word, worktree, and session all stand exactly as they were
 it('keeps a mergeable TASK\'s state word when its branch has not landed', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
-  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
-  await repo.write('.proofspec/dispatch/a/state', 'mergeable')
+  await enterTask(repo, 'unlanded-stand', { edit: 'specs/cli.md' })
+  await repo.write('.proofspec/dispatch/unlanded-stand/state', 'mergeable')
+  // Everything a settle would have torn down stands in the fixture, because the promise is
+  // that all of it still stands after the pass: a worktree at the conventional path and a
+  // live session carrying the TASK's name on the dedicated server.
+  await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'unlanded-stand'), 'work/unlanded-stand'])
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', 'proofspec-test-run', ...args])
+  await tmux(['new-session', '-d', '-s', 'unlanded-stand', 'sleep', '60'])
+  const hasSession = () => tmux(['has-session', '-t', 'unlanded-stand']).then(() => true, () => false)
+  try {
+    const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
 
-  const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
-
-  expect(plan.merged).toEqual([])
-  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
+    expect(plan.merged).toEqual([])
+    await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'unlanded-stand', 'state'), 'utf8')).resolves.toBe('mergeable')
+    await expect(access(join(repo.root, '.proofspec', 'worktrees', 'unlanded-stand'))).resolves.toBeUndefined()
+    await expect(hasSession()).resolves.toBe(true)
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+  }
 })
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
@@ -273,7 +285,7 @@ it('kills the settled TASK\'s session through the reaper, after the pass has ans
 // GIVEN a TASK whose state word is mergeable, whose branch has not yet landed in the BASE_BRANCH
 // WHEN the branch lands and another pass runs
 // THEN the TASK is settled by that pass, because no earlier answer was kept
-it('checks the landed-in-main question fresh from git on each pass', async () => {
+it('checks the landed-in-BASE_BRANCH question fresh from git on each pass', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   await repo.write('.proofspec/dispatch/a/state', 'mergeable')

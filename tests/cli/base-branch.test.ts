@@ -203,6 +203,7 @@ it('settles through a scheduling pass against the branch PROOFSPEC_BASE_BRANCH n
   await repo.git(['checkout', 'main'])
   await queueTask(repo, 'passed', 'mergeable')
   await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'passed'), 'work/passed'])
+  await execFileAsync('tmux', ['-L', SOCKET, 'new-session', '-d', '-s', 'passed', 'sleep', '60'])
   process.env.PROOFSPEC_BASE_BRANCH = development
 
   const outcome = await schedule({ cwd: repo.root })
@@ -210,7 +211,8 @@ it('settles through a scheduling pass against the branch PROOFSPEC_BASE_BRANCH n
   expect(planOf(outcome).merged).toEqual(['passed'])
   await expect(readFile(join(repo.root, '.proofspec', 'archive', 'passed', 'state'), 'utf8')).resolves.toBe('merged')
   await expect(stat(join(repo.root, '.proofspec', 'worktrees', 'passed'))).rejects.toThrow()
-})
+  await expect(sessionGoneWithin('passed', 5000)).resolves.toBe(true)
+}, 10000)
 
 // Requirement: Every place that asks git about the BASE_BRANCH reads one name
 // Scenario: settle_task settles a TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH names

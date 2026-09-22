@@ -476,15 +476,15 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
   const repo = await makeRepo({
-    ...queueEntry('young', { state: 'blocked-on-question' }),
-    ...queueEntry('old', { state: 'queued' }),
+    ...queueEntry('zulu', { state: 'queued' }),
+    ...queueEntry('alpha', { state: 'blocked-on-question' }),
   })
-  await writtenAgo(repo, '.proofspec/dispatch/old/state', 86_400)
-  await writtenAgo(repo, '.proofspec/dispatch/young/state', 5)
+  await writtenAgo(repo, '.proofspec/dispatch/zulu/state', 86_400)
+  await writtenAgo(repo, '.proofspec/dispatch/alpha/state', 5)
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
-  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['old', 'young'])
+  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['alpha', 'zulu'])
 })
 
 // Requirement: The docket reports, and judges nothing

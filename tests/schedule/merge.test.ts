@@ -14,7 +14,7 @@ function landed(except: readonly string[] = []): (branch: string) => Promise<boo
 // GIVEN a TASK whose state word is mergeable, and whose branch is an ancestor of the BASE_BRANCH
 // WHEN the pass decides which TASKs it settles this pass
 // THEN that TASK is named for settling
-it('names a mergeable TASK whose branch has landed in main for settling', async () => {
+it('names a mergeable TASK whose branch has landed in the BASE_BRANCH for settling', async () => {
   const settled = await tasksToMerge([{ task: 'a', word: 'mergeable', branch: 'work/a' }], landed())
 
   expect(settled).toEqual(['a'])
@@ -26,7 +26,7 @@ it('names a mergeable TASK whose branch has landed in main for settling', async 
 // WHEN the pass decides which TASKs it settles this pass
 // THEN that TASK is not named — the state word the settle never reached is the end-to-end
 //      scenario's own to pin, not this pure rule's
-it('does not name a mergeable TASK whose branch has not landed in main', async () => {
+it('does not name a mergeable TASK whose branch has not landed in the BASE_BRANCH', async () => {
   const settled = await tasksToMerge([{ task: 'a', word: 'mergeable', branch: 'work/a' }], landed(['work/a']))
 
   expect(settled).toEqual([])

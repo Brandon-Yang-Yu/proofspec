@@ -132,7 +132,7 @@ it('refuses a TASK whose state word is not mergeable, leaving everything standin
 // GIVEN a TASK whose state word reads mergeable but whose branch has not landed in the BASE_BRANCH, with a worktree standing and a session live
 // WHEN the settle runs
 // THEN it refuses as a value naming which condition failed, and the state word, the worktree, and the session stand exactly as they were
-it('refuses a TASK whose branch has not landed in main, leaving everything standing', async () => {
+it('refuses a TASK whose branch has not landed in the BASE_BRANCH, leaving everything standing', async () => {
   const repo = await makeSettlableTask({ task: 'never-landed', landed: false, word: 'mergeable' })
 
   const result = await runSettleTask({ queueRoot: repo.root, task: 'never-landed' })

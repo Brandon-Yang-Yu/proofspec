@@ -196,7 +196,7 @@ not a git repository, or a revision it cannot resolve — SHALL exit the cannot-
 <!-- scenarios: generated -->
 - "A KEY no touched requirement carries cannot run" → tests/cli/touched.test.ts
 - "A PROOF the change removed is named from the base revision" → tests/cli/touched.test.ts
-- "A change committed since the branch left main is counted" → tests/cli/touched.test.ts
+- "A change committed since the branch left the BASE_BRANCH is counted" → tests/cli/touched.test.ts
 - "A change inside a PROOF names the scenario and where its requirement is written" → tests/cli/touched.test.ts
 - "A changed file that cannot be read back cannot run" → tests/cli/touched.test.ts
 - "A changed run that is nothing but blank lines is not reported" → tests/cli/touched.test.ts
@@ -463,6 +463,14 @@ The name of the branch a repo builds its work on is a fact about the repo, not a
 tool: a repo whose development branch carries another name sets the variable. Two places
 that each spelled the name for themselves would ask about two different branches once the
 variable is set.
+
+<!-- scenarios: generated -->
+- "A scheduling pass settles a mergeable TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH" → tests/cli/base-branch.test.ts
+- "The census measures each TASK against the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
+- "The diff base touched measures from is the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
+- "Unset, every place takes main" → tests/cli/base-branch.test.ts
+- "settle_task settles a TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
+<!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out
 
