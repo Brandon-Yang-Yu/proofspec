@@ -223,7 +223,7 @@ function entryHookFrom(
 /** Whether `path` names something under `root` — the one path relation both "the config
  *  names the queue root's checkout" and "the entry the hook names belongs to the queue
  *  root" turn on. */
-const sitsUnder = (root: string, path: string): boolean => {
+function sitsUnder(root: string, path: string): boolean {
   const relative = relativePath(root, path)
   return relative !== '' && !relative.startsWith('..') && !isAbsolute(relative)
 }
