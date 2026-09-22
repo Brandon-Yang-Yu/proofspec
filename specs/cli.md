@@ -180,8 +180,8 @@ The terminal form SHALL say the same things as the JSON one in each of the three
 person reading a work list wants the address to fetch by; one reading a requirement is walking
 their diff, so its scenarios stay in file order there.
 
-It compares against the branch point with `main` by default, so run inside a task's
-worktree it answers "what did this branch touch"; `--since` names another revision. It
+It compares against the branch point with the BASE_BRANCH by default, so run inside a
+task's worktree it answers "what did this branch touch"; `--since` names another revision. It
 counts the work as it stands — the working tree and files not yet added to git, not only
 what is committed — because in a worktree most of the work is uncommitted most of the time.
 
@@ -450,6 +450,20 @@ page is a dialect of its own.
 - "The listener answers the loopback interface only" → tests/cli/docket-serve.test.ts
 <!-- /scenarios -->
 
+### Requirement: Every place that asks git about the BASE_BRANCH reads one name
+
+Wherever the tools ask git about the BASE_BRANCH, they SHALL read its name from the
+`PROOFSPEC_BASE_BRANCH` environment variable, taking `main` when that variable is unset.
+The diff base `touched` measures a change from, the base the inflight graph's census
+measures each TASK from, the landed check a scheduling pass runs, and the landed check
+`settle_task` runs SHALL all read one resolution of the name, so no two of them measure
+against different branches.
+
+The name of the branch a repo builds its work on is a fact about the repo, not about the
+tool: a repo whose development branch carries another name sets the variable. Two places
+that each spelled the name for themselves would ask about two different branches once the
+variable is set.
+
 ### Requirement: Two revisions can be compared without checking either one out
 
 The CLI SHALL provide a way to compare two named git revisions without checking either one
@@ -457,7 +471,7 @@ out: where their histories last agreed, which paths under a pathspec differ betw
 every path either one holds, and whether one is an ancestor of the other.
 
 The inflight graph asks this of two revisions neither of which is checked out — a task's own
-branch against another task's, or against `main` — without disturbing whatever the caller
+branch against another task's, or against the BASE_BRANCH — without disturbing whatever the caller
 has checked out.
 
 <!-- scenarios: generated -->

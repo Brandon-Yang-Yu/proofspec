@@ -49,15 +49,15 @@ moment's confusion, a TASK wrongly dropped costs the graph its whole purpose.
 
 Computing the graph SHALL read each in-flight TASK's edges relative to the merge-base of
 its own branch with the branch of the TASK its `base` names, when that `base` is of kind
-`task` and the named TASK is itself in flight, and with `main` otherwise. A TASK whose own
-state has reached merged SHALL NOT be read into the graph at all.
+`task` and the named TASK is itself in flight, and with the BASE_BRANCH otherwise. A TASK
+whose own state has reached merged SHALL NOT be read into the graph at all.
 
 A `base` without a live ancestor is not one case but two — a `base` of kind `main`, and a
 `base` of kind `task` naming a TASK that has since merged — and both mean the same thing:
-the work behind that name is now in `main`. Both measure against `main`, and measuring
-against the old branch instead would double-count what `main` already holds. A TASK already
-merged has nothing left to place on a graph of what is still in flight; it is not a TASK
-with an empty answer, it is not asked.
+the work behind that name is now in the BASE_BRANCH. Both measure against the BASE_BRANCH,
+and measuring against the old branch instead would double-count what the BASE_BRANCH
+already holds. A TASK already merged has nothing left to place on a graph of what is
+still in flight; it is not a TASK with an empty answer, it is not asked.
 
 <!-- scenarios: generated -->
 - "A TASK based on a merged TASK measures against main even though its own branch was" → tests/inflight/end-to-end.test.ts

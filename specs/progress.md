@@ -116,7 +116,7 @@ TASK it settles the same way `report_task_state` does — from `PROOFSPEC_QUEUE_
 `PROOFSPEC_TASK`, never from `ExtensionContext.cwd` — refusing when either is unset. It
 SHALL never take its caller's word for the settle conditions: on every call it SHALL read
 the TASK's current state word from the queue, and check its MANIFEST's `branch` is an
-ancestor of `main`, fresh from git. Either condition failing, it SHALL refuse as a value —
+ancestor of the BASE_BRANCH, fresh from git. Either condition failing, it SHALL refuse as a value —
 `{ok: false, reason}` naming which condition failed — touching nothing: the state word, the
 worktree, and the session stand exactly as they were. Both holding, it SHALL perform the
 settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its

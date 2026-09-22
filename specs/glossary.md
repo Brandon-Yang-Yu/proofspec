@@ -57,16 +57,29 @@ The append-only record of judgements: one line per reviewed PROMISE, filed under
 was judged under. A line is a fact about a KEY, so two branches that both reviewed both keep
 their lines.
 
+### Term: BASE_BRANCH
+
+The branch every TASK's work is built on, measured against, and settled into. It is the
+branch the `PROOFSPEC_BASE_BRANCH` environment variable names, or `main` when that
+variable is unset.
+
+It is the base a repo chooses to build on, not the main branch under another name. A
+TASK's branch landing in the BASE_BRANCH ends the TASK's life in the queue; where the
+branch travels afterwards is the repo's own flow, and no concern of the queue.
+
 ### Term: MANIFEST
 
 The JSON hand-off a TASK's own worktree carries: an `intentRef` saying where the change
 intent is written, a `branch` on which the TASK's work is built, and a `base` naming
 what this TASK's worktree was built on — always one of two shapes: `{kind: 'main'}`, or
 `{kind: 'task', task, reason}` when this TASK's worktree was deliberately built on
-another in-flight TASK's own worktree instead. The `task` shape carries the reason
-argued because choosing to build on another TASK instead of `main` is an intent a git
-fact alone cannot express; the `main` shape needs nothing more, because building on
-`main` is the default course, and the default course is the one with nothing to argue.
+another in-flight TASK's own worktree instead. The `{kind: 'main'}` shape says the
+worktree was built on the BASE_BRANCH, whatever that branch is actually called. The
+shape predates the setting and its name stays, so a MANIFEST already on disk keeps
+reading the same. The `task` shape carries the reason argued because choosing to build
+on another TASK instead of the BASE_BRANCH is an intent a git fact alone cannot express;
+the `main` shape needs nothing more, because building on the BASE_BRANCH is the default
+course, and the default course is the one with nothing to argue.
 
 The `intentRef` is read by one rule with two shapes. The reserved name `INTENT` names
 the TASK's own queue entry's `INTENT` file — `.proofspec/dispatch/<task>/INTENT`, a

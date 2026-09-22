@@ -31,11 +31,11 @@ live.
 - "A held TASK is never ready to dispatch, however queued its own word is" → tests/schedule/lease.test.ts
 <!-- /scenarios -->
 
-### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 
 A scheduling pass SHALL settle a TASK when both conditions hold: the TASK's current state
-word is `mergeable`, and its MANIFEST's `branch` is an ancestor of `main`. A settle SHALL
-rewrite the TASK's state file to `merged`, remove its worktree at its conventional path,
+word is `mergeable`, and its MANIFEST's `branch` is an ancestor of the BASE_BRANCH. A settle
+SHALL rewrite the TASK's state file to `merged`, remove its worktree at its conventional path,
 and kill its same-named tmux session on the dedicated server, in that order — so a TASK the
 queue has settled leaves nothing checked out behind it. Both conditions SHALL be checked
 fresh from git at the moment of the settle, never from bookkeeping. A TASK failing either
@@ -56,7 +56,7 @@ time a pass runs. Neither caller is trusted on its word: the settle verifies bot
 conditions from git itself.
 
 Both conditions are required because each covers the other's blind spot. A branch is an
-ancestor of `main` from the moment it is cut, so ancestry alone would mark a freshly
+ancestor of the BASE_BRANCH from the moment it is cut, so ancestry alone would mark a freshly
 queued TASK `merged` before any work happened; the `mergeable` word is the executor's own
 claim the work is done. And `mergeable` alone is only a claim — the landing in git is
 the proof, which is exactly what the ancestor check supplies.
