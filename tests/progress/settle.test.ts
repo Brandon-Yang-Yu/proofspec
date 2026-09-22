@@ -113,7 +113,7 @@ it('refuses to settle when PROOFSPEC_TASK is not set, writing nothing', async ()
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
 // Scenario: A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were
-// GIVEN a TASK whose branch has landed in main but whose state word reads building, with a worktree standing and a session live
+// GIVEN a TASK whose branch has landed in the BASE_BRANCH but whose state word reads building, with a worktree standing and a session live
 // WHEN the settle runs
 // THEN it refuses naming the word building, and the state still reads building, the worktree still stands, and the session is still live
 it('refuses a TASK whose state word is not mergeable, leaving everything standing', async () => {
@@ -128,10 +128,10 @@ it('refuses a TASK whose state word is not mergeable, leaving everything standin
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
-// Scenario: A settle for a TASK whose branch has not landed in main is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were
-// GIVEN a TASK whose state word reads mergeable but whose branch has not landed in main, with a worktree standing and a session live
+// Scenario: A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were
+// GIVEN a TASK whose state word reads mergeable but whose branch has not landed in the BASE_BRANCH, with a worktree standing and a session live
 // WHEN the settle runs
-// THEN it refuses naming the branch, and the state still reads mergeable, the worktree still stands, and the session is still live
+// THEN it refuses as a value naming which condition failed, and the state word, the worktree, and the session stand exactly as they were
 it('refuses a TASK whose branch has not landed in main, leaving everything standing', async () => {
   const repo = await makeSettlableTask({ task: 'never-landed', landed: false, word: 'mergeable' })
 
@@ -146,10 +146,10 @@ it('refuses a TASK whose branch has not landed in main, leaving everything stand
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
-// Scenario: A settle for a mergeable TASK whose branch has landed in main rewrites the state to merged and removes the TASK's worktree
-// GIVEN a TASK whose state word reads mergeable and whose branch has landed in main, with a worktree standing at its conventional path
+// Scenario: A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree
+// GIVEN a TASK whose state word reads mergeable and whose branch has landed in the BASE_BRANCH, with a worktree standing at its conventional path
 // WHEN the settle runs
-// THEN the entry's state file reads merged, and nothing stands at the worktree's conventional path
+// THEN the state word is rewritten to merged and the worktree is removed
 it('settles a mergeable TASK whose branch has landed, rewriting the state and removing the worktree', async () => {
   const repo = await makeSettlableTask({ task: 'settled', landed: true, word: 'mergeable' })
 

@@ -20,6 +20,7 @@ afterEach(cleanupRepos)
 // against. The same pattern `judge-cli.test.ts` already uses for its own env overrides.
 afterEach(() => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
+  delete process.env.PROOFSPEC_BASE_BRANCH
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
@@ -94,7 +95,7 @@ it('throws an error carrying git\'s own stderr when creating the worktree fails'
   )
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch
 // GIVEN a TASK with a worktree standing at its conventional path
 // WHEN the settled TASK's teardown runs
@@ -116,7 +117,7 @@ it('removes the settled TASK\'s worktree and frees its branch for a later dispat
   await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'a'), 'work/a'])
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: The settled TASK's tmux session is killed on the dedicated server
 // GIVEN a TASK the queue has settled, and a tmux session still carrying its name
 // WHEN the settled TASK's teardown runs
@@ -183,17 +184,24 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
-// Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK
-// GIVEN a TASK and its worktree
+// Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against
+// GIVEN a ready TASK whose queue measures against a BASE_BRANCH other than main
 // WHEN the tmux start command is built
-// THEN it carries PROOFSPEC_QUEUE_ROOT naming the main checkout and PROOFSPEC_TASK naming the TASK
-it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on the start command', () => {
+// THEN it hands the session the queue's checkout, the TASK's name, and that branch as
+//      environment variables, so a session that settles measures against the same branch
+//      its queue was built on
+it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables on the start command', () => {
+  process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   // A slice at the flags' own position, not arrayContaining — proves each -e immediately
-  // precedes the value it names, not just that all four tokens appear somewhere in args.
+  // precedes the value it names, not just that all six tokens appear somewhere in args.
   const envFlagIndex = start.args.indexOf('-c') + 2
-  expect(start.args.slice(envFlagIndex, envFlagIndex + 4)).toEqual(['-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a'])
+  expect(start.args.slice(envFlagIndex, envFlagIndex + 6)).toEqual([
+    '-e', 'PROOFSPEC_QUEUE_ROOT=/repo',
+    '-e', 'PROOFSPEC_TASK=a',
+    '-e', 'PROOFSPEC_BASE_BRANCH=bDev',
+  ])
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed

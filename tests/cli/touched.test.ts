@@ -203,8 +203,8 @@ it('reports cannot-run for an address no touched requirement carries', async () 
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A change committed since the branch left main is counted
-// GIVEN a branch that has committed a change to a PROOF since it left main
+// Scenario: A change committed since the branch left the BASE_BRANCH is counted
+// GIVEN a branch that has committed a change to a PROOF since it left the BASE_BRANCH
 // WHEN the touched command runs
 // THEN its requirement counts the scenario among those reached, because the question is what
 //      this branch touched rather than what is uncommitted

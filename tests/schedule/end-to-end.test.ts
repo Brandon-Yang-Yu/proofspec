@@ -183,12 +183,11 @@ it('dispatches a TASK once the TASK it was held on has merged', async () => {
   expect(plan.started).toEqual(['b'])
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
-// Scenario: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
-// GIVEN a TASK whose state word is mergeable, whose branch has already landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
+// Scenario: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
+// GIVEN a TASK whose state word is mergeable, whose branch has already landed in the BASE_BRANCH
 // WHEN a scheduling pass runs
-// THEN the TASK is reported settled, its state word rewritten to merged and its entry pruned
-//      in the same pass
+// THEN the TASK's state word is rewritten to merged
 it('rewrites a mergeable TASK to merged once its branch has landed in main', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
@@ -204,11 +203,11 @@ it('rewrites a mergeable TASK to merged once its branch has landed in main', asy
   expect(remaining).not.toContain('a')
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
-// Scenario: A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands
-// GIVEN a TASK whose state word is mergeable, whose branch has not landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
+// Scenario: A mergeable TASK whose branch has not landed in the BASE_BRANCH keeps its state word exactly as it stands
+// GIVEN a TASK whose state word is mergeable, whose branch has not landed in the BASE_BRANCH
 // WHEN a scheduling pass runs
-// THEN the TASK's state file still reads mergeable, and the pass settles nothing
+// THEN its state word, worktree, and session all stand exactly as they were
 it('keeps a mergeable TASK\'s state word when its branch has not landed', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
@@ -220,9 +219,9 @@ it('keeps a mergeable TASK\'s state word when its branch has not landed', async 
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands
-// GIVEN a TASK whose branch has landed in main, whose state word is building — the executor\'s
+// GIVEN a TASK whose branch has landed in the BASE_BRANCH, whose state word is building — the executor\'s
 //      own word for a session still live
 // WHEN a scheduling pass runs
 // THEN the TASK's state file still reads building — a landed branch alone never settles a TASK
@@ -238,9 +237,9 @@ it('keeps a landed TASK\'s state word when it is not mergeable', async () => {
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('building')
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: The pass's settle kills the TASK's session through the reaper, so the pass has already answered when the kill lands
-// GIVEN a mergeable TASK whose branch has landed in main, with a live tmux session carrying its name on the dedicated server
+// GIVEN a mergeable TASK whose branch has landed in the BASE_BRANCH, with a live tmux session carrying its name on the dedicated server
 // WHEN a scheduling pass runs and answers
 // THEN the session is still live at the moment the pass answers, and is gone within a few seconds after
 // The task name is unique in this suite because the reaper kills by that name: a shared name
@@ -269,12 +268,11 @@ it('kills the settled TASK\'s session through the reaper, after the pass has ans
   }
 }, 10000)
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
-// Scenario: The landed-in-main check is made fresh from git on each pass, never from bookkeeping
-// GIVEN a TASK whose state word is mergeable, whose branch has not yet landed in main
-// WHEN a first pass runs, then the branch is merged into main, then a second pass runs
-// THEN the first pass settles nothing, and the second settles it — the same pass shape answers
-//      differently once git alone has changed
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
+// Scenario: The landed check is made fresh from git on each pass, never from bookkeeping
+// GIVEN a TASK whose state word is mergeable, whose branch has not yet landed in the BASE_BRANCH
+// WHEN the branch lands and another pass runs
+// THEN the TASK is settled by that pass, because no earlier answer was kept
 it('checks the landed-in-main question fresh from git on each pass', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
@@ -293,9 +291,9 @@ it('checks the landed-in-main question fresh from git on each pass', async () =>
   expect(remaining).not.toContain('a')
 })
 
-// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+// Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it
-// GIVEN a TASK based on another whose state word is mergeable and whose branch has landed in main
+// GIVEN a TASK based on another whose state word is mergeable and whose branch has landed in the BASE_BRANCH
 // WHEN a scheduling pass runs
 // THEN the pass settles the held-on TASK, and dispatches the held TASK in that same pass — the
 //      hold never outlives the state word it reads
