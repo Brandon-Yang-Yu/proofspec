@@ -170,7 +170,7 @@ passes triggered at the same instant can each see three live sessions and each s
 five, briefly — and closing that window would take a lock over the whole queue, which this
 design declines to build. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
 bound point at a throwaway socket and a bound of one, rather than start four real sessions
-on the production server.
+on the repo's own server.
 
 <!-- scenarios: generated -->
 - "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
@@ -208,8 +208,10 @@ own MCP server (`specs/mcp.md`); where that generated config file is written is 
 implementation's choice, and which server it names is not. Every tmux command this action
 runs SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L
 <socket>` flag rather than the default server — never the user's own default tmux server,
-and never any other named server — with a default socket name of `proofspec`, overridable
-through the `PROOFSPEC_TMUX_SOCKET` environment variable.
+and never any other named server — and its default socket name SHALL be per-repo:
+`proofspec-<short hash>`, where `<short hash>` is the short hash of the queue root's
+absolute path, so two repos on one machine never share a server. `PROOFSPEC_TMUX_SOCKET`
+SHALL override the derived name.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a

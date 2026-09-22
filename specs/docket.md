@@ -123,7 +123,7 @@ and nothing aggregated is stored anywhere.
 ### Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
 
 Each row SHALL say whether the dedicated tmux server — the one `startSession` runs executor
-sessions on, reached through the same `PROOFSPEC_TMUX_SOCKET` override with the same default
+sessions on, reached through the same `PROOFSPEC_TMUX_SOCKET` override with the same per-repo default
 (`specs/schedule.md`) — holds a session named for the TASK, by asking that server for its
 session list once and matching names, and a session that is listed SHALL have its exact
 attach command carried on the row. A session not listed SHALL be marked absent, and nothing
