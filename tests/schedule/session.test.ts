@@ -196,7 +196,7 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
 
   // Pairwise scans, not a positional slice — the STANDARD and the CLAIM name three
   // variables without ordering them, and a flag appended after another -e (KICKOFF,
-  // say) still satisfies both. Each scan proves some -e immediately precedes the value
+  // say) still satisfies them. Each scan proves some -e immediately precedes the value
   // it names.
   const carries = (value: string): boolean => {
     for (let i = 0; i + 1 < start.args.length; i++) {
