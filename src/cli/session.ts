@@ -361,14 +361,21 @@ function reapSession(task: string): void {
 
 /** Runs a command, throwing when it could not even start or exited non-zero — unlike the kill
  * above, `tmux new-session` failing is a real fault (tmux missing, a broken server) worth
- * surfacing rather than silently reporting a session that was never actually started. */
+ * surfacing rather than silently reporting a session that was never actually started. The
+ * thrown message carries tmux's own stderr, the same standard a failed worktree creation
+ * keeps — a bare exit-code summary names no cause, and the causes tmux names (a socket
+ * directory that is not a directory, say) are actionable. */
 function runOrThrow(command: TmuxCommand): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command.command, [...command.args], { stdio: 'ignore' })
+    const child = spawn(command.command, [...command.args], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', chunk => {
+      stderr += chunk
+    })
     child.once('error', reject)
     child.once('exit', code => {
       if (code === 0) resolve()
-      else reject(new Error(`${command.command} ${command.args.join(' ')} exited with code ${code}`))
+      else reject(new Error(`${commandLine(command)}: ${stderr.trim()}`))
     })
   })
 }
