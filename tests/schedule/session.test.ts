@@ -2,7 +2,7 @@
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, symlinkSync } from 'node:fs'
+import { existsSync, realpathSync, symlinkSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -666,6 +666,15 @@ it('derives the default socket from the queue root, so two repos never share a s
     const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' }).map(socketOf)
     const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: 'you are the executor' }).map(socketOf)
     for (const socket of [...byRoot, ...byAlias]) expect(socket).toMatch(/^proofspec-.+$/)
+    // The named rule itself, held absolutely where the root stands — the port test's own
+    // form: the rule computed locally from the canonical root, the built commands held to
+    // it, so no digest variant that switches on the root's existence can pass.
+    expect(byRoot[0]).toBe(`proofspec-${createHash('sha256').update(realpathSync(root)).digest('hex').slice(0, 8)}`)
+    // And a queue-root-only surface tied to a production-facts build: the list command,
+    // built for this root alone with no worktree fact of its own, names the same server
+    // the worktree-on-disk build named — a canonicalization keyed on the worktree's
+    // existence splits them and dies here.
+    expect(socketOf(tmuxListSessionsCommand(root))).toBe(byRoot[0])
     // The within-build tie too, for roots that stand on disk — the same one-server fact
     // `socketForRoot` holds for the synthetic roots, so this proof carries it for both.
     expect(new Set(byRoot).size).toBe(1)
