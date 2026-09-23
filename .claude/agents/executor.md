@@ -179,15 +179,54 @@ changed test files:
     BASE="$(git merge-base HEAD main)"
     { git diff --name-only "$BASE" -- tests; \
       git ls-files --others --exclude-standard -- tests; } \
-      | sort -u | xargs sha256sum | sha256sum
+      | sort -u | xargs sha256sum
 
-At the fixpoint check, recompute it: a digest that differs from the one recorded at the
-last dispatch means a test changed since — reported or not — and one more pass runs before
-anything counts as clean. The fixpoint is both gates clean on the final measured shape:
-a test-reviewer pass with no findings AND `touched` exiting 0. Trust exit codes and digests,
-not prose. The reason the rule exists: the cheapest way to turn a red test green is to
-weaken the test, so a test edited during build-green is the one edit that must never skip
-review.
+The digest is the per-file lines — each changed test file's own line of `<sha256>  <path>`
+— so the measurement answers *what* changed, file by file, and per-file survival becomes
+observable. At the fixpoint check, recompute it: a digest that differs from the one
+recorded at the last dispatch means a test changed since — reported or not — and one more
+pass runs before anything counts as clean. The fixpoint is both gates clean on the final
+measured shape: a test-reviewer pass with no findings AND `touched` exiting 0. Trust exit
+codes and digests, not prose.
+
+On the per-file digest runs a counter — on change, not on verdict:
+
+    unit    one test file's own line in the per-file digest
+    +1      the line survives one test-reviewer dispatch unchanged
+    frozen  at 3 — the file leaves the read set of later dispatches
+    reset   to 0 on any of the three conditions below
+
+Three and not one, because the reviewer is a fresh cold read every dispatch: repeat reads
+of unchanged bytes buy independent samples against reviewer error, not freshness. Three
+samples settle a file. Change and not verdict, because per-file verdicts would have to be
+read out of the reviewer's prose, and the rule this reaction already runs on is "Trust
+exit codes and digests, not prose." The digest is the whole ledger; nothing else is
+consulted.
+
+The three resets:
+
+1. **The file's own line changed** — the test was actually edited. The edit this matters
+   most for is a test edited on the way to green, which is the one edit the reaction
+   exists to catch; such a file re-earns its three from zero.
+2. **A support file it imports changed.** `tests/cli/support.ts` is imported by at least
+   ten test files across six directories; loosening `makeGitRepo` or `enterTask` weakens
+   every importer without changing one byte in the importers, so a frozen file unfreezes
+   when its support changes. Listing the importers with `grep -l` is enough; no
+   dependency graph is needed.
+3. **The PLAN changed** — the whole set resets. A frozen file is otherwise judged against
+   a CLAIM that no longer stands.
+
+The counter only shrinks a dispatch's read set; it never causes a dispatch. The fixpoint
+stands exactly as written — a test-reviewer pass with no findings AND `touched` exiting 0,
+both on the current digest — so a TASK clean on round 1 does one full read, as today.
+
+An incremental dispatch says in its own brief that the bijection, every CLAIM with exactly
+one PROOF, is machine-checked by `pnpm proofspec touched`, and asks only for proof strength
+on the files it carries. Without that sentence the reviewer reconstructs the set on its own
+and the saving is handed back.
+
+The reason the rule exists: the cheapest way to turn a red test green is to weaken the
+test, so a test edited during build-green is the one edit that must never skip review.
 
 ## Build to green
 One worker — the implementer (the project-level `implementer` persona) — holding the whole PLAN.

@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
+import type { FireSchedulingPass } from '../cli/settle.ts'
 import { createToolCore, piExecute, registrationsFor, resolveCore, refreshHeartbeat } from '../mcp/core.ts'
 import type { CoreInjection, PiToolResult, ToolCore, ToolName } from '../mcp/core.ts'
 
@@ -36,8 +37,8 @@ const PROGRESS_TOOLS: readonly ToolName[] = ['report_task_state', 'report_task_p
  * them behaves exactly like calling the registered tool: same rules, same answers, with no
  * test-injected core in between.
  */
-function defaultCore(): ToolCore {
-  return createToolCore()
+function defaultCore(fireSchedulingPass?: FireSchedulingPass): ToolCore {
+  return createToolCore({ fireSchedulingPass })
 }
 
 /** `report_task_state`'s pi boundary — pulled out so a test can call it directly with a
@@ -69,15 +70,18 @@ export function executeReportTaskPhase(
 /** `settle_task`'s pi boundary, pulled out for the same reason: a test calls it with a
  *  constructed `ExtensionContext` and proves the settle resolves its queue from the
  *  environment, never from `ctx.cwd`. The settle itself is the shared one the scheduling pass
- *  runs — the tool adds no conditions of its own and skips none. */
+ *  runs — the tool adds no conditions of its own and skips none. The five leading params are
+ *  the execute signature pi imposes; what this boundary adds of its own rides the trailing
+ *  options object, so the addition never compounds the imposed positionals (style rule 4). */
 export function executeSettleTask(
   toolCallId: string,
   params: Readonly<Record<string, unknown>>,
   signal: AbortSignal | undefined,
   onUpdate: unknown,
   ctx: ExtensionContext,
+  options?: { readonly fireSchedulingPass?: FireSchedulingPass },
 ): Promise<PiToolResult> {
-  return piExecute(defaultCore(), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
+  return piExecute(defaultCore(options?.fireSchedulingPass), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
 }
 
 /**
