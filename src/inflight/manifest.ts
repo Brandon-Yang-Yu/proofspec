@@ -26,12 +26,15 @@ export function readManifest(source: string): ManifestRead {
     : { ok: true, manifest: { intentRef, branch, blocked: blocked.blocked } }
 }
 
+/** A `blocked` field's read: shaped and carried, refused naming why, or absent outright. */
+type BlockedRead =
+  | { readonly ok: true; readonly blocked: NonNullable<Manifest['blocked']> }
+  | { readonly ok: false; readonly reason: string }
+
 /** A `blocked` field: absent means blocked by nothing, and present means it must carry both
  *  its `task` and its `reason` — a field that names a blocker without saying why, or argues
  *  a wait behind nobody, is refused naming the limb it stands without. */
-function readBlocked(
-  value: unknown,
-): { readonly ok: true; readonly blocked: { readonly task: string; readonly reason: string } } | { readonly ok: false; readonly reason: string } | undefined {
+function readBlocked(value: unknown): BlockedRead | undefined {
   if (value === undefined) return undefined
   const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
   const task = record['task']

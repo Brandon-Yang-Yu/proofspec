@@ -121,7 +121,7 @@ export type AncestorRead = { readonly ok: true; readonly isAncestor: boolean } |
 
 /**
  * Where two named revisions last agreed, without checking either one out. `inflight` measures
- * a task's branch against another task's, or against the BASE_BRANCH, and neither is the working tree.
+ * every TASK's branch against the BASE_BRANCH, and never the working tree.
  */
 export async function mergeBase(options: { readonly cwd: string; readonly a: string; readonly b: string }): Promise<MergeBaseRead> {
   const a = await verifiedRevision(options.cwd, options.a)

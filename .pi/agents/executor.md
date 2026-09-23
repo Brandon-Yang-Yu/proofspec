@@ -74,9 +74,9 @@ Dispatch a fresh claim-writer (the project-level `claim-writer` persona) with th
 **affected spec files**, the explorer's two maps, and the PLAN's path in the TASK's
 queue entry (the main checkout's `.proofspec/dispatch/<task>/`, named by
 `$PROOFSPEC_QUEUE_ROOT` and `$PROOFSPEC_TASK`). The affected spec files are the
-`specs/*.md` this branch changes against the base it forked from
-(`git diff --name-only "$(git merge-base HEAD <base>)" HEAD -- specs/` — the MANIFEST
-names the base), always plus `specs/glossary.md`. Never hand a worker the whole
+`specs/*.md` this branch changes against the BASE_BRANCH
+(`git diff --name-only "$(git merge-base HEAD main)" HEAD -- specs/`), always plus
+`specs/glossary.md`. Never hand a worker the whole
 `specs/` tree when a few files carry the changes. It translates each affected requirement's
 STANDARD into CLAIM drafts, reconciles old proof per the PROOF MAP, names each
 requirement's one test file, and writes the PLAN itself — the drafter writes, nobody
@@ -104,7 +104,7 @@ leakage into implementation detail.
 Scope both sides of that judgment, and never pay for the whole tree:
 
 - **STANDARDs** — the same affected spec files the claim-writer received: the ones this
-  branch changed against its base, plus `specs/glossary.md`. Name them in the dispatch;
+  branch changed against the BASE_BRANCH, plus `specs/glossary.md`. Name them in the dispatch;
   never hand the reviewer "the `specs/*.md` on the branch" — a file with no CLAIM
   against it cannot produce a finding, only cost.
 - **CLAIMs** — the first pass judges every CLAIM in the PLAN, all of them new. Every
