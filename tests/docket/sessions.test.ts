@@ -127,13 +127,12 @@ it('asks the repo\'s own dedicated server for the session list, honoring the soc
   expect(socketOf(tmuxListSessionsCommand(queueRoot))).toBe(derived)
   expect(socketOf(tmuxAttachCommand('alpha', queueRoot))).toBe(derived)
 
-  // The runtime half: the docket's served ask is the zero-argument reader, which sources
-  // its queue root from the cwd it runs in — the same fact PROOFSPEC_QUEUE_ROOT carries. A
-  // session stands on a real root's own derived server, the reader runs from inside that
-  // root, and the names come back — proving the runtime ask and the built command name one
-  // server, with no override anywhere to hide a wrong root behind. `derivedSocketFor` holds
-  // the shape before any tmux runs, so the red suite can never stand a session on the
-  // machine's real bare-name server by way of the retired default.
+  // The runtime half: the docket's served ask is the reader itself, handed the queue root
+  // the docket was answered for. A session stands on a real root's own derived server, the
+  // reader asks for that root, and the names come back — proving the runtime ask and the
+  // built command name one server, with no override anywhere to hide a wrong root behind.
+  // `derivedSocketFor` holds the shape before any tmux runs, so the red suite can never
+  // stand a session on the machine's real bare-name server by way of the retired default.
   const root = await mkdtemp(join(tmpdir(), 'proofspec-docket-socket-'))
   const rootDerived = derivedSocketFor(root)
   const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', rootDerived, ...args])
@@ -145,16 +144,13 @@ it('asks the repo\'s own dedicated server for the session list, honoring the soc
   // answers ['alpha'].
   const decoy = 'proofspec-test-docket-decoy'
   const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
-  const wasCwd = process.cwd()
   try {
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})
     await askDerived(['new-session', '-d', '-s', 'alpha', 'sleep', '60'])
     await askDecoy(['new-session', '-d', '-s', 'beta', 'sleep', '60'])
-    process.chdir(root)
-    await expect(listTmuxSessions()).resolves.toEqual(['alpha'])
+    await expect(listTmuxSessions(root)).resolves.toEqual(['alpha'])
   } finally {
-    process.chdir(wasCwd)
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})
     await rm(root, { recursive: true, force: true })

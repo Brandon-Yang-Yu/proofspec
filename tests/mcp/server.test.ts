@@ -78,7 +78,12 @@ type ToolCore = Record<ToolName, CoreRule>
 type PiExtensionEntry = (pi: ExtensionAPI, options?: { readonly core?: ToolCore }) => void
 
 /** `createToolCore` as this proof drives it. */
-type CreateToolCore = (options?: { readonly scheduleActions?: Record<string, unknown> }) => ToolCore
+type CreateToolCore = (options?: {
+  readonly scheduleActions?: Record<string, unknown>
+  /** The settle's fired scheduling pass, injected here for the same reason the schedule
+   *  actions are: to keep a proof of transport equality from ever starting a real pass. */
+  readonly fireSchedulingPass?: () => void
+}) => ToolCore
 
 /** `serveMcp` as this proof drives it: serve the core over a stdio pair, closable on demand. */
 type ServeMcp = (options: {
@@ -397,7 +402,7 @@ it('registers each tool under the same parameters on both transports', async () 
 // WHEN one copy is carried by the pi extension and the other by the MCP server
 // THEN the two answers are exactly the same value, for every tool, result and refusal alike
 it('answers the same values whichever transport carries the call, for every tool', async () => {
-  const core = createCore({ scheduleActions: {} })
+  const core = createCore({ scheduleActions: {}, fireSchedulingPass: () => {} })
   const piTools = registerPiTools(core)
 
   // enqueue_task — a fresh TASK queued (each transport against its own copy, the call

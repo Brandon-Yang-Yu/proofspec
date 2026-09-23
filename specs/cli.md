@@ -428,25 +428,33 @@ is this command's reader. The JSON form carries the same content.
 The CLI SHALL provide a way to serve the docket as a page: the `docket` command, asked to
 serve, SHALL answer the page at the root and the JSON the page reads at `/docket`, and
 SHALL run until stopped. The listener SHALL bind the loopback interface by default, and
-the interface a caller names with `--host`. It SHALL listen on port 4567 by default, and
-on the port a caller names with `--port`.
+the interface a caller names with `--host`. It SHALL listen by default on the port derived
+from the queue root's absolute path: 4567 plus the numeric value of that path's SHA-256
+digest taken modulo 1000, a number from 4567 through 5566, computed the same way every
+run. It SHALL listen on the port a caller names with `--port`. When the port a run wants
+is already taken, the command SHALL fail fast, naming the port it could not get and
+naming `--port` as the override, and SHALL NOT fall back to another port on its own.
 
 Serving is a command, not a daemon: a person asks for the page the way they ask for any
 other answer, and stopping it is closing the terminal it runs in. The loopback interface
 is the default because the docket names this machine's queue, this machine's sessions,
 and this machine's ruling debts. Naming an interface with `--host` is the caller choosing
 who reads. `0.0.0.0` is the spelling that answers every interface the machine has, so the
-docket can be watched from another device on the same network. The port is conventional
-so the URL is memorable, and overridable so a second instance can run beside a first.
+docket can be watched from another device on the same network. The port is derived from the queue
+root so two repos on one machine serve side by side with no configuration, and the same
+repo keeps the same port so its URL stays stable. A collision between two repos' derived
+ports fails outright and names `--port`, rather than moving a URL nobody told the browser
+about.
 The JSON it answers at `/docket` is the one answer the page reads, so nothing about the
 page is a dialect of its own.
 
 <!-- scenarios: generated -->
 - "A named --host is the interface served on" → tests/cli/docket-serve.test.ts
 - "A port a caller names is the port served on" → tests/cli/docket-serve.test.ts
+- "A port already taken fails the serve fast, naming the port it could not get and --port as the override" → tests/cli/docket-serve.test.ts
 - "Asked to serve, the command answers the page at / and the JSON the page reads at /docket" → tests/cli/docket-serve.test.ts
 - "Serving runs until stopped, and stopping releases the port" → tests/cli/docket-serve.test.ts
-- "The listener answers the loopback interface at port 4567 by default" → tests/cli/docket-serve.test.ts
+- "The listener answers the loopback interface on the port derived from the queue root by default" → tests/cli/docket-serve.test.ts
 - "The listener answers the loopback interface only" → tests/cli/docket-serve.test.ts
 <!-- /scenarios -->
 

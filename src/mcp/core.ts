@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
 import { piJudge } from '../cli/judge.ts'
@@ -6,7 +7,7 @@ import { appendPhaseHistory, enqueue, readPhase, writeHeartbeat, writePhase, wri
 import { schedule } from '../cli/run.ts'
 import { liveSessionCount, tmuxStartSession } from '../cli/session.ts'
 import { settleTask } from '../cli/settle.ts'
-import type { SettleResult } from '../cli/settle.ts'
+import type { FireSchedulingPass, SchedulingPassPlan, SettleResult } from '../cli/settle.ts'
 import type { Outcome } from '../cli/types.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
 import { BUILDING } from '../schedule/types.ts'
@@ -187,8 +188,8 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
  * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` the same way `report_task_state` does, refusing
  * rather than guessing when either is missing — is the rule's, here in the core.
  */
-export function runSettleTask(env: ReportEnv): Promise<SettleResult> {
-  return settleTask({ queueRoot: env.queueRoot, task: env.task })
+export function runSettleTask(env: ReportEnv, fireSchedulingPass?: FireSchedulingPass): Promise<SettleResult> {
+  return settleTask({ queueRoot: env.queueRoot, task: env.task, fireSchedulingPass })
 }
 
 /**
@@ -271,6 +272,20 @@ function realScheduleActions(cwd: string): ScheduleActions {
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   }
+}
+
+/** The real fire a successful settle runs when nothing else is given: starts the pass the
+ *  plan names the way the reaper is started (`reapSession`, `src/cli/session.ts`) — detached
+ *  and unref'd, in a process group of its own — so the pass survives the settle's own
+ *  teardown. The settle awaits only whether the pass *started* (never its exit): a start
+ *  that cannot even happen surfaces as the ok limb's finding, never a failed settle. */
+function realFireSchedulingPass(plan: SchedulingPassPlan): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(plan.command, [...plan.args], { detached: true, stdio: 'ignore' })
+    child.once('error', reject)
+    child.once('spawn', () => resolve())
+    child.unref()
+  })
 }
 
 /**
@@ -399,7 +414,7 @@ export const TOOL_SURFACE: readonly ToolRegistration[] = [
   {
     name: 'settle_task',
     label: 'Settle Task',
-    description: 'Settles this session\'s own TASK once its merge has landed in the BASE_BRANCH: re-verifies from git that the TASK is mergeable and its branch is an ancestor of that branch, then rewrites the state to merged, removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
+    description: 'Settles this session\'s own TASK once its merge has landed in the BASE_BRANCH: re-verifies from git that the TASK is mergeable and its branch is an ancestor of that branch, then rewrites the state to merged, fires one best-effort scheduling pass against the queue root — detached, so it survives the teardown — removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
     parameters: SETTLE_TASK_PARAMETERS,
   },
 ]
@@ -502,7 +517,7 @@ export function piExecute(core: ToolCore, tool: ToolName) {
  * them under. The scheduling actions the enqueue rule's triggered pass runs are injectable,
  * so a proof can keep that pass from ever touching tmux (`tests/mcp/server.test.ts`).
  */
-export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions }): ToolCore {
+export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions; readonly fireSchedulingPass?: FireSchedulingPass }): ToolCore {
   const core: ToolCore = {
     enqueue_task: async ({ args, cwd }) => runEnqueueTask(cwd, args as unknown as EnqueueTaskInput, options?.scheduleActions),
     census_in_flight: async ({ cwd }) => runCensusInFlight(cwd),
@@ -520,7 +535,7 @@ export function createToolCore(options?: { readonly scheduleActions?: ScheduleAc
     settle_task: async () => {
       const envResult = resolveReportEnv(process.env)
       if (!envResult.ok) return envResult
-      return runSettleTask(envResult.env)
+      return runSettleTask(envResult.env, options?.fireSchedulingPass ?? realFireSchedulingPass)
     },
     call(tool, args, cwd = process.cwd()) {
       // Read through the object's own field, never a closure copy: a rule changed on the core

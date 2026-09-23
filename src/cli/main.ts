@@ -58,8 +58,8 @@ Commands:
            yet ruled, each with the exact command that records a ruling. Text by default,
            JSON with --format json. Reports only: writes nothing, judges nothing, always ok.
            With --serve it answers the same docket as a page over HTTP: the page at /, the
-           JSON the page reads at /docket, on the loopback at port 4567 (--host and --port to
-           override), refreshing itself, until stopped.
+           JSON the page reads at /docket, on the loopback at a port derived from the queue
+           root (--host and --port to override), refreshing itself, until stopped.
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)
@@ -85,7 +85,7 @@ Options:
                   answers as JSON and everything else as text.
   --serve         The docket command answers the page over HTTP instead of printing an
                   answer, and runs until stopped (docket only)
-  --port <n>      The port docket --serve listens on (default: 4567)
+  --port <n>      The port docket --serve listens on (default: derived from the queue root)
   --host <addr>   The interface docket --serve listens on (default: the loopback)
   --json          The legacy spelling of --format json; touched answers that way anyway
   --pretty        Lay the JSON answer out over indented lines for a person to read. Without
@@ -165,12 +165,12 @@ const options: RunOptions = {
   // The bare command line's own real actions — see the `schedule` usage text above.
   schedule: {
     startSession: task => tmuxStartSession(process.cwd(), task),
-    countSessions: liveSessionCount,
+    countSessions: () => liveSessionCount(process.cwd()),
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   },
   docket: {
-    listSessions: listTmuxSessions,
+    listSessions: () => listTmuxSessions(process.cwd()),
   },
   specsDir: values.specs,
   testsDir: values.tests,
@@ -213,7 +213,7 @@ async function serveUntilStopped(rawPort: string | undefined, rawHost: string | 
     process.stderr.write(`--port needs a port number, got "${rawPort}".\n\n${USAGE}\n`)
     process.exit(2)
   }
-  const served = await serveDocket({ cwd: process.cwd(), port, host: rawHost, docket: { listSessions: listTmuxSessions } })
+  const served = await serveDocket({ cwd: process.cwd(), port, host: rawHost, docket: { listSessions: () => listTmuxSessions(process.cwd()) } })
   if (!served.ok) {
     process.stderr.write(`${served.reason}\n`)
     process.exit(2)

@@ -193,7 +193,10 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 is not itself a worktree, reusing it unchanged only when it is — and start the executor
 agent there in a detached tmux session named for the TASK, first killing any same-named
 session already there. A creation that fails SHALL throw an error carrying git's own
-stderr in its message, never a bare "could not create" summary in stderr's place. Which
+stderr in its message, never a bare "could not create" summary in stderr's place. A
+session start that fails SHALL throw an error carrying tmux's own stderr in its
+message, never a bare exit-code summary in its place — the same standard a failed
+worktree creation keeps. Which
 agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
 variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
 SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
@@ -212,9 +215,9 @@ tmux command this action runs SHALL reach tmux through a dedicated, isolated ser
 named by tmux's own `-L <socket>` flag rather than the default server — never the user's
 own default tmux server,
 and never any other named server — and its default socket name SHALL be per-repo:
-`proofspec-<short hash>`, where `<short hash>` is the short hash of the queue root's
-absolute path, so two repos on one machine never share a server. `PROOFSPEC_TMUX_SOCKET`
-SHALL override the derived name.
+`proofspec-` followed by the first 8 hex digits of the SHA-256 digest of the queue root's
+absolute path, so two repos on one machine never share a server.
+`PROOFSPEC_TMUX_SOCKET` SHALL override the derived name.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
@@ -227,7 +230,13 @@ names no cause.
 The same-named session is killed first so a TASK whose first session attempt died gets a
 working session on retry. Every tmux command reaches the dedicated server so a TASK's name
 can never collide with a session it did not create, and `PROOFSPEC_TMUX_SOCKET` lets a test
-or an acceptance run point at a throwaway, per-run socket.
+or an acceptance run point at a throwaway, per-run socket. The dedicated server keeps this
+tool's sessions off the user's own tmux server, and a fixed default name made every repo
+on the machine share that one server: one repo's sessions counted against another's
+live-session bound, and a same-named TASK in two repos killed each other's session.
+Deriving the name from the queue root gives each repo its own server, with no
+configuration. There is no special case for the single-repo user; everyone gets the
+derived name.
 
 The choice is one environment variable because everything else about starting a session
 is the same act either way, and the default stays `pi` so a queue that never names a
@@ -257,6 +266,8 @@ one kickoff message.
 - "A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
+- "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
+- "A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
@@ -266,7 +277,7 @@ one kickoff message.
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
-- "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
+- "The tmux commands run against a dedicated server whose name is derived from the queue root, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
 - "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts

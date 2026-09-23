@@ -152,6 +152,10 @@ glue, not domain logic, and belongs beside `.githooks/post-commit` (which alread
 unrelated command on its own event with nothing of its own to test): a `post-merge` hook that
 shells out to `pnpm proofspec schedule` on a merge into `main`. It is part of this TASK's
 intent but carries no requirement or scenario here, the same reason `post-commit` carries none.
+A merge that `git merge` does not finish itself — a resolved conflict, or `--no-commit`
+followed by `git commit` — lands through `git commit` and never fires `post-merge`, so
+`post-commit` also shells out to `pnpm proofspec schedule` when the commit it follows is a
+merge commit on `main`.
 
 <!-- scenarios: generated -->
 - "A TASK stays reported as queued even when the pass that followed it could not run" → tests/handoff/extension.test.ts
