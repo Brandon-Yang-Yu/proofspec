@@ -732,7 +732,7 @@ it('derives the default socket from the queue root, so two repos never share a s
     // An implementation resolving symlinks only when the handed path is itself one passes
     // the whole-path tie above and dies here.
     const midPath = join(holder, 'midparent', 'root')
-    await symlinkSync(join(holder, 'realparent'), join(holder, 'midparent'))
+    symlinkSync(join(holder, 'realparent'), join(holder, 'midparent'))
     const byMidPath = tmuxSessionCommands('a', { worktree: join(midPath, '.proofspec/worktrees/a'), queueRoot: midPath, systemPrompt: 'you are the executor' }).map(socketOf)
     for (const socket of [...byRoot, ...byAlias, ...byMidPath]) expect(socket).toMatch(/^proofspec-.+$/)
     // The named rule itself, held absolutely where the root stands — the port test's own

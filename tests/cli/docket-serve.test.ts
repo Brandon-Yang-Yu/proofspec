@@ -145,10 +145,10 @@ it('listens on the loopback at the port derived from the queue root by default',
   // spelling and fails here, on any machine, with no reliance on the machine's own
   // symlinked tmpdir.
   const alias = join(served.root, '..', 'alias-of-same-queue')
-  await symlinkSync(served.root, alias)
+  symlinkSync(served.root, alias)
   const parent = dirname(served.root)
   const midParent = join(parent, '..', 'midparent-of-same-queue')
-  await symlinkSync(parent, midParent)
+  symlinkSync(parent, midParent)
   const midPath = join(midParent, basename(served.root))
   try {
     const aliased = await serveOver(FILES, { root: alias })
