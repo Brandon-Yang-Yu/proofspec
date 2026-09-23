@@ -631,6 +631,9 @@ it('derives the default socket from the queue root, so two repos never share a s
   const socketForRoot = (queueRoot: string, task = 'a'): string => {
     const sockets = tmuxSessionCommands(task, { worktree: `${queueRoot}/.proofspec/worktrees/${task}`, queueRoot, systemPrompt: '' }).map(socketOf)
     for (const socket of sockets) expect(socket).toMatch(/^proofspec-.+$/)
+    // One root, one server, for every command of the build — never the kill's alone, so
+    // root-dependence below holds for the start command through the same tie.
+    expect(new Set(sockets).size).toBe(1)
     return sockets[0]!
   }
 
@@ -660,6 +663,7 @@ it('derives the default socket from the queue root, so two repos never share a s
     symlinkSync(root, alias)
     const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' }).map(socketOf)
     const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: '' }).map(socketOf)
+    for (const socket of [...byRoot, ...byAlias]) expect(socket).toMatch(/^proofspec-.+$/)
     expect(byAlias).toEqual(byRoot)
   } finally {
     await rm(holder, { recursive: true, force: true })
