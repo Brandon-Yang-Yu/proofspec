@@ -1,6 +1,7 @@
 ---
 name: guideline-reviewer
-description: Audits the change against the project rules — CLAUDE.md (the five rules) and TypeScript style. A fresh subagent; reports violations with file:line and fixes nothing. Explores via codebase-memory.
+description: >-
+  Audits the change against the project rules — CLAUDE.md (the five rules) and TypeScript style. A fresh subagent; reports violations with file:line and fixes nothing. Explores via codebase-memory.
 tools: read, grep, find, ls, bash
 ---
 

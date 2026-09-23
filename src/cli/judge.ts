@@ -12,9 +12,10 @@ const MAX_JUDGE_OUTPUT = 1024 * 1024
 const DEFAULT_JUDGE_AGENT: JudgeAgent = { model: 'zai/glm-5.3:low' }
 
 /**
- * The real one-shot agent run: a fresh `pi` process per relationship, saving no session. The
- * pure rules of asking and reading live in `schedule/judge.ts`; this is the one thing that
- * actually spawns a process, the same boundary `graph.ts` keeps for the codebase-memory CLI.
+ * The real one-shot agent run: a fresh process per relationship — `pi` by default,
+ * `claude` headless under `PROOFSPEC_JUDGE_BIN` — saving no session. The pure rules of
+ * asking and reading live in `schedule/judge.ts`; this is the one thing that actually
+ * spawns a process, the same boundary `graph.ts` keeps for the codebase-memory CLI.
  */
 export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<ScheduleActions['judge']> {
   return judgeWith(runJudgeProcess, agent)
@@ -39,11 +40,28 @@ async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome
   const binary = process.env.PROOFSPEC_JUDGE_BIN ?? 'pi'
   const timeoutMs = judgeTimeoutMs(process.env.PROOFSPEC_JUDGE_TIMEOUT_MS)
   try {
-    const stdout = await execFileWithClosedStdin(binary, judgeProcess.args, timeoutMs)
+    const stdout = await execFileWithClosedStdin(binary, judgeArgsFor(binary, judgeProcess.args), timeoutMs)
     return { kind: 'ran', code: 0, stdout }
   } catch (error) {
-    return outcomeFor(error, timeoutMs)
+    return outcomeFor(error, timeoutMs, binary)
   }
+}
+
+/**
+ * The argv the judge's process runs, per binary. The pure builder (`schedule/judge.ts`)
+ * assembles the pinned `pi` argv — and with it everything the ask needs: the system prompt
+ * and the question sit inside it, so the per-binary choice is only which harness's argv
+ * carries them. `claude` runs headless one-shot (`-p`, once): the same system prompt, the
+ * same question, never the `pi` flags a `claude` binary cannot even start under. Anything
+ * else keeps the pinned argv untouched.
+ */
+function judgeArgsFor(binary: string, pinned: readonly string[]): readonly string[] {
+  if (binary !== 'claude') return pinned
+  const question = pinned.at(-1)
+  if (question === undefined) throw new Error('judge: the pinned argv carries no question to ask')
+  const promptAt = pinned.indexOf('--system-prompt')
+  const systemPrompt = promptAt === -1 ? undefined : pinned[promptAt + 1]
+  return systemPrompt === undefined ? ['-p', question] : ['-p', '--system-prompt', systemPrompt, question]
 }
 
 /**
@@ -80,14 +98,14 @@ function execFileWithClosedStdin(binary: string, args: readonly string[], timeou
  * anyone watching the process, even though every outcome still safely reads as
  * unresolved.
  */
-function outcomeFor(error: unknown, timeoutMs: number): JudgeOutcome {
+function outcomeFor(error: unknown, timeoutMs: number, binary: string): JudgeOutcome {
   const code = exitCodeOf(error)
   if (code === undefined) {
-    const reason = wasKilledByTimeout(error) ? `pi did not answer within ${timeoutMs}ms` : messageOf(error)
-    process.stderr.write(`judge: could not run pi: ${reason}\n`)
+    const reason = wasKilledByTimeout(error) ? `${binary} did not answer within ${timeoutMs}ms` : messageOf(error)
+    process.stderr.write(`judge: could not run ${binary}: ${reason}\n`)
     return { kind: 'cannot-run', reason }
   }
-  process.stderr.write(`judge: pi exited ${code}\n`)
+  process.stderr.write(`judge: ${binary} exited ${code}\n`)
   return { kind: 'ran', code, stdout: '' }
 }
 

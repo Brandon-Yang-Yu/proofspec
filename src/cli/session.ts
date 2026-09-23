@@ -1,15 +1,19 @@
-import { readFile, rm, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { baseBranch } from '../base-branch.ts'
 import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
 
 /**
  * The real `startSession` action: a headed,
- * interactive `pi` executor, started in the TASK's own worktree. `schedule`'s own core
- * never starts one itself (see its tests) — this is the one place that actually does, using
- * tmux as the one thing on this machine that can hand a real pty to a human without taking
- * over the terminal the scheduling pass itself is running in.
+ * interactive executor session in the harness `PROOFSPEC_EXECUTOR` names, started in the
+ * TASK's own worktree. `schedule`'s own core never starts one itself (see its tests) — this
+ * is the one place that actually does, using tmux as the one thing on this machine that can
+ * hand a real pty to a human without taking over the terminal the scheduling pass itself is
+ * running in.
  */
 
 const WORKTREES_DIR = ['.proofspec', 'worktrees'] as const
@@ -96,6 +100,29 @@ function tmuxSocket(): string {
 }
 
 const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
+
+/** Where the installed `pi` package itself ships the `subagent` extension — under the queue
+ *  root's `node_modules`, never a file under `.pi/extensions/`. pi injects the virtual modules
+ *  that example imports only into an entry extension file, so a wrapper under
+ *  `.pi/extensions/` re-exporting it hangs pi at startup, silently (measured three ways);
+ *  pinning the package's own copy also keeps the extension and the pi that runs it from
+ *  drifting apart — they version together. */
+const SUBAGENT_EXTENSION_PATH = ['node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'] as const
+
+/** Where the queue root's own checkout ships the stdio MCP server entry — one repo-relative
+ *  path, so the config naming it can never drift from the file it names. */
+const MCP_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
+
+/** The two harnesses an executor session can run in. Subscription auth lives only inside
+ *  the Claude Code harness, and `pi` is the default — the choice is operational
+ *  (`PROOFSPEC_EXECUTOR`), never something a TASK or its branch gets a say in. */
+type ExecutorName = 'pi' | 'claude'
+
+/** Which harness a dispatched executor session runs in. Anything but `claude` names `pi` —
+ *  an unrecognized value must not silently start nothing. */
+function executorName(): ExecutorName {
+  return process.env.PROOFSPEC_EXECUTOR === 'claude' ? 'claude' : 'pi'
+}
 
 /** The one initial user message `pi` is handed as its positional prompt argument. Its exact
  * words are this implementation's own choice; what is not negotiable is that it exists — an
@@ -209,29 +236,109 @@ export type SessionStart = {
   readonly systemPrompt: string
 }
 
+/** The one line the session's runner script runs: `pi`'s whole invocation, with every value
+ *  that can vary — the extension paths, the system prompt, the kickoff — taken from the
+ *  session environment rather than spelled out inside it, because a script file is a channel
+ *  a shell parses, and only quoted variable references keep arbitrary bytes intact through
+ *  it. The system prompt arrives through `$(cat ...)` inside double quotes, where command
+ *  substitution output is never word-split or re-parsed, so the persona's backticks,
+ *  quotes, `$()`, and redirections reach `pi` as one argument, same bytes. `--approve` and
+ *  the pinned `--extension`s are what let the executor actually load the tools it works
+ *  with — `--approve` because a freshly created worktree is an unknown path to `pi`'s own
+ *  project trust; the `progress.ts` pin because `.pi/` being tracked in git means the
+ *  TASK's own branch can carry a stale (or missing) copy; the `subagent` pin because the
+ *  executor's work reaches its personas through fresh subagents, and it points into
+ *  `node_modules` for the reason `SUBAGENT_EXTENSION_PATH` records. `--no-extensions`
+ *  disables `pi`'s own auto-discovery of the worktree's own copy of `progress.ts` — without
+ *  it, `pi` loads both, and refuses to start at all: two extensions registering the same
+ *  tool name, `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not.
+ *  The two pinned paths coexist (no tool-name overlap between them), and both still load
+ *  under `--no-extensions`, same as `pi`'s own help text says an explicit `-e` does. The
+ *  trailing `"$PROOFSPEC_KICKOFF"` is the kickoff message from `kickoffFor` above — the
+ *  last argument after every flag/value pair, which is exactly how `pi` reads a first
+ *  prompt. */
+const RUNNER_SCRIPT =
+  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --extension "$PROOFSPEC_SUBAGENT_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
+
+/** The same one line for the `claude` harness: the same executor persona
+ *  (`--append-system-prompt`, read from the same prompt file), `--dangerously-skip-permissions`
+ *  because an unattended session has nobody attached to answer an approval, and a generated
+ *  MCP config naming the queue root's own MCP server — the transport that puts the five
+ *  tools in the session's hands. The config rides a file for the same size reason every
+ *  other payload does, and its path — not its contents — is what the environment carries.
+ *  The kickoff rides FIRST, before every flag: `--mcp-config` takes space-separated values,
+ *  so a trailing positional after it is read as one more config path and the session dies
+ *  before it ever starts. */
+const CLAUDE_RUNNER_SCRIPT =
+  'exec claude "$PROOFSPEC_KICKOFF" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG"'
+
+/** A Claude Code MCP config naming the queue root's own server — the one config every
+ *  Claude Code session this product starts is handed (`specs/schedule.md`, `specs/mcp.md`).
+ *  The server it names runs from the queue root's own checkout, never the TASK's worktree,
+ *  for the same freshness reason the `pi` invocation pins its `--extension`. */
+function mcpConfigFor(queueRoot: string): string {
+  const server = { command: 'node', args: ['--experimental-transform-types', join(queueRoot, ...MCP_SERVER_ENTRY_PATH)] }
+  return `${JSON.stringify({ mcpServers: { proofspec: server } }, null, 2)}\n`
+}
+
+/** The files a session start hands its harness through, and their paths: the system prompt
+ *  (far past tmux's command-size cap, so it can only ride a file) and the fixed runner script
+ *  for the harness the session runs in; the `claude` shape additionally carries the generated
+ *  MCP config, whose path — not its contents — is what the environment hands the runner. The
+ *  union is discriminated by the harness itself, so which env entries a start command carries
+ *  is read off the shape, never re-derived from a field's presence. All files go in a fresh
+ *  throwaway directory: a detached session reads them when it starts, possibly after the
+ *  process that wrote them is gone, so nothing is left that could clean them up — and
+ *  separate directories keep one start from overwriting files a session has yet to read. */
+type SessionHandoff =
+  | { readonly executor: 'pi'; readonly promptFile: string; readonly runnerScript: string }
+  | { readonly executor: 'claude'; readonly promptFile: string; readonly runnerScript: string; readonly mcpConfig: string }
+
+function writeSessionHandoff(executor: ExecutorName, start: SessionStart): SessionHandoff {
+  const directory = mkdtempSync(join(tmpdir(), 'proofspec-session-'))
+  const promptFile = join(directory, 'system-prompt.txt')
+  writeFileSync(promptFile, start.systemPrompt)
+  const runnerScript = join(directory, 'runner.sh')
+  writeFileSync(runnerScript, `${executor === 'claude' ? CLAUDE_RUNNER_SCRIPT : RUNNER_SCRIPT}\n`)
+  if (executor !== 'claude') return { executor: 'pi', promptFile, runnerScript }
+  const mcpConfig = join(directory, 'mcp-config.json')
+  writeFileSync(mcpConfig, mcpConfigFor(start.queueRoot))
+  return { executor: 'claude', promptFile, runnerScript, mcpConfig }
+}
+
 /**
- * The tmux commands that (re)start a TASK's pi executor: killing whatever tmux session
- * already carries the TASK's name before creating a fresh one, so retrying a TASK whose LEASE
- * went stale (schedule's own reclaim requirement) replaces a dead session rather than
- * colliding with its name. The kill is expected to fail the ordinary way — no such session —
- * which is why it is a command of its own rather than folded into one call. `systemPrompt` is
- * appended to `pi`'s own default coding-assistant prompt (`--append-system-prompt`), not a
- * replacement for it — the executor still needs everything that default already grants.
- * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` are how the session later addresses the queue from
- * inside its own worktree (`specs/progress.md`); `--approve` and the pinned `--extension` are
- * what let it actually load the tool that reports there — a freshly created worktree is an
- * unknown path to `pi`'s own project trust, and `.pi/` being tracked in git means the TASK's
- * own branch can carry a stale (or missing) copy of `progress.ts`. `--no-extensions` disables
- * `pi`'s own auto-discovery of the worktree's copy of that same file — without it, `pi` loads
- * both, and refuses to start at all: two extensions registering the same tool name,
- * `report_task_state`, is a conflict `pi` treats as fatal, pinned copy or not. The pinned
- * `--extension` path still loads under `--no-extensions`, same as `pi`'s own help text says
- * an explicit `-e` does. The trailing positional argument is the kickoff message above: the
- * last thing after every flag/value pair, which is exactly how `pi` reads a first prompt.
+ * The tmux commands that (re)start a TASK's executor session in the harness
+ * `PROOFSPEC_EXECUTOR` names: killing whatever tmux session already carries the TASK's name
+ * before creating a fresh one, so retrying a TASK whose LEASE went stale (schedule's own
+ * reclaim requirement) replaces a dead session rather than colliding with its name. The
+ * kill is expected to fail the ordinary way — no such session — which is why it is a
+ * command of its own rather than folded into one call.
+ *
+ * The start command's own words are nothing but `sh <runner script>` — a plain path, no
+ * metacharacter in it. tmux packs the command words it is handed and refuses ones past its
+ * own size cap ("command too long"; the executor persona is far larger), and older tmux runs
+ * the joined words through a shell, substituting every metacharacter they carry — so the
+ * system prompt, the kickoff, and the harness's own flags can never ride the words. Every
+ * payload instead reaches the session through a channel no shell parses as syntax: the `-e`
+ * flags set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
+ * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
+ * worktree, `specs/progress.md`; `PROOFSPEC_BASE_BRANCH` hands down the base branch the queue
+ * measures against, so a session that settles reads the same name its queue was built on),
+ * and the runner script assembles the harness's argv from them, reading the system prompt
+ * from its file — so the harness is handed the persona and the kickoff exactly as passed,
+ * one argument each, same bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   const socket = tmuxSocket()
-  const extension = join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)
+  const handoff = writeSessionHandoff(executorName(), start)
+  // Which harness env the session carries follows the handoff's own shape — the harness it
+  // was built for is the discriminator, not a field's presence.
+  const harnessEnv = handoff.executor === 'claude'
+    ? [`-e`, `PROOFSPEC_MCP_CONFIG=${handoff.mcpConfig}`]
+    : [
+      `-e`, `PROOFSPEC_PROGRESS_EXTENSION=${join(start.queueRoot, ...PROGRESS_EXTENSION_PATH)}`,
+      `-e`, `PROOFSPEC_SUBAGENT_EXTENSION=${join(start.queueRoot, ...SUBAGENT_EXTENSION_PATH)}`,
+    ]
   return [
     tmuxKillSessionCommand(task),
     {
@@ -239,8 +346,11 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
-        'pi', '--approve', '--no-extensions', '--extension', extension, '--append-system-prompt', start.systemPrompt,
-        kickoffFor(task),
+        '-e', `PROOFSPEC_BASE_BRANCH=${baseBranch()}`,
+        '-e', `PROOFSPEC_KICKOFF=${kickoffFor(task)}`,
+        '-e', `PROOFSPEC_SYSTEM_PROMPT_FILE=${handoff.promptFile}`,
+        ...harnessEnv,
+        'sh', handoff.runnerScript,
       ],
     },
   ]
@@ -268,15 +378,51 @@ export function sessionStartFor(cwd: string, worktree: string, systemPrompt: str
 }
 
 /**
- * The real `startSession`: resolves the TASK's own worktree, then starts `pi` there in a
- * detached tmux session named for the TASK, seeded with the executor's own system prompt.
+ * The real `startSession`: resolves the TASK's own worktree, then starts the harness
+ * `PROOFSPEC_EXECUTOR` names there in a detached tmux session named for the TASK, seeded with
+ * the executor's own system prompt. A Claude Code session is additionally handed its hook
+ * wiring: the harness reports that session's moves through hooks, and the heartbeat those
+ * hooks refresh is the Claude Code transport's own limb of the one write (`specs/mcp.md`).
  */
 export async function tmuxStartSession(cwd: string, task: string): Promise<void> {
   const worktree = await resolveSessionWorktree(cwd, task)
   const systemPrompt = await executorSystemPrompt(cwd)
   const [kill, start] = tmuxSessionCommands(task, sessionStartFor(cwd, worktree, systemPrompt))
+  if (executorName() === 'claude') await writeClaudeHookSettings(worktree, cwd)
   await runIgnoringFailure(kill)
   await runOrThrow(start)
+}
+
+/** Where the queue root's own checkout ships the heartbeat CLI entry — one repo-relative
+ *  path, so the hook command naming it can never drift from the file it names. */
+const HEARTBEAT_ENTRY_PATH = ['src', 'mcp', 'heartbeat.ts'] as const
+
+/** The command line every Claude Code hook runs: the heartbeat CLI entry out of the queue
+ *  root's own checkout, the same freshness rule the MCP config carries — run from the main
+ *  checkout, never the TASK's own branch's possibly stale copy. */
+function heartbeatHookCommand(queueRoot: string): string {
+  return `node --experimental-transform-types ${join(queueRoot, ...HEARTBEAT_ENTRY_PATH)}`
+}
+
+/**
+ * Writes the hook wiring a dispatched Claude Code session runs with: `.claude/settings.json`
+ * in the TASK's worktree, running the heartbeat CLI entry on every event the harness reports
+ * a session's move through. The `pi` transport needs no wiring of its own — its extension
+ * subscribes the same write to its own events — so this file is written only for `claude`.
+ */
+async function writeClaudeHookSettings(worktree: string, queueRoot: string): Promise<void> {
+  const hook = { type: 'command', command: heartbeatHookCommand(queueRoot) }
+  const oneEvent = { hooks: [hook] }
+  const settings = {
+    hooks: {
+      UserPromptSubmit: [oneEvent],
+      PreToolUse: [oneEvent],
+      PostToolUse: [oneEvent],
+      Stop: [oneEvent],
+    },
+  }
+  await mkdir(join(worktree, '.claude'), { recursive: true })
+  await writeFile(join(worktree, '.claude', 'settings.json'), `${JSON.stringify(settings, null, 2)}\n`)
 }
 
 /** Runs a command, ignoring whether it succeeded — `tmux kill-session` on a name with no

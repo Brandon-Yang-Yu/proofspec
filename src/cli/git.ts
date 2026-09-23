@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { baseBranch } from '../base-branch.ts'
 import { compareStrings } from '../order.ts'
 import type { LineRange } from '../locate/index.ts'
 
@@ -36,13 +37,11 @@ export type DiffRead =
   | { readonly ok: true; readonly base: string; readonly files: readonly ChangedFile[] }
   | { readonly ok: false; readonly reason: string }
 
-/** The branch a task's work is measured from, and merged back into. */
-const INTEGRATION_BRANCH = 'main'
-
 /**
  * Every file under the given paths the working tree has changed since the base revision, with
- * the lines that changed in each. The base is where this branch left `main` unless a revision is named, so
- * run inside a worktree with no arguments it answers "what did this branch touch".
+ * the lines that changed in each. The base is where this branch left the BASE_BRANCH unless a
+ * revision is named, so run inside a worktree with no arguments it answers "what did this
+ * branch touch".
  *
  * It reads the working tree, not just what is committed: in a worktree most of the work is
  * uncommitted most of the time, and files not yet added to git are counted for the same
@@ -59,7 +58,7 @@ export async function readChangedFiles(options: {
 
   const named = options.since ?? (await defaultBase(options.cwd))
   if (named === undefined) {
-    return { ok: false, reason: `could not find where this branch left ${INTEGRATION_BRANCH}; name a revision with --since` }
+    return { ok: false, reason: `could not find where this branch left ${baseBranch()}; name a revision with --since` }
   }
   const base = (await git(options.cwd, ['rev-parse', '--verify', `${named}^{commit}`]))?.trim()
   if (base === undefined) return { ok: false, reason: `${named} is not a revision this repository has` }
@@ -89,22 +88,24 @@ export async function readFileAt(options: {
 }
 
 /**
- * Where a run that named no revision measures from. Off `main` that is the branch point.
- * On `main` the branch point is `HEAD` itself, which would answer "nothing touched" over
- * commits the next push is about to publish — the very list a held push sends a reader to
- * work through — so there the base is where the published tip stands: `main`'s upstream
- * when one is configured, else the conventional `origin` tracking ref a fetch leaves
- * behind. A repo with neither keeps the branch point: nothing is published to measure from.
+ * Where a run that named no revision measures from. Off the BASE_BRANCH that is the branch
+ * point. On the BASE_BRANCH the branch point is `HEAD` itself, which would answer "nothing
+ * touched" over commits the next push is about to publish — the very list a held push sends
+ * a reader to work through — so there the base is where the published tip stands: the
+ * BASE_BRANCH's upstream when one is configured, else the conventional `origin` tracking
+ * ref a fetch leaves behind. A repo with neither keeps the branch point: nothing is
+ * published to measure from.
  */
 async function defaultBase(cwd: string): Promise<string | undefined> {
+  const branch = baseBranch()
   const head = (await git(cwd, ['rev-parse', 'HEAD']))?.trim()
-  const branchPoint = (await git(cwd, ['merge-base', 'HEAD', INTEGRATION_BRANCH]))?.trim()
+  const branchPoint = (await git(cwd, ['merge-base', 'HEAD', branch]))?.trim()
   if (head === undefined || branchPoint === undefined) return undefined
   if (branchPoint !== head) return branchPoint
 
   const published =
-    (await git(cwd, ['rev-parse', '--verify', `${INTEGRATION_BRANCH}@{upstream}`]))?.trim() ??
-    (await git(cwd, ['rev-parse', '--verify', `refs/remotes/origin/${INTEGRATION_BRANCH}`]))?.trim()
+    (await git(cwd, ['rev-parse', '--verify', `${branch}@{upstream}`]))?.trim() ??
+    (await git(cwd, ['rev-parse', '--verify', `refs/remotes/origin/${branch}`]))?.trim()
   if (published === undefined) return branchPoint
   return (await git(cwd, ['merge-base', 'HEAD', published]))?.trim() ?? branchPoint
 }
@@ -120,7 +121,7 @@ export type AncestorRead = { readonly ok: true; readonly isAncestor: boolean } |
 
 /**
  * Where two named revisions last agreed, without checking either one out. `inflight` measures
- * a task's branch against another task's, or against `main`, and neither is the working tree.
+ * a task's branch against another task's, or against the BASE_BRANCH, and neither is the working tree.
  */
 export async function mergeBase(options: { readonly cwd: string; readonly a: string; readonly b: string }): Promise<MergeBaseRead> {
   const a = await verifiedRevision(options.cwd, options.a)

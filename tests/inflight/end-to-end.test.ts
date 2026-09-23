@@ -122,14 +122,13 @@ it('reports an unresolved claim through the real command when the named TASK is 
 })
 
 // Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK based on a merged TASK measures against main even though its own branch was
+// Scenario: A TASK based on a merged TASK measures against the BASE_BRANCH even though its own branch was
 //           built on top of the merged TASK's
-// GIVEN a TASK built on top of a TASK whose own state has reached merged, each editing a
-//       different CAPABILITY_FILE
-// WHEN the inflight command is run
-// THEN the dependent TASK's writes include the merged TASK's own edit too, because it is
-//      measured against `main` rather than against the merged TASK's branch
-it('measures against main, not the merged branch, when base names a merged TASK', async () => {
+// GIVEN a TASK whose base names a TASK that has since merged into the BASE_BRANCH
+// WHEN the census reads what the dependent TASK rewrote
+// THEN it is measured from the BASE_BRANCH, not the merged branch, so work the BASE_BRANCH
+//      already holds is not counted twice
+it('measures against the BASE_BRANCH, not the merged branch, when base names a merged TASK', async () => {
   const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
   await enterTask(repo, 'a', { edit: 'specs/a.md' })
   await repo.write('.proofspec/dispatch/a/state', 'merged')
