@@ -171,7 +171,8 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi
 // GIVEN a tmux session already named for the TASK
 // WHEN the tmux commands to start its session are built
-// THEN the first kills that stale session, and the second starts a fresh one running pi under the same name
+// THEN the first kills that stale session, and the second starts a fresh one running pi
+//      under the same name, in the TASK's own worktree, detached
 it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', async () => {
   const [kill, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
@@ -181,6 +182,13 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
   // runner script, so "running pi" is read from that script's own content.
   const nameIndex = start.args.indexOf('-s')
   expect(start.args[nameIndex + 1]).toBe('a')
+  // Detached, so the fresh session stands with no client attached to the scheduling pass
+  // that started it; and its working directory is the TASK's own worktree — the flag that
+  // sets a new session's directory, immediately followed by the worktree the build was
+  // handed, never the directory the builder itself ran in.
+  expect(start.args).toContain('-d')
+  const worktreeDirIndex = start.args.indexOf('-c')
+  expect(start.args[worktreeDirIndex + 1]).toBe('/repo/.proofspec/worktrees/a')
   await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec pi\b/)
 })
 
@@ -188,9 +196,6 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 // Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against
 // GIVEN a ready TASK whose queue measures against a BASE_BRANCH other than main
 // WHEN the tmux start command is built
-// THEN it hands the session the queue's checkout, the TASK's name, and that branch as
-//      environment variables, so a session that settles measures against the same branch
-//      its queue was built on
 // THEN it hands the session the queue's checkout, the TASK's name, and that branch as
 //      environment variables, so a session that settles measures against the same branch
 //      its queue was built on
@@ -214,27 +219,39 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
-// Scenario: The pi invocation carries --approve and --extension pinned to this checkout's own progress extension
+// Scenario: The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
-// THEN the pi invocation carries --approve and --extension pinned to this checkout's own progress extension
-it('carries --approve and --extension pinned to this checkout\'s own progress extension', async () => {
+// THEN the pi invocation carries --approve, and pins two extensions by path: this checkout's
+//      own progress extension, and the subagent extension shipped inside the pi package
+//      under the queue root's node_modules — never a file under .pi/extensions/, so the
+//      extension and the pi that runs it cannot drift apart
+it('carries --approve and --extension pinned twice over — this checkout\'s own progress extension, and the subagent extension inside the installed pi package', async () => {
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
   const words = (await runnerScriptFrom(start)).trim().split(' ')
 
   // Slices at the flags' own positions in pi's invocation, not arrayContaining — proves
-  // --approve immediately follows pi and --extension is immediately followed by exactly the
-  // environment variable, never a path spelled out inside the script itself.
+  // --approve immediately follows pi and each --extension is immediately followed by
+  // exactly an environment variable, never a path spelled out inside the script itself.
   const piIndex = words.indexOf('pi')
   expect(words.slice(piIndex, piIndex + 2)).toEqual(['pi', '--approve'])
   const extensionIndex = words.indexOf('--extension')
   expect(words.slice(extensionIndex, extensionIndex + 2)).toEqual(['--extension', '"$PROOFSPEC_PROGRESS_EXTENSION"'])
-  // The value that variable receives is what pins the extension to this checkout's own
-  // progress tool — one -e environment entry on the start command (the flag immediately
-  // before its value), resolved from the queue root, not from whatever the TASK's branch carries.
+  const subagentIndex = words.indexOf('--extension', extensionIndex + 1)
+  expect(words.slice(subagentIndex, subagentIndex + 2)).toEqual(['--extension', '"$PROOFSPEC_SUBAGENT_EXTENSION"'])
+  // The values those variables receive are what pin the two extensions — one -e
+  // environment entry each on the start command (the flag immediately before its value),
+  // resolved from the queue root, not from whatever the TASK's branch carries.
   const extensionEnvIndex = start.args.indexOf('PROOFSPEC_PROGRESS_EXTENSION=/repo/.pi/extensions/progress.ts')
   expect(extensionEnvIndex).toBeGreaterThan(0)
   expect(start.args[extensionEnvIndex - 1]).toBe('-e')
+  const subagentExtensionPath = '/repo/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts'
+  const subagentEnvIndex = start.args.indexOf(`PROOFSPEC_SUBAGENT_EXTENSION=${subagentExtensionPath}`)
+  expect(subagentEnvIndex).toBeGreaterThan(0)
+  expect(start.args[subagentEnvIndex - 1]).toBe('-e')
+  // The exact-equality env pin above carries the never-clause on its own: a value under
+  // .pi/extensions/ - a wrapper, say - is a different string and fails the equality, so
+  // the pin can only ever name the subagent example inside the installed pi package.
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -246,7 +263,7 @@ it('disables extension auto-discovery so the worktree\'s own progress.ts never l
   const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   // The flag lives in pi's own invocation inside the runner script — auto-discovery is what
-  // would load the worktree's own copy of the extension beside the pinned one.
+  // would load the worktree's own copy of the extension beside the pinned ones.
   await expect(runnerScriptFrom(start)).resolves.toContain('--no-extensions')
 })
 
@@ -302,6 +319,7 @@ writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2))
     expect(existsSync(argvFile), `pi never ran (${tmuxFailure || 'tmux exited 0 without starting it'})`).toBe(true)
     expect(JSON.parse(await readFile(argvFile, 'utf8'))).toEqual([
       '--approve', '--no-extensions', '--extension', join(base, '.pi', 'extensions', 'progress.ts'),
+      '--extension', join(base, 'node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'),
       '--append-system-prompt', systemPrompt,
       "Begin: work your TASK a now - read the MANIFEST's intentRef (the reserved name INTENT names the TASK's own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.",
     ])
@@ -321,14 +339,20 @@ it('starts the pi invocation whenever PROOFSPEC_EXECUTOR is unset, and when it n
   const build = () => tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
 
   // Each GIVEN case built and read on its own — the default must survive the harness choice
-  // being added, not silently drift the moment the variable starts being read.
+  // being added, not silently drift the moment the variable starts being read. Naming pi
+  // must reach the same invocation, not a pi-shaped shortcut: the pi-named build's runner
+  // script is the unset build's own script, byte for byte — pins included, since the
+  // scenarios above prove what the unset build's script carries.
   delete process.env.PROOFSPEC_EXECUTOR
-  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  const unsetScript = await runnerScriptFrom(build()[1])
+  await expect(unsetScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
 
   process.env.PROOFSPEC_EXECUTOR = 'pi'
-  await expect(runnerScriptFrom(build()[1])).resolves.toMatch(/^exec pi\b/)
+  const namedPiScript = await runnerScriptFrom(build()[1])
+  await expect(namedPiScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
+  expect(namedPiScript, 'naming pi must carry the unset build\'s own pinned runner script').toBe(unsetScript)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -372,11 +396,20 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
   expect(start.args[configIndex - 1]).toBe('-e')
   const configPath = start.args[configIndex]!.slice('PROOFSPEC_MCP_CONFIG='.length)
   const config = JSON.parse(await readFile(configPath, 'utf8')) as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> }
-  const servers = Object.values(config.mcpServers ?? {})
-  expect(servers.length, 'the config names no MCP server').toBeGreaterThan(0)
-  for (const server of servers) {
+  // Which server the config names is the promise, so identity is asserted, not just
+  // location: the one server it names is the queue root's own MCP server — the stdio
+  // server entry this checkout ships, `src/mcp/serve.ts` under the queue root. A config
+  // naming a different entry, or a second server beside the real one, is a different
+  // answer than the one claimed.
+  const entries = Object.entries(config.mcpServers ?? {})
+  expect(entries.length, 'the config must name exactly one MCP server').toBe(1)
+  for (const [, server] of entries) {
     const words = [server.command, ...(Array.isArray(server.args) ? server.args : [])]
       .filter((word): word is string => typeof word === 'string')
+    expect(
+      words,
+      `the server the config names is not the queue root's own MCP server entry`,
+    ).toContain(join(queueRoot, 'src', 'mcp', 'serve.ts'))
     const paths = words.filter(word => word.includes('/'))
     expect(
       paths.some(path => sitsUnderPath(queueRoot, path)),

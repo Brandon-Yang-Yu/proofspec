@@ -201,7 +201,9 @@ PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
 command, and SHALL be handed one initial user message as the agent's positional prompt
 argument — a message telling the session to begin working its TASK, whose exact words
 are the implementation's to choose. The `pi` invocation SHALL be run with `--approve`,
-`--no-extensions`, and `--extension <cwd>/.pi/extensions/progress.ts`. The `claude`
+`--no-extensions`, `--extension <cwd>/.pi/extensions/progress.ts`, and `--extension
+<cwd>/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts`.
+The `claude`
 invocation SHALL be run with `--append-system-prompt` carrying the executor's own
 system prompt, with `--dangerously-skip-permissions`, and with a generated MCP config
 naming the queue root's own MCP server (`specs/mcp.md`); where that generated config
@@ -234,9 +236,14 @@ action already holds at the moment it starts the session, so it hands them down 
 three environment variables. The tool that reports
 state must load in a freshly created worktree, and the copy it loads must be the current
 one. On the `pi` side, `--approve` is what lets the tool load there, the pinned
-`--extension` points at this tool's own checkout rather than whatever the TASK's branch
+`progress.ts` points at this tool's own checkout rather than whatever the TASK's branch
 carries, and `--no-extensions` keeps the worktree's own copy of the extension from loading
-beside the pinned one. On the `claude` side, the generated config carries the same
+beside the pinned ones. The second `--extension` loads the `subagent` tool, because the
+executor's work reaches its personas through fresh subagents. That pin points straight
+at the `subagent` example inside the installed `pi` package, under the queue root's
+`node_modules` — never at a file under `.pi/extensions/`, which would be a second thing
+to maintain — so the extension and the `pi` that runs it cannot drift apart. On the
+`claude` side, the generated config carries the same
 freshness reasoning for the MCP server (`specs/mcp.md`), and `--dangerously-skip-permissions`
 stands because an unattended session has nobody attached to answer an approval.
 
@@ -251,7 +258,7 @@ one kickoff message.
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
-- "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
+- "The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
