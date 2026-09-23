@@ -1,9 +1,15 @@
 // Capability: docket
 
-import { createHash } from 'node:crypto'
 import { afterEach, expect, it } from 'vitest'
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import { docket } from '../../src/cli/index.ts'
-import { commandLine, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand } from '../../src/cli/session.ts'
+import { commandLine, listTmuxSessions, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import type { TmuxCommand } from '../../src/cli/session.ts'
 import type { Docket } from '../../src/docket/index.ts'
 import type { Outcome } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
@@ -24,11 +30,30 @@ function manifestFor(task: string): string {
   return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
 }
 
-// The dedicated server's own name for a queue root — proofspec- plus the first 8 hex digits
-// of the root's SHA-256 digest. Computed here from the rule so a proof pins that the name
-// follows the path, never a literal string the implementation could share by accident.
-function derivedSocket(queueRoot: string): string {
-  return `proofspec-${createHash('sha256').update(queueRoot).digest('hex').slice(0, 8)}`
+/** The socket a built tmux command reaches its server through — the value its own `-L`
+ *  names. A command with no `-L` at all would reach the user's default server, the exact
+ *  thing this requirement forbids, so the missing flag is itself the failure to report. */
+function socketOf(command: TmuxCommand): string {
+  const flag = command.args.indexOf('-L')
+  expect(flag).toBeGreaterThanOrEqual(0)
+  return command.args[flag + 1]!
+}
+
+/** The per-repo default the start commands derive for a queue root — the name every other
+ *  tmux surface must agree with for the same root. Read off the built start command rather
+ *  than re-derived here, so what the docket expects can never drift from what the scheduler
+ *  actually asks. A derivation still answering the machine's shared bare `proofspec` name
+ *  would make every comparison against this value vacuous, so the per-repo shape —
+ *  `proofspec-` with a root-dependent tail — is held here, at the source. */
+function derivedSocketFor(queueRoot: string): string {
+  const [, start] = tmuxSessionCommands('a', {
+    worktree: `${queueRoot}/.proofspec/worktrees/a`,
+    queueRoot,
+    systemPrompt: 'irrelevant to the socket',
+  })
+  const socket = socketOf(start)
+  expect(socket).toMatch(/^proofspec-.+$/)
+  return socket
 }
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
@@ -52,9 +77,12 @@ it('carries the exact attach command for a session the server holds, asking for 
   const outcome = await docket({ cwd: repo.root, docket: { listSessions } })
 
   const report = reportOf(outcome)
+  // The row's exact command attaches through the socket this repo's own server derives —
+  // the same name the start commands target for the same queue root — read off those
+  // commands, never pinned, so the row cannot name a server the scheduler never asked.
   expect(report.rows.find(row => row.task === 'alpha')?.session).toEqual({
     listed: true,
-    attach: `tmux -L ${derivedSocket(repo.root)} attach-session -t alpha`,
+    attach: `tmux -L ${derivedSocketFor(repo.root)} attach-session -t alpha`,
   })
   expect(report.rows.find(row => row.task === 'beta')?.session).toEqual({ listed: false })
   expect(asked).toBe(1)
@@ -83,17 +111,72 @@ it('marks a session the server does not hold as absent, asking nothing further',
   expect(questions).toEqual(['list-sessions'])
 })
 
+const execFileAsync = promisify(execFile)
+
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
-// Scenario: The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default
-// GIVEN no socket override is set
-// WHEN the session-list command and the attach command are built
-// THEN both reach the dedicated server, and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
-it('asks the dedicated server for the session list, honoring the socket override', () => {
+// Scenario: The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same per-repo default
+// GIVEN no socket override is set, and a queue root
+// WHEN the session-list command and the attach command are built for that root
+// THEN both reach that root's own derived server — the same per-repo default the start
+//      commands target for the same root — and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
+it('asks the repo\'s own dedicated server for the session list, honoring the socket override', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
   const queueRoot = '/repo'
 
-  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', derivedSocket(queueRoot), 'list-sessions'] })
-  expect(commandLine(tmuxAttachCommand('alpha', queueRoot))).toBe(`tmux -L ${derivedSocket(queueRoot)} attach-session -t alpha`)
+  const derived = derivedSocketFor(queueRoot)
+
+  expect(socketOf(tmuxListSessionsCommand(queueRoot))).toBe(derived)
+  expect(socketOf(tmuxAttachCommand('alpha', queueRoot))).toBe(derived)
+
+  // The runtime half: the docket's served ask is the reader itself, handed the queue root
+  // the docket was answered for. A session stands on a real root's own derived server, the
+  // reader asks for that root, and the names come back — proving the runtime ask and the
+  // built command name one server, with no override anywhere to hide a wrong root behind.
+  // `derivedSocketFor` holds the shape before any tmux runs, so the red suite can never
+  // stand a session on the machine's real bare-name server by way of the retired default.
+  const root = await mkdtemp(join(tmpdir(), 'proofspec-docket-socket-'))
+  const rootDerived = derivedSocketFor(root)
+  const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', rootDerived, ...args])
+  // A decoy session under its own distinct name stands on a second throwaway server for
+  // the whole ask: the list is read from the root's own derived server only. The decoy's
+  // name is not the real one's, so no aggregation or misdirection can answer ['alpha'] —
+  // concatenation and union both answer ['alpha', 'beta'], and a wrapper that reads the
+  // decoy server instead answers ['beta']; only asking the derived server and it alone
+  // answers ['alpha'].
+  const decoy = 'proofspec-test-docket-decoy'
+  const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
+  try {
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+    await askDerived(['new-session', '-d', '-s', 'alpha', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'beta', 'sleep', '60'])
+    await expect(listTmuxSessions(root)).resolves.toEqual(['alpha'])
+    // The spelling half: the queue root handed through a symlinked alias of itself, and
+    // again through a mid-path symlink on the route to it — both spellings name one
+    // queue, and one queue asks one server. The builders and the reader carry each
+    // spelling in turn, and the answer is still the derived server's own list, so a
+    // surface that canonicalizes only some spellings — resolving symlinks only when the
+    // handed path is itself one — splits from the scheduler's server and fails here.
+    const alias = join(dirname(root), `alias-of-${basename(root)}`)
+    const midParent = join(dirname(root), `midparent-of-${basename(root)}`)
+    symlinkSync(root, alias)
+    symlinkSync(dirname(root), midParent)
+    const midRoot = join(midParent, basename(root))
+    try {
+      for (const spelled of [alias, midRoot]) {
+        expect(socketOf(tmuxListSessionsCommand(spelled))).toBe(rootDerived)
+        expect(socketOf(tmuxAttachCommand('alpha', spelled))).toBe(rootDerived)
+        await expect(listTmuxSessions(spelled)).resolves.toEqual(['alpha'])
+      }
+    } finally {
+      await rm(alias, { force: true })
+      await rm(midParent, { force: true })
+    }
+  } finally {
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 

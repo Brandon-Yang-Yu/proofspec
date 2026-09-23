@@ -124,7 +124,7 @@ and nothing aggregated is stored anywhere.
 ### Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
 
 Each row SHALL say whether the dedicated tmux server — the one `startSession` runs executor
-sessions on, reached through the same `PROOFSPEC_TMUX_SOCKET` override with the same default
+sessions on, reached through the same `PROOFSPEC_TMUX_SOCKET` override with the same per-repo default
 (`specs/schedule.md`) — holds a session named for the TASK, by asking that server for its
 session list once and matching names, and a session that is listed SHALL have its exact
 attach command carried on the row. A session not listed SHALL be marked absent, and nothing
@@ -144,7 +144,7 @@ things.
 - "A session not listed is marked absent, and nothing further asked about it" → tests/docket/sessions.test.ts
 - "A session the server holds is listed on the row with its exact attach command" → tests/docket/sessions.test.ts
 - "The server's session list is read from tmux's own output, one name per line" → tests/docket/sessions.test.ts
-- "The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default" → tests/docket/sessions.test.ts
+- "The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same per-repo default" → tests/docket/sessions.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The answer names every relationship raised but not yet ruled

@@ -431,7 +431,8 @@ SHALL run until stopped. The listener SHALL bind the loopback interface by defau
 the interface a caller names with `--host`. It SHALL listen by default on the port derived
 from the queue root's absolute path: 4567 plus the numeric value of that path's SHA-256
 digest taken modulo 1000, a number from 4567 through 5566, computed the same way every
-run. It SHALL listen on the port a caller names with `--port`. When the port a run wants
+run — so one path derives one port however it is spelled, the same rule the dedicated
+server's name follows (`specs/schedule.md`). It SHALL listen on the port a caller names with `--port`. When the port a run wants
 is already taken, the command SHALL fail fast, naming the port it could not get and
 naming `--port` as the override, and SHALL NOT fall back to another port on its own.
 

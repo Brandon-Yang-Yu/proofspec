@@ -1091,9 +1091,10 @@ export async function docket(options: RunOptions): Promise<Outcome> {
   if (!queue.ok) return { kind: 'cannot-run', reason: queue.reason }
 
   // The server is asked once, and each session it names carries its own attach command — the
-  // map the rows match TASK names against, never a question asked per TASK. Both the ask and
-  // the attach command name the server this queue root derives, so a row's command is one a
-  // person can copy and run against the very server holding the session.
+  // map the rows match TASK names against, never a question asked per TASK. Both the ask
+  // and the attach command name the server this queue root derives, so a docket answered
+  // for one root can never ask another root's server, and a row's command is one a person
+  // can copy and run against the very server holding the session.
   const listSessions = options.docket?.listSessions ?? (() => listTmuxSessions(options.cwd))
   const sessions = new Map((await listSessions()).map(name => [name, commandLine(tmuxAttachCommand(name, options.cwd))]))
 

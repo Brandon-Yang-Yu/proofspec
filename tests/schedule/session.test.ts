@@ -2,10 +2,10 @@
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync, symlinkSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import { listTmuxSessions, liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
@@ -186,8 +186,9 @@ it('stands a session even when the kill before it finds no stale session, that f
     expect(existsSync(parkedFile), 'the started session\'s harness never ran').toBe(true)
 
     // Exactly one session stands on the throwaway server, named for the TASK — read the
-    // way the docket reads it, over the same socket override the start honored.
-    await expect(listTmuxSessions()).resolves.toEqual(['a'])
+    // way the docket reads it, over the same socket override the start honored (the root
+    // the reader is handed is immaterial under the override).
+    await expect(listTmuxSessions(repo.root)).resolves.toEqual(['a'])
     // Detached: no client attached, the only way an unattended session may stand.
     const listing = await execFileAsync('tmux', ['-L', socket, 'list-sessions'])
     expect(listing.stdout).not.toContain('(attached)')
@@ -239,7 +240,36 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
     PROOFSPEC_REAP_SOCKET: derivedSocketFor('/repo'),
     PROOFSPEC_REAP_TASK: 'a',
   })
-  expect(reaperFor('a', '/repo').args).toEqual(['-c', expect.stringContaining('tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"')])
+  // The script itself, exactly — not a substring of it: the whole line is the STANDARD's
+  // own words, and a script that also ran a bare `tmux kill-session` on the user's default
+  // server would keep every substring check green while doing the machine-global harm
+  // this requirement exists to prevent.
+  expect(reaperFor('a', '/repo').args).toEqual(['-c', 'sleep "$PROOFSPEC_REAP_SECONDS" && exec tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"'])
+
+  // And on disk, with the spellings manufactured rather than inherited from the
+  // machine's own tmpdir: a whole-path symlinked alias of the root, and a mid-path
+  // symlink on the route to it, each name the same queue. The start command is built
+  // from the root spelling, and the reaper — handed each respelled root in turn — must
+  // still resolve the socket that start named. A reaper hashing the handed spelling, or
+  // resolving symlinks only when the handed path is itself one, kills on the alias's or
+  // the route's other name for the same server and leaks the session; on a symlink-free
+  // tmpdir this is the only form that still discriminates. The build holds the worktree
+  // on disk, as a production start does.
+  const holder = await mkdtemp(join(tmpdir(), 'proofspec-reaper-spelling-'))
+  try {
+    const root = join(holder, 'root')
+    await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
+    const alias = join(holder, 'alias')
+    symlinkSync(root, alias)
+    const midParent = join(holder, 'midparent')
+    symlinkSync(holder, midParent)
+    const midRoot = join(midParent, 'root')
+    const [, start] = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' })
+    expect(reaperFor('a', alias).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
+    expect(reaperFor('a', midRoot).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
+  } finally {
+    await rm(holder, { recursive: true, force: true })
+  }
 
   const socket = 'proofspec-test-run-42'
   process.env.PROOFSPEC_TMUX_SOCKET = socket
@@ -262,7 +292,46 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   } finally {
     await tmux(['kill-server']).catch(() => {})
   }
-}, 10000)
+
+  // The derived-default landing half — the same landing, with no override anywhere, so
+  // the spawned kill runs in the default state the builder's values above only describe.
+  // The session stands on the repo's own derived server; a teardown that spawned its own
+  // bare, no-`-L` kill would leave that session standing and fail here. A sibling session
+  // under a different name stands on the same server and must outlive the teardown — the
+  // kill names the TASK's session, never the whole server — and a survivor on a second
+  // named server must outlive it too: one server holds one repo's sessions, and the kill
+  // reaches that one session on that server alone.
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+  const repoDerived = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repoDerived, 'settled-derived', { edit: 'a.txt' })
+  await repoDerived.git(['worktree', 'add', join(repoDerived.root, '.proofspec', 'worktrees', 'settled-derived'), 'work/settled-derived'])
+  const [, derivedStart] = tmuxSessionCommands('settled-derived', { worktree: join(repoDerived.root, '.proofspec/worktrees/settled-derived'), queueRoot: repoDerived.root, systemPrompt: '' })
+  const derived = socketOf(derivedStart)
+  expect(derived).toMatch(/^proofspec-.+$/)
+  const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
+  const decoy = 'proofspec-test-reaper-decoy'
+  const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
+  const stands = (ask: (args: readonly string[]) => Promise<unknown>, name: string) => ask(['has-session', '-t', name]).then(() => true, () => false)
+  await askDerived(['kill-server']).catch(() => {})
+  await askDecoy(['kill-server']).catch(() => {})
+  try {
+    await askDerived(['new-session', '-d', '-s', 'settled-derived', 'sleep', '60'])
+    await askDerived(['new-session', '-d', '-s', 'sibling-task', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'survivor', 'sleep', '60'])
+    await teardownTask(repoDerived.root, 'settled-derived')
+    await expect(stands(askDerived, 'settled-derived')).resolves.toBe(true)
+    const gone = Date.now() + 5000
+    while (Date.now() < gone && (await stands(askDerived, 'settled-derived'))) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    await expect(stands(askDerived, 'settled-derived')).resolves.toBe(false)
+    await expect(stands(askDerived, 'sibling-task')).resolves.toBe(true)
+    await expect(stands(askDecoy, 'survivor')).resolves.toBe(true)
+  } finally {
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+  }
+}, 20000)
 
 // The start command's own command words are `sh <runner script path>` — pi's whole
 // invocation, with every flag and text it needs, lives in that script's content, so every
@@ -271,6 +340,15 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
   const scriptPath = start.args[start.args.indexOf('sh') + 1]
   expect(scriptPath).toBeDefined()
   return readFile(scriptPath!, 'utf8')
+}
+
+/** The socket a built tmux command reaches tmux through — the value at its `-L` flag's
+ *  head. Holding the `-L`-at-the-head fact inside the read keeps every proof that names a
+ *  socket honest with one line: a command on the user's default server carries no `-L` at
+ *  all. */
+function socketOf(command: TmuxCommand): string {
+  expect(command.args[0]).toBe('-L')
+  return command.args.slice(0, 2)[1]!
 }
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -282,6 +360,8 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
 it('kills a stale tmux session by the TASK\'s name before starting a fresh one running pi', async () => {
   const [kill, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: 'you are the executor' })
 
+  // The kill names the root's own derived socket — the STANDARD's rule, computed here
+  // from the path, never a literal — so the kill and the start below land on one server.
   expect(kill).toEqual({ command: 'tmux', args: ['-L', derivedSocketFor('/repo'), 'kill-session', '-t', 'a'] })
   // The fresh session carries the same name as the stale one just killed — the pair replaces
   // a dead session rather than colliding with it — and its command words are nothing but the
@@ -604,6 +684,91 @@ it('runs against a dedicated tmux server derived from the queue root, never the 
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: The default socket is derived from the queue root, so two repos never share a server
+// GIVEN the socket override unset, two different queue roots, and one real root spelled two ways — a whole-path symlink beside it, and a mid-path symlink on the route to it
+// WHEN the tmux commands to start a TASK's session are built for each root
+// THEN every command reaches tmux through -L on a name of the per-repo
+//      proofspec-<short hash> shape — the same name for the same root on every build and
+//      however that root is spelled, and a different name for the other root
+it('derives the default socket from the queue root, so two repos never share a server', async () => {
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+
+  // The algorithm itself is pinned by the sibling scenario above; what only this proof
+  // carries is the root-dependence — read off the built commands, never re-derived, so
+  // these facts cannot drift from what the builders actually do.
+  const socketForRoot = (queueRoot: string, task = 'a'): string => {
+    const sockets = tmuxSessionCommands(task, { worktree: `${queueRoot}/.proofspec/worktrees/${task}`, queueRoot, systemPrompt: '' }).map(socketOf)
+    for (const socket of sockets) expect(socket).toMatch(/^proofspec-.+$/)
+    // One root, one server, for every command of the build — never the kill's alone, so
+    // root-dependence below holds for the start command through the same tie.
+    expect(new Set(sockets).size).toBe(1)
+    return sockets[0]!
+  }
+
+  const one = socketForRoot('/one')
+  const two = socketForRoot('/two')
+  // Same root, same name on every build — whatever TASK the build is for: the server is
+  // the repo's, not the TASK's, so a different task must not move the name.
+  expect(socketForRoot('/one')).toBe(one)
+  expect(socketForRoot('/one', 'b')).toBe(one)
+  // Two roots, two names — the whole point of the derivation. The roots differ in every
+  // component, and then again in the last one only: the hashed fact is the root's whole
+  // absolute path, never its basename — two clones sharing a directory name in different
+  // parents are two repos, and must never share a server.
+  expect(two).not.toBe(one)
+  expect(socketForRoot('/x/repo')).not.toBe(socketForRoot('/y/repo'))
+
+  // And one path is one repo however it is spelled: a symlinked alias of a real root
+  // names the same queue, and the same queue derives the same name. A derivation hashing
+  // the spelling as handed would move the name with the alias and fail here, on any
+  // machine, with no reliance on the machine's own symlinked tmpdir. The builds carry a
+  // non-empty prompt and a worktree that stands on disk — the two facts a production
+  // build always holds — so no switch keyed on either can turn inside them; every
+  // command of each build is held to it and to the shape, never the kill's alone.
+  const holder = await mkdtemp(join(tmpdir(), 'proofspec-socket-spelling-'))
+  try {
+    const root = join(holder, 'realparent', 'root')
+    await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
+    const alias = join(holder, 'alias')
+    symlinkSync(root, alias)
+    const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' }).map(socketOf)
+    const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: 'you are the executor' }).map(socketOf)
+    // A mid-path spelling too: the symlink sits on the route to the root, not over the
+    // whole of it — the `/var` vs `/private/var` shape the canonicalization exists for.
+    // An implementation resolving symlinks only when the handed path is itself one passes
+    // the whole-path tie above and dies here.
+    const midPath = join(holder, 'midparent', 'root')
+    symlinkSync(join(holder, 'realparent'), join(holder, 'midparent'))
+    const byMidPath = tmuxSessionCommands('a', { worktree: join(midPath, '.proofspec/worktrees/a'), queueRoot: midPath, systemPrompt: 'you are the executor' }).map(socketOf)
+    for (const socket of [...byRoot, ...byAlias, ...byMidPath]) expect(socket).toMatch(/^proofspec-.+$/)
+    // The named rule itself, held absolutely where the root stands — the port test's own
+    // form: the rule computed locally from the canonical root, the built commands held to
+    // it, so no digest variant that switches on the root's existence can pass.
+    expect(byRoot[0]).toBe(`proofspec-${createHash('sha256').update(realpathSync(root)).digest('hex').slice(0, 8)}`)
+    // And a queue-root-only surface tied to a production-facts build: the list command,
+    // built for this root alone with no worktree fact of its own, names the same server
+    // the worktree-on-disk build named — a canonicalization keyed on the worktree's
+    // existence splits them and dies here.
+    expect(socketOf(tmuxListSessionsCommand(root))).toBe(byRoot[0])
+    // The within-build tie too, for roots that stand on disk — the same one-server fact
+    // `socketForRoot` holds for the synthetic roots, so this proof carries it for both.
+    expect(new Set(byRoot).size).toBe(1)
+    expect(byAlias).toEqual(byRoot)
+    expect(byMidPath).toEqual(byRoot)
+    // And two real roots sharing a directory name under different parents are two repos:
+    // the whole-path fact, held on disk the same as off it — the exact two-clones harm
+    // this scenario exists to prevent.
+    const rootA = join(holder, 'a', 'repo')
+    const rootB = join(holder, 'b', 'repo')
+    await mkdir(rootA, { recursive: true })
+    await mkdir(rootB, { recursive: true })
+    expect(socketForRoot(rootA)).not.toBe(socketForRoot(rootB))
+  } finally {
+    await rm(holder, { recursive: true, force: true })
+  }
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK
 // GIVEN a TASK ready to build
 // WHEN the tmux start command is built
@@ -638,7 +803,7 @@ it('hands pi one positional kickoff message telling the session to begin working
 // Scenario: PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target
 // GIVEN PROOFSPEC_TMUX_SOCKET names a different socket
 // WHEN the tmux commands to start a TASK's session are built
-// THEN both commands target that socket instead of the derived default
+// THEN every command targets that socket instead of the root's derived one
 it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () => {
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 
@@ -655,24 +820,64 @@ it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () 
 //      use, and the one PROOFSPEC_TMUX_SOCKET overrides — never the user's default server
 it('asks the dedicated server for the live count by its own -L socket, never the default one', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
-  // Built from a queue root, targeting that root's own derived default — the same socket the
-  // start commands use, so what is counted is what this tool started, repo by repo.
-  expect(tmuxListSessionsCommand('/repo')).toEqual({ command: 'tmux', args: ['-L', derivedSocketFor('/repo'), 'list-sessions'] })
+  // The count command is built from a queue root, targeting that root's own derived
+  // default — the STANDARD's rule, computed here from the path — and carrying -L at all
+  // is half the claim on its own: the user's default server is reached by carrying no -L.
+  const queueRoot = '/repo'
+  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', derivedSocketFor(queueRoot), 'list-sessions'] })
 
-  // The counting entry itself, not only the builder it shares the rule with: a real server
-  // standing on '/repo's derived socket is what liveSessionCount('/repo') must reach, so a
-  // refactor that stops forwarding the root goes red here rather than in a live dispatch.
-  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', derivedSocketFor('/repo'), ...args])
-  await tmux(['kill-server']).catch(() => {})
+  // The runtime half: a scheduling pass asks the counter itself, handed the queue root the
+  // pass runs for. One session stands on a real root's own derived server, the counter
+  // asks for that root, and the count reaches it — with no override anywhere to hide a
+  // wrong root behind. The shape is held before any tmux runs, so the suite can never
+  // stand a session on the machine's real bare-name server by way of the retired default.
+  const root = await mkdtemp(join(tmpdir(), 'proofspec-count-socket-'))
+  const derived = socketOf(tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' })[1]!)
+  expect(derived).toMatch(/^proofspec-.+$/)
+  const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
+  // A decoy pair of sessions stands on a second throwaway server for the whole ask: the
+  // count is asked of the root's own derived server only. Two decoys, not one, so no
+  // aggregation across servers can answer 1 — a summing wrapper answers 3, a
+  // max-across-servers wrapper answers 2, and a wrapper pointed at the decoy alone
+  // answers 2; only asking the derived server and it alone answers 1.
+  const decoy = 'proofspec-test-count-decoy'
+  const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
   try {
-    await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
-    await expect(liveSessionCount('/repo')).resolves.toBe(1)
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+    await askDerived(['new-session', '-d', '-s', 'only', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'decoy-one', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'decoy-two', 'sleep', '60'])
+    await expect(liveSessionCount(root)).resolves.toBe(1)
+    // And the answer moves with the derived server's own list — a wrapper that asks some
+    // fixed other server answers its own constant twice, not one then two. Only the ask
+    // that reads this root's derived server, fresh, answers both.
+    await askDerived(['new-session', '-d', '-s', 'second', 'sleep', '60'])
+    await expect(liveSessionCount(root)).resolves.toBe(2)
+    // The spelling half: the root handed through a symlinked alias of itself, and again
+    // through a mid-path symlink on the route to it — the count still reads the same
+    // derived server's list under both spellings, so a reader that canonicalizes only
+    // some spellings splits from the scheduler's server and fails here.
+    const alias = join(dirname(root), `alias-of-${basename(root)}`)
+    const midParent = join(dirname(root), `midparent-of-${basename(root)}`)
+    symlinkSync(root, alias)
+    symlinkSync(dirname(root), midParent)
+    const midRoot = join(midParent, basename(root))
+    try {
+      await expect(liveSessionCount(alias)).resolves.toBe(2)
+      await expect(liveSessionCount(midRoot)).resolves.toBe(2)
+    } finally {
+      await rm(alias, { force: true })
+      await rm(midParent, { force: true })
+    }
   } finally {
-    await tmux(['kill-server']).catch(() => {})
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+    await rm(root, { recursive: true, force: true })
   }
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
-  expect(tmuxListSessionsCommand('/repo')).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
+  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
@@ -692,6 +897,11 @@ it('reads the live count from the sessions standing on the server itself', async
     // `sleep` keeps each session's process alive, so the session stands until killed below.
     await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
     await tmux(['new-session', '-d', '-s', 'two', 'sleep', '60'])
+    // A second window inside the first session — pinned alive by its own `sleep`, like
+    // the sessions themselves, so the discrimination holds on any machine: the unit
+    // counted is the session, never the window — a window-counting implementation
+    // answers three here and fails.
+    await tmux(['new-window', '-t', 'one', 'sleep', '60'])
 
     await expect(liveSessionCount('/repo')).resolves.toBe(2)
 

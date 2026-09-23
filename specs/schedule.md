@@ -171,7 +171,7 @@ passes triggered at the same instant can each see three live sessions and each s
 five, briefly — and closing that window would take a lock over the whole queue, which this
 design declines to build. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
 bound point at a throwaway socket and a bound of one, rather than start four real sessions
-on the production server.
+on the repo's own server.
 
 <!-- scenarios: generated -->
 - "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
@@ -214,10 +214,11 @@ naming the queue root's own MCP server (`specs/mcp.md`); where that generated co
 file is written is the implementation's choice, and which server it names is not. Every
 tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
 named by tmux's own `-L <socket>` flag rather than the default server — never the user's
-own default tmux server, and never any other named server — with a default socket name
-derived from the queue root's absolute path: `proofspec-` followed by the first 8 hex
-digits of that path's SHA-256 digest, overridable through the `PROOFSPEC_TMUX_SOCKET`
-environment variable.
+own default tmux server, and never any other named server — and its default socket name
+SHALL be per-repo: `proofspec-` followed by the first 8 hex digits of the SHA-256 digest
+of the queue root's absolute path, so two repos on one machine never share a server, and
+one path derives one name however it is spelled. `PROOFSPEC_TMUX_SOCKET` SHALL override
+the derived name.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
@@ -272,6 +273,7 @@ one kickoff message.
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
+- "The default socket is derived from the queue root, so two repos never share a server" → tests/schedule/session.test.ts
 - "The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
