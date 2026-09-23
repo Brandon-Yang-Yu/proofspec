@@ -9,9 +9,12 @@ import type { ArchiveRecord, Docket, DocketRow, OutstandingRuling, PhaseAccountE
  * and the completed records ship as content a browser shows before any script runs — the
  * page is the view asked again, not an empty shell around a script. Every queue entry
  * renders its own flat row: a TASK whose MANIFEST records a `blocked` names on its row the
- * TASK that blocks it, rows stand with TASKs that are not held before TASKs that are held
- * (name order within each group), and a merged entry still on the queue keeps its own muted
- * row until a pass prunes it. The script inline in the page is the whole of the page's
+ * TASK that blocks it — the mark reading as a waiting state while the hold stands, a muted
+ * recorded fact once it does not — rows stand with TASKs that are not held before TASKs that
+ * are held (name order within each group, the held group behind its own `Held` subheading
+ * row so the partition is visible), and a merged entry still on the queue keeps its own
+ * muted row until a pass prunes it, its name beside a small `landed` badge so the muted row
+ * reads as work already landed. The script inline in the page is the whole of the page's
  * behavior after that: it asks `/docket` and `/archive` again on its own, renders exactly
  * the answers it last received, and does nothing else. It keeps no clock of its own — an
  * age the browser inflated between answers would be a performance of the fact rather than
@@ -86,8 +89,23 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   }
   .phase { color: var(--signal); }
   .muted { color: var(--muted); }
-  tr.muted td, tr.muted .muted, tr.muted .phase { color: var(--faded); }
-  tr.muted code { color: var(--muted); }
+  .waiting { color: var(--fg); font-style: italic; }
+  .landed {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--faded);
+    border: 1px solid var(--head-line);
+    padding: 0 0.3rem;
+    white-space: nowrap;
+  }
+  tr.group th {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-top: 1.1rem;
+  }
+  tr.muted td, tr.muted .muted, tr.muted .phase, tr.muted .waiting { color: var(--faded); }
   tr.muted td:first-child { font-weight: 400; }
   h2 .muted { font-size: 0.8rem; font-weight: normal; }
   table { border-collapse: collapse; width: 100%; }
@@ -116,7 +134,7 @@ export function docketPage(report: Docket, archive: readonly ArchiveRecord[]): s
   <thead>
     <tr><th scope="col">TASK</th><th scope="col">phase</th><th scope="col">round</th><th scope="col">branch</th><th scope="col">in phase</th><th scope="col">last move</th><th scope="col">session</th><th scope="col">phase totals</th></tr>
   </thead>
-  <tbody id="rows">${orderedRows(report.rows).map(serverRowHtml).join('')}</tbody>
+  <tbody id="rows">${serverRowsHtml(report.rows)}</tbody>
 </table>
 <h2 id="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>problems</h2>
 <ul id="problems" aria-labelledby="problems-heading"${report.problems.length === 0 ? ' hidden' : ''}>${report.problems.map(serverProblemHtml).join('')}</ul>
@@ -154,12 +172,19 @@ function isHeld(row: DocketRow, rows: readonly DocketRow[]): boolean {
   return blocker !== undefined && blocker.state !== 'merged'
 }
 
-/** The rows in the order the page writes them: TASKs that are not held before TASKs that
- *  are held, name order within each group — a stable partition over the name-sorted rows the
+/** The queue's rows as the page writes them: TASKs that are not held before TASKs that are
+ *  held, name order within each group — a stable partition over the name-sorted rows the
  *  view answers, so each group keeps the view's own sort. A held TASK is waiting, not
- *  working, and the rows a person scans first are the rows whose work can move. */
-function orderedRows(rows: readonly DocketRow[]): readonly DocketRow[] {
-  return [...rows.filter(row => !isHeld(row, rows)), ...rows.filter(row => isHeld(row, rows))]
+ *  working, and the rows a person scans first are the rows whose work can move. The
+ *  partition stands visible: when held rows stand, one subheading row — the word `Held`
+ *  alone, spanning the header's eight columns — stands between the two groups, so the name
+ *  sort restarting mid-table reads as the two groups it is; no heading stands over the
+ *  not-held group, the board's default, and none stands at all when nothing is held. */
+function serverRowsHtml(rows: readonly DocketRow[]): string {
+  const notHeld = rows.filter(row => !isHeld(row, rows))
+  const held = rows.filter(row => isHeld(row, rows))
+  const heading = held.length === 0 ? '' : '<tr class="group"><th colspan="8" scope="colgroup">Held</th></tr>'
+  return notHeld.map(row => serverRowHtml(row, rows)).join('') + heading + held.map(row => serverRowHtml(row, rows)).join('')
 }
 
 /** The HTML-escaped spelling of a string, the same five characters HTML gives entities to. */
@@ -188,16 +213,21 @@ function serverMoment(iso: string): string {
 }
 
 /** The branch cell: the branch when it differs from the TASK's name, and — only when the
- *  MANIFEST records a blocker — a muted `blocked by` naming it. One spelling for every case:
+ *  MANIFEST records a blocker — a `blocked by` naming it. One spelling for every case:
  *  the cell records the field, never decides it, so a dangling name and a merged blocker
  *  still name the TASK they name; the separator space appears only when something follows
- *  the branch. */
-function serverBranchCellHtml(row: DocketRow): string {
+ *  the branch. The mark's look follows the same hold the sort already computes: a held
+ *  row's mark reads as a waiting state (`waiting`), a released row's keeps the muted
+ *  spelling of a recorded fact. */
+function serverBranchCellHtml(row: DocketRow, rows: readonly DocketRow[]): string {
   if (row.blocked === undefined) {
     return `<td>${row.branch === row.task ? '' : serverEscapeHtml(row.branch)}</td>`
   }
   const branch = row.branch === row.task ? '' : `${serverEscapeHtml(row.branch)} `
-  return `<td>${branch}<span class="muted">blocked by ${serverEscapeHtml(row.blocked.task)}</span></td>`
+  const mark = isHeld(row, rows)
+    ? `<span class="waiting">blocked by ${serverEscapeHtml(row.blocked.task)}</span>`
+    : `<span class="muted">blocked by ${serverEscapeHtml(row.blocked.task)}</span>`
+  return `<td>${branch}${mark}</td>`
 }
 
 /** One word's line of a phase account: the word, its total time, and — only when the word
@@ -219,7 +249,7 @@ function serverPhaseAccountHtml(account: readonly PhaseAccountEntry[] | null): s
   return account.map(serverAccountFragment).join('<br>')
 }
 
-function serverRowHtml(row: DocketRow): string {
+function serverRowHtml(row: DocketRow, rows: readonly DocketRow[]): string {
   const phase = row.phase === null
     ? '<span class="muted">no phase</span>'
     : `<span class="phase">${serverEscapeHtml(row.phase)}</span>`
@@ -240,13 +270,20 @@ function serverRowHtml(row: DocketRow): string {
     ? `<code>${serverEscapeHtml(row.session.attach)}</code>`
     : '<span class="muted">no session</span>'
   // The one muting rule: a row is muted exactly when its own state word reads `merged` —
-  // finished work a pass has not pruned yet, keeping its own row until it does.
-  const openTag = row.state === 'merged' ? '<tr class="muted">' : '<tr>'
+  // finished work a pass has not pruned yet, keeping its own row until it does. The same
+  // state word stands the row's one badge: a small `landed` beside the TASK's name, so the
+  // muted row reads as work already landed rather than a session that died — no other row
+  // gains anything.
+  const merged = row.state === 'merged'
+  const name = merged
+    ? `${serverEscapeHtml(row.task)} <span class="landed">landed</span>`
+    : serverEscapeHtml(row.task)
+  const openTag = merged ? '<tr class="muted">' : '<tr>'
   return openTag
-    + `<td>${serverEscapeHtml(row.task)}</td>`
+    + `<td>${name}</td>`
     + `<td>${phase}</td>`
     + `<td>${round}</td>`
-    + serverBranchCellHtml(row)
+    + serverBranchCellHtml(row, rows)
     + `<td>${inPhase}</td>`
     + `<td>${move}</td>`
     + `<td>${session}</td>`
@@ -327,37 +364,48 @@ function pageScript(): string {
     return escapeHtml(iso.replace(/[.][0-9]{3}Z$/, 'Z'))
   }
 
-  // Whether a row is held — the same rule the shipped half's isHeld keeps, so the two
+  // Whether a row is held — the same rule the shipped half's isHeld keeps, stopping at the
+  // first row the name answers just as the shipped half's own find does, so the two
   // renderers stay byte for byte.
   function isHeld(row, rows) {
     var named = row.blocked === undefined ? undefined : row.blocked.task
     if (named === undefined) return false
     var blocker = null
-    rows.forEach(function (other) {
-      if (other.task === named) blocker = other
-    })
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].task === named) {
+        blocker = rows[i]
+        break
+      }
+    }
     return blocker !== null && blocker.state !== 'merged'
   }
 
-  // The rows in the order the page writes them — the same partition the shipped half's
-  // orderedRows keeps, so the two renderers stay byte for byte.
-  function orderedRows(rows) {
+  // The queue's rows as the page writes them — the same partition and the same Held
+  // subheading the shipped half's serverRowsHtml keeps, so the two renderers stay byte for
+  // byte.
+  function rowsHtml(rows) {
     var notHeld = rows.filter(function (row) { return !isHeld(row, rows) })
     var held = rows.filter(function (row) { return isHeld(row, rows) })
-    return notHeld.concat(held)
+    var heading = held.length === 0 ? '' : '<tr class="group"><th colspan="8" scope="colgroup">Held</th></tr>'
+    return notHeld.map(function (row) { return rowHtml(row, rows) }).join('')
+      + heading
+      + held.map(function (row) { return rowHtml(row, rows) }).join('')
   }
 
-  // The branch cell — the same spelling the shipped half's serverBranchCellHtml writes, so
-  // the two renderers stay byte for byte.
-  function branchCellHtml(row) {
+  // The branch cell — the same spelling the shipped half's serverBranchCellHtml writes,
+  // waiting mark and muted mark alike, so the two renderers stay byte for byte.
+  function branchCellHtml(row, rows) {
     if (row.blocked === undefined) {
       return '<td>' + (row.branch === row.task ? '' : escapeHtml(row.branch)) + '</td>'
     }
     var branch = row.branch === row.task ? '' : escapeHtml(row.branch) + ' '
-    return '<td>' + branch + '<span class="muted">blocked by ' + escapeHtml(row.blocked.task) + '</span></td>'
+    var mark = isHeld(row, rows)
+      ? '<span class="waiting">blocked by ' + escapeHtml(row.blocked.task) + '</span>'
+      : '<span class="muted">blocked by ' + escapeHtml(row.blocked.task) + '</span>'
+    return '<td>' + branch + mark + '</td>'
   }
 
-  function rowHtml(row) {
+  function rowHtml(row, rows) {
     var phase = row.phase === null
       ? '<span class="muted">no phase</span>'
       : '<span class="phase">' + escapeHtml(row.phase) + '</span>'
@@ -377,13 +425,18 @@ function pageScript(): string {
     var session = row.session.listed
       ? '<code>' + escapeHtml(row.session.attach) + '</code>'
       : '<span class="muted">no session</span>'
-    // The one muting rule: the row is muted exactly when its own state word reads merged.
-    var openTag = row.state === 'merged' ? '<tr class="muted">' : '<tr>'
+    // The one muting rule: the row is muted exactly when its own state word reads merged —
+    // and the same word stands the landed badge, the shipped half's own spelling.
+    var merged = row.state === 'merged'
+    var name = merged
+      ? escapeHtml(row.task) + ' <span class="landed">landed</span>'
+      : escapeHtml(row.task)
+    var openTag = merged ? '<tr class="muted">' : '<tr>'
     return openTag
-      + '<td>' + escapeHtml(row.task) + '</td>'
+      + '<td>' + name + '</td>'
       + '<td>' + phase + '</td>'
       + '<td>' + round + '</td>'
-      + branchCellHtml(row)
+      + branchCellHtml(row, rows)
       + '<td>' + inPhase + '</td>'
       + '<td>' + move + '</td>'
       + '<td>' + session + '</td>'
@@ -433,10 +486,9 @@ function pageScript(): string {
     // just one round: the visibility flags and the content they describe must never drift
     // apart mid-render, and holding costs nothing the next cleared refresh does not pay.
     if (selectionLives()) return
-    var rows = orderedRows(docket.rows)
     document.getElementById('empty').hidden = docket.rows.length > 0
     document.getElementById('queue-table').hidden = docket.rows.length === 0
-    document.getElementById('rows').innerHTML = rows.map(rowHtml).join('')
+    document.getElementById('rows').innerHTML = rowsHtml(docket.rows)
     document.getElementById('problems-heading').hidden = docket.problems.length === 0
     document.getElementById('problems').hidden = docket.problems.length === 0
     document.getElementById('problems').innerHTML = docket.problems.map(function (problem) {
