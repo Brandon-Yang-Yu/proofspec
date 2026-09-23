@@ -290,9 +290,11 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   // The derived-default landing half — the same landing, with no override anywhere, so
   // the spawned kill runs in the default state the builder's values above only describe.
   // The session stands on the repo's own derived server; a teardown that spawned its own
-  // bare, no-`-L` kill would leave that session standing and fail here. A survivor on a
-  // second named server must outlive the teardown untouched — one server holds one repo's
-  // sessions, and the kill reaches that server alone.
+  // bare, no-`-L` kill would leave that session standing and fail here. A sibling session
+  // under a different name stands on the same server and must outlive the teardown — the
+  // kill names the TASK's session, never the whole server — and a survivor on a second
+  // named server must outlive it too: one server holds one repo's sessions, and the kill
+  // reaches that one session on that server alone.
   delete process.env.PROOFSPEC_TMUX_SOCKET
   const repoDerived = await makeGitRepo({ 'a.txt': 'a' })
   await enterTask(repoDerived, 'settled-derived', { edit: 'a.txt' })
@@ -308,6 +310,7 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   await askDecoy(['kill-server']).catch(() => {})
   try {
     await askDerived(['new-session', '-d', '-s', 'settled-derived', 'sleep', '60'])
+    await askDerived(['new-session', '-d', '-s', 'sibling-task', 'sleep', '60'])
     await askDecoy(['new-session', '-d', '-s', 'survivor', 'sleep', '60'])
     await teardownTask(repoDerived.root, 'settled-derived')
     await expect(stands(askDerived, 'settled-derived')).resolves.toBe(true)
@@ -316,6 +319,7 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     await expect(stands(askDerived, 'settled-derived')).resolves.toBe(false)
+    await expect(stands(askDerived, 'sibling-task')).resolves.toBe(true)
     await expect(stands(askDecoy, 'survivor')).resolves.toBe(true)
   } finally {
     await askDerived(['kill-server']).catch(() => {})
