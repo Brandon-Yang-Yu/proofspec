@@ -21,8 +21,10 @@ import { queueRootDigest } from './digest.ts'
  * naming an interface with `--host` is choosing who reads.
  */
 
-/** Where the derived port numbering starts, so the whole rule lands in 4567..5566. */
+/** Where the derived port numbering starts, and how far it spans, so the whole rule lands
+ *  in 4567..5566 — a named span of a thousand, so the rule reads as one fact. */
 const SERVE_PORT_BASE = 4567
+const SERVE_PORT_SPAN = 1000n
 
 /** The port one queue root serves on when the caller names none: the base plus the numeric
  *  value of the queue root's SHA-256 digest taken modulo 1000 — a number from 4567 through
@@ -32,7 +34,7 @@ const SERVE_PORT_BASE = 4567
  *  separate collision spaces, so one leaking into the other's rule shows up instead of
  *  coincidentally aligning. */
 function derivedServePort(queueRoot: string): number {
-  return SERVE_PORT_BASE + Number(BigInt(`0x${queueRootDigest(queueRoot)}`) % 1000n)
+  return SERVE_PORT_BASE + Number(BigInt(`0x${queueRootDigest(queueRoot)}`) % SERVE_PORT_SPAN)
 }
 
 /** The interface serving answers on when the caller names none: the loopback. */

@@ -97,14 +97,9 @@ async function executorSystemPrompt(cwd: string): Promise<string> {
  * throwaway, per-run socket instead of ever touching the repo's own production one, let
  * alone the user's.
  */
-function tmuxSocket(queueRoot: string | undefined): string {
+function tmuxSocket(queueRoot: string): string {
   const override = process.env.PROOFSPEC_TMUX_SOCKET
   if (override !== undefined) return override
-  if (queueRoot === undefined) {
-    // Every caller here has a root or an override; a caller with neither is a wiring bug in
-    // this tool's own code, and no fixed name exists to hide behind.
-    throw new Error('no queue root to derive the tmux socket from, and no PROOFSPEC_TMUX_SOCKET naming one')
-  }
   return `proofspec-${queueRootDigest(queueRoot).slice(0, 8)}`
 }
 
@@ -202,11 +197,10 @@ export async function listTmuxSessions(queueRoot: string): Promise<readonly stri
 /** How many executor sessions stand live on the dedicated server, asked of the server itself
  *  fresh on every call. The server is the one the queue root names — the same socket the
  *  start commands use, so what is counted is what this tool started, repo by repo — or the
- *  one `PROOFSPEC_TMUX_SOCKET` names, which is why the root is optional: with an override
- *  standing, no root is needed. A server with no sessions — or no server standing at all —
- *  answers zero: that is tmux's own reading of "nothing runs there", not a failure to
- *  count. */
-export async function liveSessionCount(queueRoot?: string): Promise<number> {
+ *  one `PROOFSPEC_TMUX_SOCKET` names instead. A server with no sessions — or no server
+ *  standing at all — answers zero: that is tmux's own reading of "nothing runs there", not
+ *  a failure to count. */
+export async function liveSessionCount(queueRoot: string): Promise<number> {
   const listing = await runForOutput(listSessionsOn(tmuxSocket(queueRoot)))
   if (listing === undefined) return 0
   return listing.split('\n').filter(line => line.trim() !== '').length

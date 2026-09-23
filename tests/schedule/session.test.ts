@@ -559,11 +559,23 @@ it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () 
 // WHEN it is built
 // THEN it reaches tmux through -L on the dedicated server — the same socket the start commands
 //      use, and the one PROOFSPEC_TMUX_SOCKET overrides — never the user's default server
-it('asks the dedicated server for the live count by its own -L socket, never the default one', () => {
+it('asks the dedicated server for the live count by its own -L socket, never the default one', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
   // Built from a queue root, targeting that root's own derived default — the same socket the
   // start commands use, so what is counted is what this tool started, repo by repo.
   expect(tmuxListSessionsCommand('/repo')).toEqual({ command: 'tmux', args: ['-L', derivedSocketFor('/repo'), 'list-sessions'] })
+
+  // The counting entry itself, not only the builder it shares the rule with: a real server
+  // standing on '/repo's derived socket is what liveSessionCount('/repo') must reach, so a
+  // refactor that stops forwarding the root goes red here rather than in a live dispatch.
+  const tmux = (args: readonly string[]) => execFileAsync('tmux', ['-L', derivedSocketFor('/repo'), ...args])
+  await tmux(['kill-server']).catch(() => {})
+  try {
+    await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
+    await expect(liveSessionCount('/repo')).resolves.toBe(1)
+  } finally {
+    await tmux(['kill-server']).catch(() => {})
+  }
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
   expect(tmuxListSessionsCommand('/repo')).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
@@ -587,13 +599,13 @@ it('reads the live count from the sessions standing on the server itself', async
     await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
     await tmux(['new-session', '-d', '-s', 'two', 'sleep', '60'])
 
-    await expect(liveSessionCount()).resolves.toBe(2)
+    await expect(liveSessionCount('/repo')).resolves.toBe(2)
 
     await tmux(['kill-session', '-t', 'one'])
-    await expect(liveSessionCount()).resolves.toBe(1)
+    await expect(liveSessionCount('/repo')).resolves.toBe(1)
 
     await tmux(['kill-server'])
-    await expect(liveSessionCount()).resolves.toBe(0)
+    await expect(liveSessionCount('/repo')).resolves.toBe(0)
   } finally {
     await tmux(['kill-server']).catch(() => {})
   }
