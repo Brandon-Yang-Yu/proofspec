@@ -666,9 +666,11 @@ it('reads the live count from the sessions standing on the server itself', async
     // `sleep` keeps each session's process alive, so the session stands until killed below.
     await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
     await tmux(['new-session', '-d', '-s', 'two', 'sleep', '60'])
-    // A second window inside the first session: the unit counted is the session, never
-    // the window — a window-counting implementation answers three here and fails.
-    await tmux(['new-window', '-t', 'one'])
+    // A second window inside the first session — pinned alive by its own `sleep`, like
+    // the sessions themselves, so the discrimination holds on any machine: the unit
+    // counted is the session, never the window — a window-counting implementation
+    // answers three here and fails.
+    await tmux(['new-window', '-t', 'one', 'sleep', '60'])
 
     await expect(liveSessionCount()).resolves.toBe(2)
 
