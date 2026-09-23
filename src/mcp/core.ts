@@ -264,7 +264,10 @@ export type EnqueueTaskResult =
 function realScheduleActions(cwd: string): ScheduleActions {
   return {
     startSession: task => tmuxStartSession(cwd, task),
-    countSessions: liveSessionCount,
+    // The count and the start must name one server: both derive their socket from the same
+    // queue root, never the reading process's own cwd — the MCP server lives in whatever
+    // directory its harness spawned it from, which is not the repo's root.
+    countSessions: () => liveSessionCount(cwd),
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   }

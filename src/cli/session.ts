@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { baseBranch } from '../base-branch.ts'
 import { runGit } from './git.ts'
 import { manifestFor } from './queue.ts'
@@ -59,7 +60,44 @@ async function isWorktree(path: string): Promise<boolean> {
  * session actually starts can be checked without ever spawning a process. */
 export type TmuxCommand = { readonly command: string; readonly args: readonly string[] }
 
-const DEFAULT_TMUX_SOCKET = 'proofspec'
+/** How many hex characters of the hashed root a derived socket name carries — long enough
+ *  that two repos' names never collide in practice, short enough to read in a docket row. */
+const SOCKET_HASH_LENGTH = 8
+
+/** The queue root's one canonical spelling, so the same path always derives the same name.
+ *  `realpath` collapses what the filesystem itself collapses — on macOS a root reached as
+ *  `/var/folders/...` and the same root named by `process.cwd()` as `/private/var/folders/...`
+ *  are one directory, and must be one repo. A root that does not stand on disk (a command
+ *  built for a path only the caller names) keeps its lexical resolution — the derivation is
+ *  a naming choice, not an existence check. */
+function canonicalQueueRoot(queueRoot: string): string {
+  try {
+    return realpathSync(queueRoot)
+  } catch {
+    return resolve(queueRoot)
+  }
+}
+
+/** The per-repo default socket name: `proofspec-` plus a short hash of the queue root's
+ *  canonical absolute path — the whole path, never its basename, so two clones sharing a
+ *  directory name in different parents still derive two names. */
+function derivedSocket(queueRoot: string): string {
+  return `proofspec-${createHash('sha256').update(canonicalQueueRoot(queueRoot)).digest('hex').slice(0, SOCKET_HASH_LENGTH)}`
+}
+
+/**
+ * Which tmux server every command here targets — a dedicated one via `-L`, never the user's
+ * default server or any other named one. tmux sessions are global to the whole machine, not
+ * scoped to any directory or project: two repos on one machine must never share a server,
+ * so the default name is per-repo — `derivedSocket` of the queue root the command is built
+ * for. `PROOFSPEC_TMUX_SOCKET` overrides the derived name entirely, the same way
+ * `PROOFSPEC_JUDGE_BIN` is overridable, so a test (or a future acceptance check) can point
+ * at a throwaway, per-run socket instead of ever touching the repo's real one, let alone
+ * the user's own.
+ */
+function tmuxSocket(queueRoot: string): string {
+  return process.env.PROOFSPEC_TMUX_SOCKET ?? derivedSocket(queueRoot)
+}
 
 const EXECUTOR_PERSONA_PATH = ['.pi', 'agents', 'executor.md'] as const
 
@@ -84,19 +122,6 @@ export function promptBodyFrom(fileContents: string): string {
 async function executorSystemPrompt(cwd: string): Promise<string> {
   const raw = await readFile(join(cwd, ...EXECUTOR_PERSONA_PATH), 'utf8')
   return promptBodyFrom(raw)
-}
-
-/**
- * Which tmux server every command here targets — a dedicated one via `-L`, never the user's
- * default server or any other named one. tmux sessions are global to the whole machine, not
- * scoped to any directory or project: `kill-session -t <name>` on the default server kills
- * whatever real session already has that name, whoever it belongs to. Overridable the same way
- * `PROOFSPEC_JUDGE_BIN` is, so a test (or a future acceptance check) can point at a throwaway,
- * per-run socket instead of ever touching the real `proofspec` production one, let alone the
- * user's own.
- */
-function tmuxSocket(): string {
-  return process.env.PROOFSPEC_TMUX_SOCKET ?? DEFAULT_TMUX_SOCKET
 }
 
 const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
@@ -142,8 +167,8 @@ function kickoffFor(task: string): string {
  *  fresh one — same name, same dedicated server, never the user's own. A settle's kill is
  *  no longer this command called inline; it is the same kill line reached through the
  *  reaper, so that the settle can answer before the session it kills dies. */
-export function tmuxKillSessionCommand(task: string): TmuxCommand {
-  return { command: 'tmux', args: ['-L', tmuxSocket(), 'kill-session', '-t', task] }
+export function tmuxKillSessionCommand(task: string, queueRoot: string): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(queueRoot), 'kill-session', '-t', task] }
 }
 
 /** The tmux command that lists the sessions standing on the dedicated server. Two readers,
@@ -151,14 +176,14 @@ export function tmuxKillSessionCommand(task: string): TmuxCommand {
  *  live (the socket isolation means everything standing there is one this tool started, so
  *  the plain line count is the count), and the docket reads the names to learn whether a
  *  TASK's session is still there to attach to. */
-export function tmuxListSessionsCommand(): TmuxCommand {
-  return { command: 'tmux', args: ['-L', tmuxSocket(), 'list-sessions'] }
+export function tmuxListSessionsCommand(queueRoot: string): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(queueRoot), 'list-sessions'] }
 }
 
 /** The exact command a person runs to attach to a TASK's session on the dedicated server —
  *  the one line the docket carries for every session the server still holds. */
-export function tmuxAttachCommand(task: string): TmuxCommand {
-  return { command: 'tmux', args: ['-L', tmuxSocket(), 'attach-session', '-t', task] }
+export function tmuxAttachCommand(task: string, queueRoot: string): TmuxCommand {
+  return { command: 'tmux', args: ['-L', tmuxSocket(queueRoot), 'attach-session', '-t', task] }
 }
 
 /** A command as the one line a person copies and runs. */
@@ -177,16 +202,19 @@ export function parseSessionNames(output: string): readonly string[] {
 
 /** The session names the dedicated server holds, or none when the server holds no session at
  *  all — a server with nothing on it is the docket's ordinary every-session-absent case, not
- *  a fault worth surfacing. */
-export async function listTmuxSessions(): Promise<readonly string[]> {
-  return parseSessionNames(await capture(tmuxListSessionsCommand()))
+ *  a fault worth surfacing. Derives its socket from the queue root it is given, or from this
+ *  process's own working directory — for the CLI, the queue root it was started from; a
+ *  caller whose cwd is not the repo (the MCP server, living in the TASK's worktree) passes
+ *  the root explicitly. */
+export async function listTmuxSessions(queueRoot = process.cwd()): Promise<readonly string[]> {
+  return parseSessionNames(await capture(tmuxListSessionsCommand(queueRoot)))
 }
 
 /** How many executor sessions stand live on the dedicated server, asked of the server itself
  *  fresh on every call. A server with no sessions — or no server standing at all — answers
  *  zero: that is tmux's own reading of "nothing runs there", not a failure to count. */
-export async function liveSessionCount(): Promise<number> {
-  const listing = await runForOutput(tmuxListSessionsCommand())
+export async function liveSessionCount(queueRoot = process.cwd()): Promise<number> {
+  const listing = await runForOutput(tmuxListSessionsCommand(queueRoot))
   if (listing === undefined) return 0
   return listing.split('\n').filter(line => line.trim() !== '').length
 }
@@ -329,7 +357,7 @@ function writeSessionHandoff(executor: ExecutorName, start: SessionStart): Sessi
  * one argument each, same bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
-  const socket = tmuxSocket()
+  const socket = tmuxSocket(start.queueRoot)
   const handoff = writeSessionHandoff(executorName(), start)
   // Which harness env the session carries follows the handoff's own shape — the harness it
   // was built for is the discriminator, not a field's presence.
@@ -340,7 +368,7 @@ export function tmuxSessionCommands(task: string, start: SessionStart): readonly
       `-e`, `PROOFSPEC_SUBAGENT_EXTENSION=${join(start.queueRoot, ...SUBAGENT_EXTENSION_PATH)}`,
     ]
   return [
-    tmuxKillSessionCommand(task),
+    tmuxKillSessionCommand(task, start.queueRoot),
     {
       command: 'tmux',
       args: [
@@ -451,7 +479,7 @@ function runIgnoringFailure(command: TmuxCommand): Promise<void> {
 export async function teardownTask(cwd: string, task: string): Promise<void> {
   await rm(worktreePathFor(cwd, task), { recursive: true, force: true })
   await runGit(cwd, ['worktree', 'prune'])
-  reapSession(task)
+  reapSession(cwd, task)
 }
 
 /** How many seconds the reaper waits before its kill lands — long enough for the settle's
@@ -478,13 +506,13 @@ export type ReaperPlan = {
 /** The reaper a settle schedules for `task`: `sh`, the delay script, and the variables it
  *  reads — the socket resolved here, at scheduling time, from the same override every other
  *  tmux command honors. */
-export function reaperFor(task: string): ReaperPlan {
+export function reaperFor(task: string, queueRoot: string): ReaperPlan {
   return {
     command: 'sh',
     args: ['-c', REAPER_SCRIPT],
     reapEnv: {
       PROOFSPEC_REAP_SECONDS: REAP_DELAY_SECONDS,
-      PROOFSPEC_REAP_SOCKET: tmuxSocket(),
+      PROOFSPEC_REAP_SOCKET: tmuxSocket(queueRoot),
       PROOFSPEC_REAP_TASK: task,
     },
   }
@@ -495,8 +523,8 @@ export function reaperFor(task: string): ReaperPlan {
  *  process that scheduled it and the session it kills — which is the point: the caller of a
  *  settle is usually the very session being killed, so nothing that session owns can be the
  *  one holding the kill. */
-function reapSession(task: string): void {
-  const plan = reaperFor(task)
+function reapSession(cwd: string, task: string): void {
+  const plan = reaperFor(task, cwd)
   const child = spawn(plan.command, [...plan.args], {
     detached: true,
     stdio: 'ignore',
