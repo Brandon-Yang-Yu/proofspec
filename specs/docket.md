@@ -28,7 +28,8 @@ The docket SHALL answer one row for every TASK the conventional queue directory 
 including one whose state word has reached `merged`, until a scheduling pass prunes its
 entry — each row carrying the TASK's name, its state word exactly as its `state` file holds
 it, its phase word and round exactly as its `phase` file holds them, its phase history
-exactly as its `phase-history` file holds it, and the branch and base its MANIFEST records.
+exactly as its `phase-history` file holds it, and the branch and `blocked` its MANIFEST
+records.
 A TASK with no `phase` file SHALL carry the phase word and its round both as absent, never
 invented, and a TASK with no `phase-history` file SHALL carry the history as absent the
 same way. A `phase` file or `phase-history` file that does not hold the shape
@@ -49,9 +50,9 @@ the same way it carries the state word. The phase history rides the row for the 
 reason: it is that account extended backwards, one appended entry per standing the TASK
 reached, and the row carries it as it stands — a file whose shape the docket cannot read
 answers as absent rather than half-invented, the rule it keeps for every file it reads.
-The branch and base ride along as the two facts that say which work the row stands for and
-where it was built; whether that base still holds the TASK is `schedule`'s judgement to
-make, and this view records it rather than deciding it. A merged TASK stays on the docket
+The branch and `blocked` ride along as the facts that say which work the row stands for and
+which TASK, if any, it waits behind; whether that hold still stands is `schedule`'s
+judgement to make, and this view records the field rather than deciding it. A merged TASK stays on the docket
 until the pass prunes its entry, because a person asking what happened to a TASK wants the
 answer `merged`, not a silent absence. Sorting by name keeps two runs over the same queue
 comparable, the same reason the graph answers in one stable order.
@@ -199,33 +200,14 @@ holds them — so a page
 held open shows the docket as it stood at its last request, never as it stood when the
 server started.
 
-The rendered page SHALL render the queue's entries as chains, not one flat row per queue
-entry. An entry whose MANIFEST records a base of the `task` shape — one TASK's worktree
-deliberately built on another TASK's — links to the TASK that base names while that TASK
-is still on the queue, and the entries so linked form one chain. A chain SHALL render one
-row: the row of its in-progress member, the member nearest the BASE_BRANCH whose state
-word is not `merged`. The members merged before it and the members queued after it SHALL
-ride that row, and none of them SHALL render a row of its own. A merged entry that no entry names as
-its base SHALL keep a row of its own, shown muted, until a scheduling pass prunes its
-entry. A chain's one row SHALL stand in the name order the JSON's rows already carry, at
-the place of the member it renders.
-
-When members ride a row, the row SHALL carry the chain's progress as a bare fraction: the
-members whose state word reads `merged` over all the chain's members, and no words around
-the number. The fraction SHALL be expandable: a `details`/`summary` disclosure listing
-every member of the chain, each by name and state word. An expanded disclosure SHALL stay
-expanded across the page's own refreshes.
-
 The rendered page SHALL show everything the JSON carries except the state word and the
-state word's age. A member riding a row shows inside that row's disclosure by name and
-state word alone, and none of its other facts renders. The branch renders only when it
-differs from the TASK's name. The phase word and its round SHALL stand where the state
-word stood. The round SHALL stand in a column of its own beside the phase word's column,
-always shown, round 1 included. The page's two ages SHALL be the time in the phase word
-and the heartbeat age, each exactly as the row carries it. For a TASK with no phase file —
-queued before any session, or anything else — the page SHALL show the word's absence as
-absent, the same way it shows a missing heartbeat, and SHALL never show the state word
-standing in for it.
+state word's age. The branch renders only when it differs from the TASK's name. The phase
+word and its round SHALL stand where the state word stood. The round SHALL stand in a
+column of its own beside the phase word's column, always shown, round 1 included. The
+page's two ages SHALL be the time in the phase word and the heartbeat age, each exactly
+as the row carries it. For a TASK with no phase file — queued before any session, or
+anything else — the page SHALL show the word's absence as absent, the same way it shows a
+missing heartbeat, and SHALL never show the state word standing in for it.
 
 The page SHALL also show, for each rendered row, an account of the phases its TASK has been
 through: every phase word in the order each first stood; the total time spent in each, the word's
@@ -251,19 +233,7 @@ account is computed fresh on each answer from the recorded moments, which is wha
 current phase live and the closed phases closed — the last entry runs to now because the
 standing it records is still the standing the `phase` file holds.
 
-A chain renders one row because a TASK built on another TASK's worktree waits for that
-TASK to merge. The linked entries are one stream of work taken one after the other, and a
-row per entry would say there were two streams running at once. A merged entry that stays
-on the docket only because another TASK is built on it looks like work still standing.
-Folding it into the row that stands on it says what it is: work already landed. The
-fraction answers the question a scanning eye asks of a chain: how much of it has landed.
-The names sit behind the fraction because most glances do not want them; a person who does
-want them opens the disclosure and reads every member by name and state word. The list
-then stays open across the page's own refreshes, because a list that collapsed on every
-refresh would close while the person was reading it. The state word shows inside the
-disclosure and nowhere else. On a row it would say `building` almost the whole life of a
-TASK; as a riding member's one rendered fact it says the thing the fraction counts: that
-this member has merged. The branch renders only when it differs from the TASK's name
+The branch renders only when it differs from the TASK's name
 because the two are two kinds of name that happen to coincide here. When they coincide,
 the TASK's name already carries everything the branch name would say.
 
@@ -280,8 +250,7 @@ two hard constraints: each command stays whole in one copyable run, and no contr
 appears. Where the work sits in the TASK's whole run reads from the account the row
 already carries; the rendering improves and no new fact joins the contract. The page's
 tests hold its whole reach as inventories, and they extend honestly to what the page now
-ships: the `details`/`summary` disclosure, the viewport and color-scheme metas, the
-classes, and the element reads and writes that carry an open disclosure across a refresh.
+ships: the viewport and color-scheme metas and the classes.
 
 The state word stays in the JSON because the page's JSON is the same read the one-shot
 command makes, not a second answer — and so the history travels in the JSON the same way.
@@ -330,6 +299,20 @@ page is not a second capability beside the view; it is the view, asked more than
 - "Two chains in one answer each render their own row" → tests/docket/page.test.ts
 <!-- /scenarios -->
 
+### Requirement: The rendered page gives every queue entry its own row
+
+The rendered page SHALL render every queue entry as its own row. A TASK whose MANIFEST
+carries a `blocked` SHALL name on its row the TASK that blocks it. Rows SHALL stand with
+TASKs that are not held before TASKs that are held, in name order within each group; a
+TASK is held when its `blocked` names a TASK still on the queue whose state word is not
+`merged`. A merged entry still on the queue SHALL keep its own row, shown muted, until a
+scheduling pass prunes its entry. The page SHALL show no fraction and no disclosure.
+
+A held TASK is waiting, not working, and the rows a person scans first are the rows whose
+work can move; the blocked name on a waiting row says who it waits for. A merged entry
+still standing on the queue is finished work the pass has not pruned yet, and its own
+muted row says what it is: work already landed, not work still standing.
+
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does
 
 The page SHALL ask the server for the docket again on its own, on a short interval of its
@@ -353,7 +336,7 @@ move with it — and two people reading the same open page read the same numbers
 The server SHALL answer a second read — a JSON answer at `/archive` — beside the docket's
 own answer, computed fresh on each request from the archive directory
 `.proofspec/archive/`. It SHALL carry one record per archived TASK, each holding: the
-TASK's name; the branch and base its MANIFEST records; when it was enqueued, read from its
+TASK's name; the branch and `blocked` its MANIFEST records; when it was enqueued, read from its
 MANIFEST file's write time; when it was settled, read from its `state` file's write time;
 how long it lived, the difference between those two times, computed on each request and
 tracked nowhere else; and its phase history, read from the `phase-history` file the
