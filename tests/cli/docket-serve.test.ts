@@ -42,7 +42,7 @@ async function freePort(): Promise<number> {
  *  refuse, held by a listener the serve did not make. */
 async function holdPort(): Promise<{ readonly port: number; release(): Promise<void> }> {
   const holder = createNetServer()
-  const port = await new Promise((resolve, reject) => {
+  const port = await new Promise<number>((resolve, reject) => {
     holder.once('error', reject)
     holder.listen(0, '127.0.0.1', () => resolve((holder.address() as AddressInfo).port))
   })

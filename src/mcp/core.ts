@@ -264,7 +264,7 @@ export type EnqueueTaskResult =
 function realScheduleActions(cwd: string): ScheduleActions {
   return {
     startSession: task => tmuxStartSession(cwd, task),
-    countSessions: liveSessionCount,
+    countSessions: () => liveSessionCount(cwd),
     judge: piJudge(),
     notifyHuman: stderrNotifyHuman(),
   }

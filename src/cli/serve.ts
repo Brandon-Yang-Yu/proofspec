@@ -5,6 +5,7 @@ import type { DocketActions } from '../docket/index.ts'
 import { readArchive } from './queue.ts'
 import { renderAnswer } from './render.ts'
 import { docket } from './run.ts'
+import { queueRootDigest } from './digest.ts'
 
 /**
  * The docket served over HTTP. `cli` is the one capability that owns the process, so it owns
@@ -20,15 +21,27 @@ import { docket } from './run.ts'
  * naming an interface with `--host` is choosing who reads.
  */
 
-/** The conventional port, so the URL is memorable. */
-export const DOCKET_SERVE_PORT = 4567
+/** Where the derived port numbering starts, so the whole rule lands in 4567..5566. */
+const SERVE_PORT_BASE = 4567
+
+/** The port one queue root serves on when the caller names none: the base plus the numeric
+ *  value of the queue root's SHA-256 digest taken modulo 1000 — a number from 4567 through
+ *  5566 that the same queue root derives on every run, and that two repos checked out side
+ *  by side do not share. Deliberately the whole digest modulo 1000 rather than the tmux
+ *  socket rule's first 8 hex digits: the two per-repo defaults are separate facts with
+ *  separate collision spaces, so one leaking into the other's rule shows up instead of
+ *  coincidentally aligning. */
+function derivedServePort(queueRoot: string): number {
+  return SERVE_PORT_BASE + Number(BigInt(`0x${queueRootDigest(queueRoot)}`) % 1000n)
+}
 
 /** The interface serving answers on when the caller names none: the loopback. */
 const LOOPBACK = '127.0.0.1'
 
 /** What serving is asked for: where the queue lives, which interface and port to listen on
- *  (the loopback and the conventional one when left out), the session server to ask, and the
- *  clock each request computes its ages from — read per request, never once at startup. */
+ *  (the loopback and the queue root's derived port when left out), the session server to ask,
+ *  and the clock each request computes its ages from — read per request, never once at
+ *  startup. */
 export type ServeOptions = {
   readonly cwd: string
   readonly port?: number
@@ -53,11 +66,11 @@ export type RefusedServe = { readonly ok: false; readonly reason: string }
 
 /**
  * Serves the docket until `stop` is called on the answer. A port nothing can be listening
- * on is refused rather than retried: the caller named it, and silently serving somewhere
- * else would answer a URL nobody asked for.
+ * on is refused rather than retried: whether the caller named it or the queue root derived
+ * it, silently serving somewhere else would answer a URL nobody asked for.
  */
 export async function serveDocket(options: ServeOptions): Promise<StandingServe | RefusedServe> {
-  const port = options.port ?? DOCKET_SERVE_PORT
+  const port = options.port ?? derivedServePort(options.cwd)
   const host = options.host ?? LOOPBACK
   const ask: Answering = { options, clock: options.now ?? (() => new Date()) }
   const server = createServer((request, response) => {
@@ -112,7 +125,7 @@ function listen(server: ReturnType<typeof createServer>, port: number, host: str
       resolve({
         ok: false,
         reason: error.code === 'EADDRINUSE'
-          ? `port ${port} is already in use`
+          ? `port ${port} is already in use (name another with --port)`
           // The interface is named too, because it is as often the part that cannot be
           // listened on — an address the machine does not hold, say.
           : `could not listen on ${host} at port ${port}: ${error.message}`,
