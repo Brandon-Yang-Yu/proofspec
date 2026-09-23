@@ -12,7 +12,7 @@ import { afterEach, expect, it } from 'vitest'
 import { DEFAULT_JUDGE_TIMEOUT_MS, judgeTimeoutMs, piJudge } from '../../src/cli/judge.ts'
 import type { RelationshipJudgeInput } from '../../src/schedule/index.ts'
 
-// Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
+// Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
 // Scenario: A malformed timeout override falls back to the default, rather than silently disabling the timeout
 // GIVEN a PROOFSPEC_JUDGE_TIMEOUT_MS value that is not a positive number
 // WHEN judgeTimeoutMs reads it
@@ -56,7 +56,7 @@ const INPUT: RelationshipJudgeInput = {
   intents: { a: 'renames a helper', b: 'fixes a typo' },
 }
 
-// Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
+// Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
 // Scenario: A process that never closes its own stdin still returns instead of hanging, because judge closes it first
 // GIVEN a stand-in pi that only answers after reading its stdin to EOF
 // WHEN judge runs it, bounded by an ample configured timeout
@@ -70,7 +70,7 @@ it('closes stdin so a process reading it to EOF does not hang', async () => {
   expect(verdict).toEqual({ kind: 'resolved' })
 })
 
-// Requirement: The bare CLI's judge asks a fresh pi process per relationship, its stdin closed so it cannot hang
+// Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
 // Scenario: A process that never answers is not waited on past the configured timeout
 // GIVEN a stand-in pi that never exits on its own
 // WHEN judge runs it, bounded by a short configured timeout

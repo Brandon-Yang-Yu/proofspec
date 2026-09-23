@@ -637,7 +637,7 @@ async function readHeartbeat(root: string, task: string): Promise<string | undef
   }
 }
 
-// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Requirement: A heartbeat is refreshed on every move the session makes
 // Scenario: A heartbeat file is refreshed in the TASK's queue entry on every observable move the session makes
 // GIVEN a real queue entry named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK
 // WHEN each of the six observable-move events fires, with the heartbeat deleted before each one
@@ -664,7 +664,7 @@ it('refreshes a heartbeat in the TASK\'s queue entry on every observable move', 
   }
 })
 
-// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Requirement: A heartbeat is refreshed on every move the session makes
 // Scenario: No heartbeat is written when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset
 // GIVEN a real queue entry, and first PROOFSPEC_QUEUE_ROOT then PROOFSPEC_TASK unset in the environment
 // WHEN an observable-move event fires after each unset
@@ -687,7 +687,7 @@ it('writes no heartbeat when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is un
   expect(await readHeartbeat(repo.root, 'a')).toBeUndefined()
 })
 
-// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Requirement: A heartbeat is refreshed on every move the session makes
 // Scenario: The heartbeat is subscribed to exactly the six observable-move events, and to no others
 // GIVEN the extension registered against a recording fake
 // WHEN its event subscriptions are read back
@@ -702,7 +702,7 @@ it('subscribes the heartbeat to exactly the six observable-move events, and no o
   expect([...handlers.keys()].sort()).toEqual([...OBSERVABLE_MOVES].sort())
 })
 
-// Requirement: The extension refreshes a heartbeat on every move the session makes
+// Requirement: A heartbeat is refreshed on every move the session makes
 // Scenario: A heartbeat refresh leaves the entry's state, MANIFEST, and LEASE exactly as they were
 // GIVEN a queue entry carrying a state, a MANIFEST, and a LEASE
 // WHEN all six observable-move events fire

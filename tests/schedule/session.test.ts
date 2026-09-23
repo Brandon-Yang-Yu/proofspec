@@ -1,11 +1,12 @@
 // Capability: schedule
 
 import { execFile } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import { liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 const execFileAsync = promisify(execFile)
@@ -19,7 +20,7 @@ afterEach(() => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A ready TASK whose worktree has never been checked out gets one created at its conventional path
 // GIVEN a ready TASK whose worktree has never been checked out
 // WHEN startSession runs
@@ -34,7 +35,7 @@ it('creates a worktree at the TASK\'s conventional path when none has ever been 
   expect(await repo.git(['-C', worktree, 'branch', '--show-current'])).toBe('work/a')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A ready TASK whose worktree already exists at its conventional path has it reused, not recreated
 // GIVEN a ready TASK whose worktree already exists at its conventional path
 // WHEN startSession runs
@@ -54,7 +55,7 @@ it('reuses a TASK\'s worktree once it already exists, rather than recreating it'
   await expect(readFile(join(worktree, 'untracked-marker.txt'), 'utf8')).resolves.toBe('still here')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead
 // GIVEN a TASK whose conventional path holds an empty directory with no .git file at its root
 // WHEN startSession runs
@@ -73,7 +74,7 @@ it('treats a directory merely sitting at the conventional path as no worktree, c
   expect(await repo.git(['-C', worktree, 'branch', '--show-current'])).toBe('work/a')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: A worktree creation that fails throws an error carrying git's own stderr
 // GIVEN a TASK whose branch is already checked out in another worktree, so git worktree add refuses
 // WHEN startSession runs
@@ -89,6 +90,42 @@ it('throws an error carrying git\'s own stderr when creating the worktree fails'
   await expect(resolveSessionWorktree(repo.root, 'a')).rejects.toThrow(
     /fatal: 'work\/a' is already (used by worktree|checked out at)/,
   )
+})
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: A session start that fails throws an error carrying tmux's own stderr
+// GIVEN a ready TASK whose tmux session start is forced to fail, so tmux itself writes its own words to stderr
+// WHEN startSession runs
+// THEN it throws an error carrying tmux's own stderr in its message, not a bare exit-code summary
+it('throws an error carrying tmux\'s own stderr when starting the session fails', async () => {
+  // The persona is read before any tmux call, so the scratch repo carries one — the throw
+  // below must come from the start itself, not from a missing setup file.
+  const repo = await makeGitRepo({ 'a.txt': 'a', '.pi/agents/executor.md': 'You are the executor.\n' })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+
+  // The reproducible forcing, the acceptance run's own: a regular file standing where
+  // tmux's socket directory would be (tmux resolves -L <name> to <TMUX_TMPDIR>/tmux-<uid>/
+  // <name>), under a throwaway TMUX_TMPDIR and a throwaway PROOFSPEC_TMUX_SOCKET. The
+  // server cannot stand, so this is a real start failing with tmux's own words on stderr —
+  // and the kill before the start fails the same ordinary way, staying ignored exactly as
+  // in production, so the throw can only come from the start.
+  const previousTmuxTmpdir = process.env.TMUX_TMPDIR
+  const brokenSocketRoot = await mkdtemp(join(tmpdir(), 'proofspec-tmux-'))
+  process.env.TMUX_TMPDIR = brokenSocketRoot
+  process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-start-fails'
+  // @types/node marks getuid optional because Windows lacks it; tmux is POSIX-only, so the
+  // fallback is for the type system alone, never reached where this test runs.
+  const uid = process.getuid?.() ?? 0
+  await writeFile(join(brokenSocketRoot, `tmux-${uid}`), '')
+  try {
+    // tmux's own diagnostic — wording only tmux writes, which a summary naming no cause
+    // (a bare exit code) never carries.
+    await expect(tmuxStartSession(repo.root, 'a')).rejects.toThrow(/is not a directory/)
+  } finally {
+    if (previousTmuxTmpdir === undefined) delete process.env.TMUX_TMPDIR
+    else process.env.TMUX_TMPDIR = previousTmuxTmpdir
+    await rm(brokenSocketRoot, { recursive: true, force: true })
+  }
 })
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
@@ -153,7 +190,7 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   }
 }, 10000)
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi
 // GIVEN a tmux session already named for the TASK
 // WHEN the tmux commands to start its session are built
@@ -176,7 +213,7 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
   ])
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
@@ -190,7 +227,7 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
   expect(start.args.slice(envFlagIndex, envFlagIndex + 4)).toEqual(['-e', 'PROOFSPEC_QUEUE_ROOT=/repo', '-e', 'PROOFSPEC_TASK=a'])
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation carries --approve and --extension pinned to this checkout's own progress extension
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
@@ -205,7 +242,7 @@ it('carries --approve and --extension pinned to this checkout\'s own progress ex
   expect(start.args.slice(piIndex, piIndex + 5)).toEqual(['pi', '--approve', '--no-extensions', '--extension', '/repo/.pi/extensions/progress.ts'])
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one
 // GIVEN a TASK and its worktree
 // WHEN the tmux start command is built
@@ -216,7 +253,7 @@ it('disables extension auto-discovery so the worktree\'s own progress.ts never l
   expect(start.args).toContain('--no-extensions')
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The tmux commands run against a dedicated server, never the user's default or any other named one
 // GIVEN the default socket name has not been overridden
 // WHEN the tmux commands to start a TASK's session are built
@@ -229,7 +266,7 @@ it('runs against a dedicated tmux server, never the default one, unless overridd
   for (const command of commands) expect(command.args.slice(0, 2)).toEqual(['-L', 'proofspec'])
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK
 // GIVEN a TASK ready to build
 // WHEN the tmux start command is built
@@ -255,7 +292,7 @@ it('hands pi one positional kickoff message telling the session to begin working
   expect(kickoff).toMatch(/branch/)
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target
 // GIVEN PROOFSPEC_TMUX_SOCKET names a different socket
 // WHEN the tmux commands to start a TASK's session are built
@@ -312,7 +349,7 @@ it('reads the live count from the sessions standing on the server itself', async
   }
 })
 
-// Requirement: The bare CLI's startSession opens the TASK's own worktree and runs pi there, headed
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree
 // GIVEN startSession's own cwd and a TASK's worktree path
 // WHEN the SessionStart is built

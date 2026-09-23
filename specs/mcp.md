@@ -21,6 +21,9 @@ Both harnesses serve the same product, and a tool answered one way inside `pi` a
 way through the server is the same product disagreeing with itself. The tools are written
 once; the transports only carry calls to them.
 
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
 ### Requirement: An adapter carries transport only, never a rule
 
 Each transport adapter SHALL carry transport only — the parameter schemas its tools are
@@ -32,6 +35,9 @@ Two surfaces that share a rule by each holding a copy of it do not share it for 
 copy gets edited, the other stands, and the two harnesses drift apart with no single change
 to point at. One core with two thin adapters is the shape that keeps that from starting.
 
+<!-- scenarios: generated -->
+<!-- /scenarios -->
+
 ### Requirement: The MCP server runs from the queue root's own checkout, never the TASK's worktree
 
 The MCP server process SHALL be started from the queue root's own checkout, never from the
@@ -41,6 +47,9 @@ A freshly created worktree carries whatever copy of the tools the TASK's branch 
 a TASK's branch is cut from `main` at some earlier, possibly stale point; the queue root's
 checkout is where the current tools live. A session that must report its state needs the
 current tools, not its branch's possibly stale copy.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
 
 ### Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
 
@@ -52,3 +61,6 @@ SHALL do nothing else. The Claude Code harness's hooks call it.
 One write, two triggers: the `pi` transport fires the write from its own events, and the
 Claude Code transport fires it from hooks that run this entry. The write is the one shared
 thing, so the `heartbeat` file means the same whichever harness the session runs in.
+
+<!-- scenarios: generated -->
+<!-- /scenarios -->
