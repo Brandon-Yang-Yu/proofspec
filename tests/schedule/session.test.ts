@@ -246,21 +246,27 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   // this requirement exists to prevent.
   expect(reaperFor('a', '/repo').args).toEqual(['-c', 'sleep "$PROOFSPEC_REAP_SECONDS" && exec tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"'])
 
-  // And on disk, with the two spellings manufactured rather than inherited from the
-  // machine's own tmpdir: a symlinked alias of the root names the same queue, the start
-  // command is built from the root spelling, and the reaper — handed the alias — must
-  // still resolve the socket that start named. A reaper hashing the handed spelling
-  // kills on the alias's other name for the same server and leaks the session; on a
-  // symlink-free tmpdir this is the only form that still discriminates. The build holds
-  // the worktree on disk, as a production start does.
+  // And on disk, with the spellings manufactured rather than inherited from the
+  // machine's own tmpdir: a whole-path symlinked alias of the root, and a mid-path
+  // symlink on the route to it, each name the same queue. The start command is built
+  // from the root spelling, and the reaper — handed each respelled root in turn — must
+  // still resolve the socket that start named. A reaper hashing the handed spelling, or
+  // resolving symlinks only when the handed path is itself one, kills on the alias's or
+  // the route's other name for the same server and leaks the session; on a symlink-free
+  // tmpdir this is the only form that still discriminates. The build holds the worktree
+  // on disk, as a production start does.
   const holder = await mkdtemp(join(tmpdir(), 'proofspec-reaper-spelling-'))
   try {
     const root = join(holder, 'root')
     await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
     const alias = join(holder, 'alias')
     symlinkSync(root, alias)
+    const midParent = join(holder, 'midparent')
+    symlinkSync(holder, midParent)
+    const midRoot = join(midParent, 'root')
     const [, start] = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' })
     expect(reaperFor('a', alias).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
+    expect(reaperFor('a', midRoot).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
   } finally {
     await rm(holder, { recursive: true, force: true })
   }
@@ -848,15 +854,21 @@ it('asks the dedicated server for the live count by its own -L socket, never the
     // that reads this root's derived server, fresh, answers both.
     await askDerived(['new-session', '-d', '-s', 'second', 'sleep', '60'])
     await expect(liveSessionCount(root)).resolves.toBe(2)
-    // The spelling half: the root handed through a symlinked alias of itself — the count
-    // still reads the same derived server's list, so a reader that canonicalizes only
+    // The spelling half: the root handed through a symlinked alias of itself, and again
+    // through a mid-path symlink on the route to it — the count still reads the same
+    // derived server's list under both spellings, so a reader that canonicalizes only
     // some spellings splits from the scheduler's server and fails here.
     const alias = join(dirname(root), `alias-of-${basename(root)}`)
+    const midParent = join(dirname(root), `midparent-of-${basename(root)}`)
     symlinkSync(root, alias)
+    symlinkSync(dirname(root), midParent)
+    const midRoot = join(midParent, basename(root))
     try {
       await expect(liveSessionCount(alias)).resolves.toBe(2)
+      await expect(liveSessionCount(midRoot)).resolves.toBe(2)
     } finally {
       await rm(alias, { force: true })
+      await rm(midParent, { force: true })
     }
   } finally {
     await askDerived(['kill-server']).catch(() => {})
