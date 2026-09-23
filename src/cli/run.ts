@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import { baseBranch } from '../base-branch.ts'
 import { changedTerms, definitionsFor, reopenedByTerms, standardTexts } from '../glossary/index.ts'
 import type { TermChange } from '../glossary/index.ts'
 import { guard } from '../guard/index.ts'
@@ -1303,7 +1304,7 @@ function now(options: RunOptions): string {
 
 /**
  * Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch
- * has landed in main
+ * has landed in the BASE_BRANCH
  *
  * The pass's half of the settle: name the TASKs the pure rule settles, then run each through
  * the one shared settle (`src/cli/settle.ts`) the `settle_task` tool also runs — the pass is
@@ -1323,7 +1324,7 @@ async function settleMergedStates(
     .map(([task, word]) => ({ task, word, branch: branches.get(task) }))
     .filter((one): one is MergeCandidate => one.branch !== undefined)
   const named = await tasksToMerge(candidates, async branch => {
-    const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: 'main' })
+    const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: baseBranch() })
     return answer.ok && answer.isAncestor
   })
   const settled: string[] = []

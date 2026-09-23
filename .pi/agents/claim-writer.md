@@ -1,6 +1,7 @@
 ---
 name: claim-writer
-description: Drafts the CLAIMs — one translation pass from STANDARD to scenario — and writes the PLAN itself at the TASK's queue entry, .proofspec/dispatch/<task>/PLAN. Receives the intent, the affected spec files, and the explorer's two maps. Reconciles old proof per the PROOF MAP, names each requirement's one test file, and decides whether the TASK adds or changes user-facing UI. Never edits specs/*.md, never writes code or tests.
+description: >-
+  Drafts the CLAIMs — one translation pass from STANDARD to scenario — and writes the PLAN itself at the TASK's queue entry, .proofspec/dispatch/<task>/PLAN. Receives the intent, the affected spec files, and the explorer's two maps. Reconciles old proof per the PROOF MAP, names each requirement's one test file, and decides whether the TASK adds or changes user-facing UI. Never edits specs/*.md, never writes code or tests.
 tools: read, write, edit, grep, find, ls, bash
 ---
 

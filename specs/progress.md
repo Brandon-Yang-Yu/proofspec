@@ -88,7 +88,7 @@ the wrong place, or into no place a scheduling pass will ever read.
 <!-- scenarios: generated -->
 - "A report with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
 - "A report with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/extension.test.ts
-- "The registered tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
+- "The registered tool reports into PROOFSPEC_QUEUE_ROOT even when the session's own working directory names a different directory" → tests/progress/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: report_task_state delegates to writeState and answers its outcome as a value
@@ -124,7 +124,7 @@ TASK it settles the same way `report_task_state` does — from `PROOFSPEC_QUEUE_
 unset. It
 SHALL never take its caller's word for the settle conditions: on every call it SHALL read
 the TASK's current state word from the queue, and check its MANIFEST's `branch` is an
-ancestor of `main`, fresh from git. Either condition failing, it SHALL refuse as a value —
+ancestor of the BASE_BRANCH, fresh from git. Either condition failing, it SHALL refuse as a value —
 `{ok: false, reason}` naming which condition failed — touching nothing: the state word, the
 worktree, and the session stand exactly as they were. Both holding, it SHALL perform the
 settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its
@@ -147,13 +147,13 @@ whose tool call this is, and a kill that took effect at once would cut the answe
 before the caller ever saw whether the settle succeeded.
 
 <!-- scenarios: generated -->
-- "A settle for a TASK whose branch has not landed in main is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
+- "A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
-- "A settle for a mergeable TASK whose branch has landed in main rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
+- "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
-- "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never ExtensionContext.cwd" → tests/progress/settle.test.ts
+- "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory" → tests/progress/settle.test.ts
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
 

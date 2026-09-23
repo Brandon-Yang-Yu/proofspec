@@ -203,9 +203,9 @@ The rendered page SHALL render the queue's entries as chains, not one flat row p
 entry. An entry whose MANIFEST records a base of the `task` shape — one TASK's worktree
 deliberately built on another TASK's — links to the TASK that base names while that TASK
 is still on the queue, and the entries so linked form one chain. A chain SHALL render one
-row: the row of its in-progress member, the member nearest `main` whose state word is not
-`merged`. The members merged before it and the members queued after it SHALL ride that
-row, and none of them SHALL render a row of its own. A merged entry that no entry names as
+row: the row of its in-progress member, the member nearest the BASE_BRANCH whose state
+word is not `merged`. The members merged before it and the members queued after it SHALL
+ride that row, and none of them SHALL render a row of its own. A merged entry that no entry names as
 its base SHALL keep a row of its own, shown muted, until a scheduling pass prunes its
 entry. A chain's one row SHALL stand in the name order the JSON's rows already carry, at
 the place of the member it renders.

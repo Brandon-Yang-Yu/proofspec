@@ -14,11 +14,11 @@ function record(task: string, options: Partial<TaskRecord> = {}): TaskRecord {
 }
 
 // Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` is `main` is read from its merge-base with `main`
-// GIVEN an in-flight TASK whose base is `main`
+// Scenario: A TASK whose `base` is of the `main` shape is read from its merge-base with the BASE_BRANCH
+// GIVEN an in-flight TASK whose base is `{kind: 'main'}`
 // WHEN the graph decides what to measure it against
-// THEN it is measured against `main`, with no basedOn claim to verify
-it('measures a TASK whose base is main against main', () => {
+// THEN it is measured against the BASE_BRANCH, with no basedOn claim to verify
+it('measures a TASK whose base is of the main shape against the BASE_BRANCH', () => {
   const bases = basesFor([record('a')])
 
   expect(bases).toEqual([
@@ -48,11 +48,11 @@ it('measures a TASK whose base names an in-flight TASK against that branch', () 
 })
 
 // Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` names a TASK that has merged is read from `main` instead
+// Scenario: A TASK whose `base` names a TASK that has merged is read from the BASE_BRANCH instead
 // GIVEN an in-flight TASK whose base names a TASK whose own state has reached merged
 // WHEN the graph decides what to measure it against
-// THEN it is measured against `main`, with no basedOn claim to verify
-it('measures a TASK whose base names a merged TASK against main instead', () => {
+// THEN it is measured against the BASE_BRANCH, with no basedOn claim to verify
+it('measures a TASK whose base names a merged TASK against the BASE_BRANCH instead', () => {
   const target = record('a', { state: 'merged' })
   const dependent = record('b', {
     manifest: { intentRef: 'docs/y.md', branch: 'work/b', base: { kind: 'task', task: 'a', reason: 'needs a\'s parser' } },
