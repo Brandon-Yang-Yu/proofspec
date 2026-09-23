@@ -679,7 +679,7 @@ it('runs against a dedicated tmux server derived from the queue root, never the 
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
 // Scenario: The default socket is derived from the queue root, so two repos never share a server
-// GIVEN the socket override unset, and two different queue roots
+// GIVEN the socket override unset, two different queue roots, and one real root spelled two ways — a whole-path symlink beside it, and a mid-path symlink on the route to it
 // WHEN the tmux commands to start a TASK's session are built for each root
 // THEN every command reaches tmux through -L on a name of the per-repo
 //      proofspec-<short hash> shape — the same name for the same root on every build and
@@ -721,13 +721,20 @@ it('derives the default socket from the queue root, so two repos never share a s
   // command of each build is held to it and to the shape, never the kill's alone.
   const holder = await mkdtemp(join(tmpdir(), 'proofspec-socket-spelling-'))
   try {
-    const root = join(holder, 'root')
+    const root = join(holder, 'realparent', 'root')
     await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
     const alias = join(holder, 'alias')
     symlinkSync(root, alias)
     const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' }).map(socketOf)
     const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: 'you are the executor' }).map(socketOf)
-    for (const socket of [...byRoot, ...byAlias]) expect(socket).toMatch(/^proofspec-.+$/)
+    // A mid-path spelling too: the symlink sits on the route to the root, not over the
+    // whole of it — the `/var` vs `/private/var` shape the canonicalization exists for.
+    // An implementation resolving symlinks only when the handed path is itself one passes
+    // the whole-path tie above and dies here.
+    const midPath = join(holder, 'midparent', 'root')
+    await symlinkSync(join(holder, 'realparent'), join(holder, 'midparent'))
+    const byMidPath = tmuxSessionCommands('a', { worktree: join(midPath, '.proofspec/worktrees/a'), queueRoot: midPath, systemPrompt: 'you are the executor' }).map(socketOf)
+    for (const socket of [...byRoot, ...byAlias, ...byMidPath]) expect(socket).toMatch(/^proofspec-.+$/)
     // The named rule itself, held absolutely where the root stands — the port test's own
     // form: the rule computed locally from the canonical root, the built commands held to
     // it, so no digest variant that switches on the root's existence can pass.
@@ -741,6 +748,7 @@ it('derives the default socket from the queue root, so two repos never share a s
     // `socketForRoot` holds for the synthetic roots, so this proof carries it for both.
     expect(new Set(byRoot).size).toBe(1)
     expect(byAlias).toEqual(byRoot)
+    expect(byMidPath).toEqual(byRoot)
     // And two real roots sharing a directory name under different parents are two repos:
     // the whole-path fact, held on disk the same as off it — the exact two-clones harm
     // this scenario exists to prevent.

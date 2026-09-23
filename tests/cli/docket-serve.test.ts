@@ -127,7 +127,7 @@ it('answers the page at / and the JSON the page reads at /docket', async () => {
 // Scenario: The listener answers the loopback interface on the port derived from the queue root by default
 // GIVEN the command asked to serve with no port named, over a queue whose root's absolute path is known
 // WHEN the server stands
-// THEN it listens on the loopback interface at the port derived from that path — 4567 plus the numeric value of the path's SHA-256 digest taken modulo 1000, a number from 4567 through 5566 — the same port the same queue root derives on every run
+// THEN it listens on the loopback interface at the port derived from that path — 4567 plus the numeric value of the path's SHA-256 digest taken modulo 1000, a number from 4567 through 5566 — the same port the same queue root derives on every run, however that root is spelled
 it('listens on the loopback at the port derived from the queue root by default', async () => {
   const served = await serveOver(FILES)
   const port = derivedPort(served.root)
