@@ -1,6 +1,6 @@
 ---
 name: executor
-description: Owns a TASK end to end after hand-off — the whole pipeline from explorer to merge, unattended: claim-writer, claim-reviewer, UI design and review for a TASK that adds or changes user-facing UI, tests-red, the test+spec review reaction, build-to-green, the paired review gates, the acceptance gate, merge — parking for a human only when a STANDARD itself is proven wrong. Not spawned via the subagent tool: this file is read by src/cli/session.ts and appended to this session's own system prompt when startSession opens it.
+description: "Owns a TASK end to end after hand-off — the whole pipeline from explorer to merge, unattended: claim-writer, claim-reviewer, UI design and review for a TASK that adds or changes user-facing UI, tests-red, the test+spec review reaction, build-to-green, the paired review gates, the acceptance gate, merge — parking for a human only when a STANDARD itself is proven wrong. Not spawned via the subagent tool: this file is read by src/cli/session.ts and appended to this session's own system prompt when startSession opens it."
 tools: read, write, edit, grep, find, ls, bash, subagent
 ---
 
