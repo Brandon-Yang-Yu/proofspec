@@ -4,16 +4,13 @@
  * everything past that: what a TASK's own state means, and how in-flight TASK relate.
  */
 
-/** What this TASK's worktree was built on. The `task` shape argues why; `main` needs no reason. */
-export type ManifestBase =
-  | { readonly kind: 'main' }
-  | { readonly kind: 'task'; readonly task: string; readonly reason: string }
-
-/** The JSON hand-off a TASK's own worktree carries. */
+/** The JSON hand-off a TASK's own worktree carries. `blocked` is present only when the TASK
+ *  waits behind another: the TASK it waits for, and the reason its MANIFEST argues for the
+ *  wait. Absent, the TASK's branch is cut from the BASE_BRANCH like any other. */
 export type Manifest = {
   readonly intentRef: string
   readonly branch: string
-  readonly base: ManifestBase
+  readonly blocked?: { readonly task: string; readonly reason: string }
 }
 
 /** A MANIFEST that stands, or the reason it does not. */
@@ -29,20 +26,22 @@ export type Node =
   | { readonly kind: 'capability'; readonly name: string }
   | { readonly kind: 'term'; readonly name: string }
 
-/** The TASK-to-TASK edge a `base` of kind `task` argues, once its ancestry is verified real. */
-export type BasedOn = { readonly task: string; readonly reason: string }
+/** The TASK-to-TASK edge a `blocked` field records: which TASK this one waits behind, and
+ *  the reason it waits. A manifest fact, verified in git by nobody. */
+export type BlockedBy = { readonly task: string; readonly reason: string }
 
 /**
- * One TASK as the graph answers it: its writes and reopened edges, its verified basedOn edge
- * when it has one, and a problem when something about it did not hold. `problem` rides beside
- * the edges rather than replacing them, because a TASK whose branch reads fine but whose
- * claimed ancestry does not is still a TASK whose edges are real.
+ * One TASK as the graph answers it: its writes and reopened edges, its blockedBy edge when
+ * its MANIFEST records one, and a problem when something about it did not hold. `problem`
+ * rides beside the edges rather than replacing them, because a TASK whose branch reads fine
+ * but whose `blocked` names a TASK the queue does not hold is still a TASK whose edges are
+ * real.
  */
 export type TaskEntry = {
   readonly task: string
   readonly writes: readonly Node[]
   readonly reopened: readonly Node[]
-  readonly basedOn: BasedOn | null
+  readonly blockedBy: BlockedBy | null
   readonly problem: string | null
 }
 

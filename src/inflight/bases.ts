@@ -8,60 +8,27 @@ export type TaskRecord = {
   readonly state: TaskState
 }
 
-/**
- * A claimed basedOn ancestry. `branch` is a claim git can check, against the named TASK's own
- * branch. `unresolved` is a claim git is never asked to check at all: the named TASK is not in
- * the queue to have a branch, so there is nothing to verify — the claim itself does not stand.
- */
-export type BasedOnClaim =
-  | { readonly kind: 'branch'; readonly task: string; readonly reason: string; readonly branch: string }
-  | { readonly kind: 'unresolved'; readonly task: string; readonly reason: string }
-
 /** What an in-flight TASK is measured against: its own branch, and the revision to merge-base it with. */
 export type TaskBasis = {
   readonly task: string
   readonly manifest: Manifest
   readonly against: string
-  readonly claim: BasedOnClaim | undefined
 }
 
 /**
- * Decides, for every in-flight TASK, which revision its edges are measured relative to. A
- * TASK built on the BASE_BRANCH is measured against it; one based on another TASK is measured
- * against that TASK's own branch when it is itself in flight, and against the BASE_BRANCH
- * instead once that TASK has merged — the work behind its name is by then already in the
- * BASE_BRANCH. A TASK whose own state has reached merged is not read at all: it has nothing
- * left to place on a graph of what is still in flight.
+ * Decides, for every in-flight TASK, which revision its edges are measured relative to: the
+ * BASE_BRANCH, always. A blocked TASK's branch is cut from the BASE_BRANCH like any other —
+ * the hold decides when the TASK may start, not where its branch begins — so the merge-base
+ * with the BASE_BRANCH is where every TASK's own history begins alike. A TASK whose own
+ * state has reached merged is not read at all: it has nothing left to place on a graph of
+ * what is still in flight.
  *
- * A `base` naming a TASK that is not in the queue at all is a third case neither of those is:
- * unlike a merged TASK, there is no branch behind the name for the work to already be in
- * the BASE_BRANCH. Its own edges are still measured against the BASE_BRANCH — the TASK's own
- * branch is real and readable — but the claim itself is carried as unresolved, so it surfaces
- * as a problem rather than silently reading as a TASK that simply has no basedOn edge.
+ * A `blocked` naming a TASK the queue does not hold changes none of that: the TASK's own
+ * branch is real and readable, so it is measured like any other, and the dangling name
+ * surfaces as that TASK's problem when the graph is drawn.
  */
 export function basesFor(tasks: readonly TaskRecord[]): readonly TaskBasis[] {
-  const byName = new Map(tasks.map(one => [one.task, one]))
-  return tasks.filter(one => one.state === 'in-flight').map(one => basisFor(one, byName))
-}
-
-function basisFor(task: TaskRecord, byName: ReadonlyMap<string, TaskRecord>): TaskBasis {
-  if (task.manifest.base.kind === 'main') {
-    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: undefined }
-  }
-
-  const named = task.manifest.base.task
-  const reason = task.manifest.base.reason
-  const target = byName.get(named)
-  if (target === undefined) {
-    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: { kind: 'unresolved', task: named, reason } }
-  }
-  if (target.state === 'merged') {
-    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: undefined }
-  }
-  return {
-    task: task.task,
-    manifest: task.manifest,
-    against: target.manifest.branch,
-    claim: { kind: 'branch', task: named, reason, branch: target.manifest.branch },
-  }
+  return tasks
+    .filter(one => one.state === 'in-flight')
+    .map(one => ({ task: one.task, manifest: one.manifest, against: baseBranch() }))
 }

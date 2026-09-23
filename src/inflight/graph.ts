@@ -1,6 +1,6 @@
 import { termsStandingOn, termsUsed } from '../glossary/index.ts'
 import { compareStrings } from '../order.ts'
-import type { BasedOn, Graph, Node, TaskEntry } from './types.ts'
+import type { BlockedBy, Graph, Node, TaskEntry } from './types.ts'
 
 /** The one capability file every TERM lives in — never itself a shared node a relationship names. */
 export const GLOSSARY_CAPABILITY = 'glossary'
@@ -17,17 +17,13 @@ export type Vocabulary = {
   readonly capabilities: readonly VocabularyCapability[]
 }
 
-/** A basedOn claim, once it is known to hold or not. `broken` names why it does not. */
-export type VerifiedClaim =
-  | { readonly kind: 'holds'; readonly task: string; readonly reason: string }
-  | { readonly kind: 'broken'; readonly task: string; readonly reason: string; readonly why: string }
-
-/** What one in-flight TASK's branch changed, relative to its own base, plus its basedOn claim. */
+/** What one in-flight TASK's branch changed, relative to the BASE_BRANCH, plus the blockedBy
+ *  edge its MANIFEST records. */
 export type TaskChange = {
   readonly task: string
   readonly editedCapabilities: readonly string[]
   readonly changedTerms: readonly string[]
-  readonly basedOn: VerifiedClaim | undefined
+  readonly blockedBy: BlockedBy | undefined
 }
 
 /** A TASK whose MANIFEST or branch could not be read at all. */
@@ -41,16 +37,20 @@ export function computeGraph(input: {
   readonly changes: readonly TaskChange[]
   readonly failures: readonly TaskFailure[]
   readonly vocabulary: Vocabulary
+  /** Every TASK name standing on the queue, merged ones included: the names a `blocked`
+   *  may name without being a dangling name. */
+  readonly queue: readonly string[]
 }): Graph {
-  const entries = input.changes.map(change => entryFor(change, input.vocabulary))
+  const standing = new Set(input.queue)
+  const entries = input.changes.map(change => entryFor(change, input.vocabulary, standing))
   const failed = input.failures.map(
-    (failure): TaskEntry => ({ task: failure.task, writes: [], reopened: [], basedOn: null, problem: failure.reason }),
+    (failure): TaskEntry => ({ task: failure.task, writes: [], reopened: [], blockedBy: null, problem: failure.reason }),
   )
   const tasks = [...entries, ...failed].sort((a, b) => compareStrings(a.task, b.task))
   return { tasks, relationships: relationshipsAmong(entries) }
 }
 
-function entryFor(change: TaskChange, vocabulary: Vocabulary): TaskEntry {
+function entryFor(change: TaskChange, vocabulary: Vocabulary, standing: ReadonlySet<string>): TaskEntry {
   const writes: Node[] = [
     ...change.editedCapabilities.map((name): Node => ({ kind: 'capability', name })),
     ...change.changedTerms.map((name): Node => ({ kind: 'term', name })),
@@ -65,17 +65,21 @@ function entryFor(change: TaskChange, vocabulary: Vocabulary): TaskEntry {
     .map((capability): Node => ({ kind: 'capability', name: capability.capability }))
     .sort((a, b) => compareStrings(a.name, b.name))
 
-  const basedOn: BasedOn | null =
-    change.basedOn?.kind === 'holds' ? { task: change.basedOn.task, reason: change.basedOn.reason } : null
+  // The edge is the manifest fact itself, drawn whether or not the named TASK stands on the
+  // queue; a name the queue does not hold rides beside it as a problem, because the TASK's
+  // own edges are still real even when the name it waits behind is not.
+  const blockedBy: BlockedBy | null = change.blockedBy ?? null
   const problem =
-    change.basedOn?.kind === 'broken' ? `claimed basedOn ${change.basedOn.task}, but ${change.basedOn.why}` : null
+    change.blockedBy !== undefined && !standing.has(change.blockedBy.task)
+      ? `blocked by ${change.blockedBy.task}, which the queue does not hold`
+      : null
 
-  return { task: change.task, writes, reopened, basedOn, problem }
+  return { task: change.task, writes, reopened, blockedBy, problem }
 }
 
 /**
- * The relationship a shared node raises, once every node a verified basedOn edge already
- * connects is left out. The glossary file is excluded from the walk entirely: every TERM lives
+ * The relationship a shared node raises, once every node a blockedBy edge already connects
+ * is left out. The glossary file is excluded from the walk entirely: every TERM lives
  * there, so two TASK that touched two unrelated words would otherwise always relate through it —
  * a fact about the format, not about the TASKs' work. A TERM node still carries the real signal.
  */
@@ -106,7 +110,7 @@ function nodeKey(node: Node): string {
   return `${node.kind}:${node.name}`
 }
 
-/** Which TASK a verified basedOn edge connects, as the component each task's name maps to. */
+/** Which TASK a blockedBy edge connects, as the component each task's name maps to. */
 function connectedComponents(entries: readonly TaskEntry[]): ReadonlyMap<string, string> {
   const parent = new Map<string, string>(entries.map(entry => [entry.task, entry.task]))
   const find = (task: string): string => {
@@ -117,9 +121,9 @@ function connectedComponents(entries: readonly TaskEntry[]): ReadonlyMap<string,
     return root
   }
   for (const entry of entries) {
-    if (entry.basedOn === null) continue
-    if (!parent.has(entry.basedOn.task)) continue
-    parent.set(find(entry.task), find(entry.basedOn.task))
+    if (entry.blockedBy === null) continue
+    if (!parent.has(entry.blockedBy.task)) continue
+    parent.set(find(entry.task), find(entry.blockedBy.task))
   }
   const roots = new Map<string, string>()
   for (const task of parent.keys()) roots.set(task, find(task))

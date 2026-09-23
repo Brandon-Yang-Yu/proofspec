@@ -12,7 +12,7 @@ export const BUILDING = 'building'
  * asked to prove before anyone acts on it. */
 export const MERGEABLE = 'mergeable'
 
-/** One in-flight TASK whose `base` names another TASK, and whether that hold still stands. */
+/** One in-flight TASK whose `blocked` names another TASK, and whether that hold still stands. */
 export type HoldStatus =
   | { readonly kind: 'held'; readonly task: string; readonly on: string }
   | { readonly kind: 'released'; readonly task: string }

@@ -1,20 +1,27 @@
-import type { TaskBasis } from '../inflight/index.ts'
+import type { TaskRecord } from '../inflight/index.ts'
 import type { HoldStatus } from './types.ts'
 
 /**
  * Requirement: A TASK held on another is released once the held-on TASK is no longer live
  *
- * Reuses `inflight`'s own basis for each TASK rather than a separate notion of liveness: a
- * basis with a `branch` claim is measured against a TASK that is still in the queue and still
- * in flight, which is exactly what "held" means. A basis with no claim, or an unresolved one,
- * is what `inflight` already answers for a base naming a merged TASK or one gone from the
- * queue entirely — both mean the named TASK is no longer live, so the hold is released.
+ * Reads the `blocked` field straight from each record: a TASK is held while the TASK it names
+ * is on the queue and still in flight, and released once that TASK has merged or left the
+ * queue — either way, the work it waits behind has either landed or never stood. A TASK
+ * carrying no `blocked` carries no hold status at all: it waits on nothing.
  */
-export function holdStatusFor(bases: readonly TaskBasis[]): readonly HoldStatus[] {
-  return bases.filter(basis => basis.manifest.base.kind === 'task').map(holdFor)
-}
-
-function holdFor(basis: TaskBasis): HoldStatus {
-  if (basis.claim?.kind === 'branch') return { kind: 'held', task: basis.task, on: basis.claim.task }
-  return { kind: 'released', task: basis.task }
+export function holdStatusFor(records: readonly TaskRecord[]): readonly HoldStatus[] {
+  const byName = new Map(records.map(one => [one.task, one]))
+  const statuses: HoldStatus[] = []
+  for (const record of records) {
+    if (record.state !== 'in-flight') continue
+    const blocked = record.manifest.blocked
+    if (blocked === undefined) continue
+    const named = byName.get(blocked.task)
+    statuses.push(
+      named !== undefined && named.state === 'in-flight'
+        ? { kind: 'held', task: record.task, on: blocked.task }
+        : { kind: 'released', task: record.task },
+    )
+  }
+  return statuses
 }

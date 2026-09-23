@@ -13,7 +13,7 @@ export type CensusRead = { readonly ok: true; readonly census: Census } | { read
 
 /**
  * Reads the conventional queue directory and answers the census `inflight` computes: every
- * in-flight TASK's own requirement and TERM rewrites, measured against the same base its
+ * in-flight TASK's own requirement and TERM rewrites, measured against the BASE_BRANCH its
  * edges already are. An absent or empty queue answers an empty census, the same way
  * `inflight`'s own graph does; one TASK whose branch or MANIFEST cannot be read is a named
  * problem for that TASK alone, never a reason to refuse the rest.
