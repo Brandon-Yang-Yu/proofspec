@@ -25,8 +25,8 @@ to explain.
 <!-- scenarios: generated -->
 - "A MANIFEST missing a required field is refused, naming the field" → tests/inflight/manifest.test.ts
 - "A MANIFEST whose JSON does not parse is refused, naming why" → tests/inflight/manifest.test.ts
-- "A `base` of a kind that is neither `main` nor `task` is refused" → tests/inflight/manifest.test.ts
-- "A `base` of kind `task` missing its `task` or its `reason` is refused" → tests/inflight/manifest.test.ts
+- "A `blocked` present but missing its `reason` is refused, naming why" → tests/inflight/manifest.test.ts
+- "A `blocked` present but missing its `task` is refused, naming why" → tests/inflight/manifest.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TASK's state is read literally
@@ -62,11 +62,10 @@ dangling name, and a graph that quietly read it as an unblocked TASK would hide 
 fact a reader needs pointed out.
 
 <!-- scenarios: generated -->
-- "A TASK based on a merged TASK measures against the BASE_BRANCH even though its own branch was" → tests/inflight/end-to-end.test.ts
-- "A TASK whose `base` is of the `main` shape is read from its merge-base with the BASE_BRANCH" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names a TASK not present in the queue at all carries an" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names a TASK that has merged is read from the BASE_BRANCH instead" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch" → tests/inflight/bases.test.ts
+- "A TASK carrying no `blocked` is read from its merge-base with the BASE_BRANCH" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a TASK not present in the queue at all carries a" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a TASK that has merged is read from the BASE_BRANCH" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a merged TASK measures against the BASE_BRANCH even" → tests/inflight/end-to-end.test.ts
 - "A TASK whose own state has reached merged is not read into the graph at all" → tests/inflight/bases.test.ts
 <!-- /scenarios -->
 
@@ -166,11 +165,9 @@ ancestry behind the name to check, and asking git for one would turn a plain man
 fact into a verdict nobody asked for.
 
 <!-- scenarios: generated -->
-- "A basedOn claim naming a TASK absent from the queue is reported as unresolved end to end" → tests/inflight/end-to-end.test.ts
-- "A basedOn claim verified false through real git reports the problem, not the edge" → tests/inflight/end-to-end.test.ts
-- "A basedOn claim verified true through real git draws the edge" → tests/inflight/end-to-end.test.ts
-- "A basedOn edge carrying its reason is drawn when the claimed ancestry is real" → tests/inflight/graph.test.ts
-- "A claimed ancestry that does not hold draws no edge and reports a problem naming the claim" → tests/inflight/graph.test.ts
+- "A `blockedBy` edge carrying its reason is drawn straight from the MANIFEST" → tests/inflight/graph.test.ts
+- "A `blockedBy` edge is drawn though neither branch is an ancestor of the other" → tests/inflight/graph.test.ts
+- "A `blocked` naming a TASK absent from the queue is a named problem, not a broken claim" → tests/inflight/end-to-end.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
@@ -195,7 +192,7 @@ signal, exactly when the same TERM is touched — the exception reaches the file
 houses every TERM, never the word itself.
 
 <!-- scenarios: generated -->
-- "A node a verified basedOn edge already explains is not reported" → tests/inflight/graph.test.ts
+- "A node a `blockedBy` edge already explains is not reported" → tests/inflight/graph.test.ts
 - "A node three TASK share is named once, not as three pairs" → tests/inflight/graph.test.ts
 - "A node two in-flight TASK are attached to is one relationship naming both" → tests/inflight/graph.test.ts
 - "Two TASK that both changed only unrelated TERM do not relate on the glossary file alone" → tests/inflight/graph.test.ts

@@ -55,8 +55,8 @@ more than that is asking it to know a domain type it should not need to see. No 
 concept is introduced: the mapping is total and exact, not an interpretation.
 
 <!-- scenarios: generated -->
-- "A call with a base naming another TASK and a reason maps to a MANIFEST whose base is exactly {kind: 'task', task, reason}" → tests/handoff/extension.test.ts
-- "A call with no base maps to a MANIFEST whose base is {kind: 'main'}" → tests/handoff/extension.test.ts
+- "A call with a blocked naming another TASK and a reason maps to a MANIFEST whose blocked is exactly {task, reason}" → tests/handoff/extension.test.ts
+- "A call with no blocked maps to a MANIFEST carrying no blocked field at all" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
@@ -84,8 +84,8 @@ reason every other refusal in this tool answers `{ok: false, reason}` rather tha
 
 <!-- scenarios: generated -->
 - "A TASK already in the queue is refused, naming the collision, and its existing entry is untouched" → tests/handoff/extension.test.ts
-- "A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued" → tests/handoff/extension.test.ts
-- "A TASK not already in the queue is enqueued with the given base recorded exactly" → tests/handoff/extension.test.ts
+- "A TASK not already in the queue is enqueued with no blocked and state queued" → tests/handoff/extension.test.ts
+- "A TASK not already in the queue is enqueued with the given blocked recorded exactly" → tests/handoff/extension.test.ts
 - "A TASK whose name an archived entry already holds is refused as a value naming the archive, with the archived entry untouched" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 

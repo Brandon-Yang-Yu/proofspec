@@ -67,7 +67,7 @@ comparable, the same reason the graph answers in one stable order.
 - "A queue directory that does not exist answers an empty docket" → tests/docket/view.test.ts
 - "A row carries the TASK's phase history exactly as its phase-history file holds it" → tests/docket/view.test.ts
 - "A row carries the TASK's phase word and round exactly as its phase file holds them" → tests/docket/view.test.ts
-- "A row carries the branch and base its MANIFEST records" → tests/docket/view.test.ts
+- "A row carries the branch and blocked its MANIFEST records" → tests/docket/view.test.ts
 - "A state word the docket has never met is shown as it stands, not translated" → tests/docket/view.test.ts
 - "Rows come back sorted by TASK name" → tests/docket/view.test.ts
 <!-- /scenarios -->
@@ -262,33 +262,17 @@ page is not a second capability beside the view; it is the view, asked more than
 
 <!-- scenarios: generated -->
 - "A TASK with no phase history shows the account's own absence" → tests/docket/page.test.ts
-- "A chain renders one row, at its in-progress member's place in the name order" → tests/docket/page.test.ts
-- "A chain runs through a root whose own base names a TASK not on the queue" → tests/docket/page.test.ts
-- "A chain whose every member has merged renders that one muted row" → tests/docket/page.test.ts
-- "A chain whose in-progress member is blocked on a question renders its row there, not at its merged root" → tests/docket/page.test.ts
-- "A chain whose in-progress member is queued renders its row there, not at its merged root" → tests/docket/page.test.ts
-- "A chain's disclosure nobody opened stays closed across a refresh that reopens another's" → tests/docket/page.test.ts
-- "A focused summary follows the chain's frontier when a refresh advances it" → tests/docket/page.test.ts
-- "A focused summary is focused again on each refresh that repeats its chain" → tests/docket/page.test.ts
-- "A fork — two TASKs stacked on the same merged base — is one chain answering one row" → tests/docket/page.test.ts
 - "A looping word shows the highest round it reached, and a word that stood only at round 1 shows no round at all" → tests/docket/page.test.ts
-- "A merged entry no entry names keeps its own row, shown muted" → tests/docket/page.test.ts
 - "A queue that has not moved between two requests answers those two requests identically" → tests/docket/serve.test.ts
 - "A row carries the TASK's phase history and the account computed from it" → tests/docket/serve.test.ts
 - "A row's phase account carries each word in first-standing order, separate runs summed, the highest round reached, and the standing word live" → tests/docket/view.test.ts
 - "A standing appended to a live TASK's phase history between two requests moves the next answer" → tests/docket/serve.test.ts
 - "A word that returned shows one total, its separate runs summed under it" → tests/docket/page.test.ts
-- "An entry whose base names a TASK not on the queue keeps its own row" → tests/docket/page.test.ts
-- "An expanded disclosure stays expanded across the page's own refresh" → tests/docket/page.test.ts
-- "An open disclosure follows the chain's frontier when a refresh advances it" → tests/docket/page.test.ts
-- "Both chains' expanded disclosures stay expanded across the page's own refresh" → tests/docket/page.test.ts
 - "Each request answers the docket computed fresh, as that moment holds it" → tests/docket/serve.test.ts
 - "Every column the header names is a cell every row carries" → tests/docket/page.test.ts
 - "The JSON answered at /docket is the same content the one-shot JSON form gives" → tests/docket/serve.test.ts
 - "The account lists each phase word once, in the order each first stood" → tests/docket/page.test.ts
 - "The branch renders only when it differs from the TASK's name" → tests/docket/page.test.ts
-- "The chain's row carries its progress as a bare fraction" → tests/docket/page.test.ts
-- "The fraction expands to every member by name and state word, and a riding member's other facts render nowhere" → tests/docket/page.test.ts
 - "The page a request answers carries the docket's facts as visible content" → tests/docket/page.test.ts
 - "The page answered at / carries the docket computed at that moment" → tests/docket/serve.test.ts
 - "The page ships a viewport meta and both color schemes, and its script owns no theme machinery" → tests/docket/page.test.ts
@@ -296,7 +280,6 @@ page is not a second capability beside the view; it is the view, asked more than
 - "The page shows the TASK's phase word, its round in a column of its own, and how long it has stood there" → tests/docket/page.test.ts
 - "The rows the page ships and the rows its script renders are the same HTML for the same answer" → tests/docket/page.test.ts
 - "The standing word's total moves with each answer, and every closed word's total holds still" → tests/docket/page.test.ts
-- "Two chains in one answer each render their own row" → tests/docket/page.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The rendered page gives every queue entry its own row
@@ -312,6 +295,14 @@ A held TASK is waiting, not working, and the rows a person scans first are the r
 work can move; the blocked name on a waiting row says who it waits for. A merged entry
 still standing on the queue is finished work the pass has not pruned yet, and its own
 muted row says what it is: work already landed, not work still standing.
+
+<!-- scenarios: generated -->
+- "A TASK whose MANIFEST carries a blocked names on its row the TASK that blocks it" → tests/docket/page.test.ts
+- "A merged entry still on the queue keeps its own row, shown muted" → tests/docket/page.test.ts
+- "Every queue entry renders its own row, however its blocked names another entry" → tests/docket/page.test.ts
+- "Rows stand with TASKs that are not held before TASKs that are held, in name order within each group" → tests/docket/page.test.ts
+- "The page shows no fraction and no disclosure" → tests/docket/page.test.ts
+<!-- /scenarios -->
 
 ### Requirement: The page refreshes itself, and its numbers move only when an answer does
 

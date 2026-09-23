@@ -58,14 +58,21 @@ it('answers the docket as text for a person by default', async () => {
 // WHEN the docket command is asked for JSON
 // THEN the answer parses, and carries the same rows, problems, and outstanding rulings the text form does
 it('answers the docket as JSON on request, carrying the same content', async () => {
-  const repo = await makeRepo(FILES)
+  const repo = await makeRepo({
+    ...FILES,
+    '.proofspec/dispatch/held/MANIFEST': manifestFor('held', { task: 'alpha', reason: 'lands behind alpha' }),
+    '.proofspec/dispatch/held/state': 'building',
+  })
   const outcome = await docket({ cwd: repo.root, docket: { listSessions: async () => [] } })
 
   const answer = renderAnswer(outcome, { format: 'json' })
-  const parsed = JSON.parse(answer) as { rows: { task: string; state: string }[]; problems: { task: string }[]; outstanding: { key: string }[] }
+  const parsed = JSON.parse(answer) as { rows: { task: string; state: string; blocked?: { task: string; reason: string } }[]; problems: { task: string }[]; outstanding: { key: string }[] }
 
-  expect(parsed.rows.map(row => row.task)).toEqual(['alpha'])
+  expect(parsed.rows.map(row => row.task)).toEqual(['alpha', 'held'])
   expect(parsed.rows[0]?.state).toBe('building')
+  // The blocked TASK's row carries the field exactly; the free TASK's row carries no field at all.
+  expect(parsed.rows[0]).not.toHaveProperty('blocked')
+  expect(parsed.rows[1]?.blocked).toEqual({ task: 'alpha', reason: 'lands behind alpha' })
   expect(parsed.problems.map(problem => problem.task)).toEqual(['broken'])
   expect(parsed.outstanding.map(one => one.key)).toEqual(['capability:spec-tree:alpha,beta'])
 })

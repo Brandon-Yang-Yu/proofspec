@@ -55,7 +55,7 @@ function fakeActions(overrides: Partial<ScheduleActions> = {}): ScheduleActions 
 
 // Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A ready TASK starts a session and takes a LEASE
-// GIVEN a queued TASK based on main
+// GIVEN a queued TASK carrying no blocked field
 // WHEN a scheduling pass runs
 // THEN the TASK's session starts exactly once, and a LEASE now stands for it
 it('starts a session for a ready TASK and takes its LEASE', async () => {
