@@ -13,8 +13,8 @@ own history begins, and what it shares with its neighbours.
 ### Requirement: A MANIFEST that cannot stand is refused, naming why
 
 Reading a MANIFEST SHALL refuse it, naming why, when its JSON does not parse, when a
-required field is missing, when its `base` names a `kind` that is neither `main` nor `task`,
-or when a `base` of kind `task` is missing its `task` or its `reason`.
+required field is missing, or when its `blocked` is present but missing its `task` or
+its `reason`.
 
 A hand-off nobody can trust is worse than none. A MANIFEST silently dropped would leave a
 TASK invisible to the graph; one silently accepted half-shaped would leave it present under
@@ -25,8 +25,8 @@ to explain.
 <!-- scenarios: generated -->
 - "A MANIFEST missing a required field is refused, naming the field" → tests/inflight/manifest.test.ts
 - "A MANIFEST whose JSON does not parse is refused, naming why" → tests/inflight/manifest.test.ts
-- "A `base` of a kind that is neither `main` nor `task` is refused" → tests/inflight/manifest.test.ts
-- "A `base` of kind `task` missing its `task` or its `reason` is refused" → tests/inflight/manifest.test.ts
+- "A `blocked` present but missing its `reason` is refused, naming why" → tests/inflight/manifest.test.ts
+- "A `blocked` present but missing its `task` is refused, naming why" → tests/inflight/manifest.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A TASK's state is read literally
@@ -45,36 +45,37 @@ moment's confusion, a TASK wrongly dropped costs the graph its whole purpose.
 - "The literal word `merged` is read as merged" → tests/inflight/state.test.ts
 <!-- /scenarios -->
 
-### Requirement: The graph reads each in-flight TASK from its own base
+### Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
 
 Computing the graph SHALL read each in-flight TASK's edges relative to the merge-base of
-its own branch with the branch of the TASK its `base` names, when that `base` is of kind
-`task` and the named TASK is itself in flight, and with the BASE_BRANCH otherwise. A TASK
-whose own state has reached merged SHALL NOT be read into the graph at all.
+its own branch with the BASE_BRANCH, always. A TASK whose own state has reached merged
+SHALL NOT be read into the graph at all. A TASK whose `blocked` names a TASK the queue
+does not hold SHALL still be read from that merge-base, and SHALL carry a named problem
+naming the TASK the queue does not hold.
 
-A `base` without a live ancestor is not one case but two — a `base` of kind `main`, and a
-`base` of kind `task` naming a TASK that has since merged — and both mean the same thing:
-the work behind that name is now in the BASE_BRANCH. Both measure against the BASE_BRANCH,
-and measuring against the old branch instead would double-count what the BASE_BRANCH
-already holds. A TASK already merged has nothing left to place on a graph of what is
-still in flight; it is not a TASK with an empty answer, it is not asked.
+A blocked TASK's branch is cut from the BASE_BRANCH like any other — the hold decides
+when the TASK may start, not where its branch begins — so the merge-base with the
+BASE_BRANCH is where every TASK's own history begins alike. A TASK already merged has
+nothing left to place on a graph of what is still in flight; it is not a TASK with an
+empty answer, it is not asked. A `blocked` naming a TASK the queue does not hold is a
+dangling name, and a graph that quietly read it as an unblocked TASK would hide the one
+fact a reader needs pointed out.
 
 <!-- scenarios: generated -->
-- "A TASK based on a merged TASK measures against the BASE_BRANCH even though its own branch was" → tests/inflight/end-to-end.test.ts
-- "A TASK whose `base` is of the `main` shape is read from its merge-base with the BASE_BRANCH" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names a TASK not present in the queue at all carries an" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names a TASK that has merged is read from the BASE_BRANCH instead" → tests/inflight/bases.test.ts
-- "A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch" → tests/inflight/bases.test.ts
+- "A TASK carrying no `blocked` is read from its merge-base with the BASE_BRANCH" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a TASK not present in the queue at all carries a" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a TASK that has merged is read from the BASE_BRANCH" → tests/inflight/bases.test.ts
+- "A TASK whose `blocked` names a merged TASK measures against the BASE_BRANCH even" → tests/inflight/end-to-end.test.ts
 - "A TASK whose own state has reached merged is not read into the graph at all" → tests/inflight/bases.test.ts
 <!-- /scenarios -->
 
-### Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+### Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 
-Computing the census SHALL name, for each in-flight TASK and relative to the same base its
-edges are measured from, every requirement and every TERM its branch rewrote: reworded when
-both ends define it but not the same way, carrying the prose before and after; new when only
-its branch defines it, carrying only the prose after; gone when only its base defined it,
-carrying only the prose before. A requirement or TERM whose prose reads the same at both ends
+Computing the census SHALL name, for each in-flight TASK and relative to the same
+merge-base with the BASE_BRANCH its edges are measured from, every requirement and every
+TERM its branch rewrote: reworded when both ends define it but not the same way, carrying
+the prose before and after; new when only its branch defines it, carrying only the prose
+after; gone when only the merge-base defines it, carrying only the prose before. A requirement or TERM whose prose reads the same at both ends
 SHALL be absent from the census entirely. A TASK whose MANIFEST or branch cannot be read
 SHALL instead carry a named problem for that TASK alone, and every other TASK's census SHALL
 still be answered.
@@ -109,7 +110,7 @@ problem, and the rest of the graph still answers" already keeps for the graph it
 
 ### Requirement: The graph reports a writes edge for every CAPABILITY_FILE and TERM a TASK's branch changed
 
-Relative to its base, the graph SHALL report a writes edge from a TASK to every
+Relative to the BASE_BRANCH, the graph SHALL report a writes edge from a TASK to every
 CAPABILITY_FILE its branch edited and to every TERM whose definition changed.
 
 A TASK's own writes are the ground truth everything else in the graph is compared against:
@@ -123,7 +124,7 @@ built from, both start from what a TASK actually wrote.
 
 ### Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches
 
-Relative to its base, the graph SHALL report a reopened edge from a TASK to every
+Relative to the BASE_BRANCH, the graph SHALL report a reopened edge from a TASK to every
 CAPABILITY_FILE its own branch did not edit that homes a requirement whose heading or
 description uses a TERM the TASK changed, directly or through another TERM's own
 definition. A CAPABILITY_FILE that is both edited and reopened SHALL carry only the writes
@@ -150,41 +151,39 @@ would put a promise in the spec no scenario could prove.
 - "A reopened edge reaches a CAPABILITY_FILE whose requirement words use a changed TERM" → tests/inflight/graph.test.ts
 <!-- /scenarios -->
 
-### Requirement: A basedOn edge holds only when the ancestry it claims is real
+### Requirement: The graph draws a blockedBy edge straight from the MANIFEST
 
-The graph SHALL draw a TASK-to-TASK edge carrying the reason a TASK's `base` argues, when
-that `base` is of kind `task`, only when the named TASK's branch is truly an ancestor of
-this TASK's branch. When it is not, the graph SHALL draw no such edge and SHALL instead
-report a problem naming the TASK and the claim that did not hold.
+The graph SHALL draw a TASK-to-TASK edge — named `blockedBy` — from a TASK to the TASK
+its `blocked` names, carrying the `reason` the MANIFEST records. Nothing SHALL be
+verified in git to draw it: no TASK's ancestry is claimed, so none is checked. A
+`blocked` naming a TASK absent from the queue is that named problem, not a broken
+claim.
 
-A `base` of kind `task` is a human's word for why a worktree was built where it was, not a
-git fact — ancestry can be checked, intent cannot, and by the time anyone reads a stale claim
-back the person who made the call is usually gone. Verifying it is what keeps a rebased-away
-claim from silently explaining an overlap it no longer explains. A `basedOn` edge holds
-neither TASK back from anything, so accepting a real one costs nothing, but believing a
-false one would.
+The `blocked` field is a human's word for why a TASK waits, not a git fact. The blocked
+TASK's branch is cut from the BASE_BRANCH, never from the blocker's, so there is no
+ancestry behind the name to check, and asking git for one would turn a plain manifest
+fact into a verdict nobody asked for.
 
 <!-- scenarios: generated -->
-- "A basedOn claim naming a TASK absent from the queue is reported as unresolved end to end" → tests/inflight/end-to-end.test.ts
-- "A basedOn claim verified false through real git reports the problem, not the edge" → tests/inflight/end-to-end.test.ts
-- "A basedOn claim verified true through real git draws the edge" → tests/inflight/end-to-end.test.ts
-- "A basedOn edge carrying its reason is drawn when the claimed ancestry is real" → tests/inflight/graph.test.ts
-- "A claimed ancestry that does not hold draws no edge and reports a problem naming the claim" → tests/inflight/graph.test.ts
+- "A `blockedBy` edge carrying its reason is drawn straight from the MANIFEST" → tests/inflight/graph.test.ts
+- "A `blockedBy` edge is drawn though neither branch is an ancestor of the other" → tests/inflight/graph.test.ts
+- "A `blocked` naming a TASK absent from the queue is a named problem, not a broken claim" → tests/inflight/end-to-end.test.ts
 <!-- /scenarios -->
 
-### Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
+### Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
 
 The graph SHALL report a relationship for a CAPABILITY_FILE or TERM that two or more
-in-flight TASK are attached to and no verified `basedOn` edge connects, naming every TASK
-attached to it once, not as separate pairs. A node where a verified `basedOn` edge connects
+in-flight TASK are attached to and no blockedBy edge connects, naming every TASK
+attached to it once, not as separate pairs. A node where a blockedBy edge connects
 every TASK attached to it SHALL NOT be reported. The glossary's own CAPABILITY_FILE SHALL
 NOT itself be reported as a shared node.
 
-Two tasks a `basedOn` edge already connects sharing a node is not a surprise — that overlap
-is exactly what the edge argues, so reporting it again would just repeat an explanation the
-reader already has. A node three or more tasks share is one relationship, not several
-pairwise ones: the reader needs to see who else is standing on the same ground, and naming
-them separately would make one fact look like many.
+Two TASKs a blockedBy edge already connects sharing a node is sequencing by design — the
+blocked one waits behind the other, so the overlap is expected, and reporting it would
+just repeat an explanation the reader already has. A node three or more tasks share is
+one relationship, not several pairwise ones: the reader needs to see who else is
+standing on the same ground, and naming them separately would make one fact look like
+many.
 
 The glossary is the one CAPABILITY_FILE every TERM change writes, so without this exception
 two tasks that touched two unrelated TERM would always relate through it: sharing that file
@@ -193,7 +192,7 @@ signal, exactly when the same TERM is touched — the exception reaches the file
 houses every TERM, never the word itself.
 
 <!-- scenarios: generated -->
-- "A node a verified basedOn edge already explains is not reported" → tests/inflight/graph.test.ts
+- "A node a `blockedBy` edge already explains is not reported" → tests/inflight/graph.test.ts
 - "A node three TASK share is named once, not as three pairs" → tests/inflight/graph.test.ts
 - "A node two in-flight TASK are attached to is one relationship naming both" → tests/inflight/graph.test.ts
 - "Two TASK that both changed only unrelated TERM do not relate on the glossary file alone" → tests/inflight/graph.test.ts

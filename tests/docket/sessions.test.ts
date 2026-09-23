@@ -21,7 +21,7 @@ function reportOf(outcome: Outcome): Docket {
 }
 
 function manifestFor(task: string): string {
-  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
 }
 
 // The dedicated server's own name for a queue root — proofspec- plus the first 8 hex digits

@@ -12,9 +12,10 @@ capability — the graph still only reports.
 
 ### Requirement: A TASK held on another is released once the held-on TASK is no longer live
 
-A TASK whose MANIFEST's `base` names another TASK of kind `task` SHALL be held until that
-named TASK is no longer live, and released the moment it is not — whether because the named
-TASK's own state has reached merged, or because the queue holds no record of it at all.
+A TASK whose MANIFEST carries a `blocked` naming another TASK SHALL be held while that
+named TASK is on the queue and still in flight, and released the moment it is not —
+whether because the named TASK's own state has reached merged, or because the queue
+holds no record of it at all.
 
 There is exactly one graph of what is in flight, and both the hold and the graph read it
 the same way. A hold with its own notion of "still live" could disagree with it: held past
@@ -22,12 +23,12 @@ the moment the graph would call the block gone, or released while the graph stil
 live.
 
 <!-- scenarios: generated -->
-- "A TASK based on main carries no hold status at all" → tests/schedule/holds.test.ts
+- "A TASK carrying no `blocked` carries no hold status at all" → tests/schedule/holds.test.ts
 - "A TASK held on a TASK that has since merged is dispatched" → tests/schedule/end-to-end.test.ts
 - "A TASK held on a still in-flight TASK is not dispatched" → tests/schedule/end-to-end.test.ts
-- "A TASK whose base names a TASK absent from the queue entirely is released" → tests/schedule/holds.test.ts
-- "A TASK whose base names a merged TASK is released" → tests/schedule/holds.test.ts
-- "A TASK whose base names a still in-flight TASK is held" → tests/schedule/holds.test.ts
+- "A TASK whose `blocked` names a TASK absent from the queue entirely is released" → tests/schedule/holds.test.ts
+- "A TASK whose `blocked` names a merged TASK is released" → tests/schedule/holds.test.ts
+- "A TASK whose `blocked` names a still in-flight TASK is held" → tests/schedule/holds.test.ts
 - "A held TASK is never ready to dispatch, however queued its own word is" → tests/schedule/lease.test.ts
 <!-- /scenarios -->
 
@@ -90,7 +91,7 @@ and asks nothing of a human.
 ### Requirement: A merged TASK's queue entry is pruned once nothing still names it
 
 A queue entry whose TASK's state has reached merged SHALL be pruned by a scheduling pass
-once no in-flight TASK's `base.task` still names it, and SHALL NOT be pruned before that.
+once no in-flight TASK's `blocked.task` still names it, and SHALL NOT be pruned before that.
 Pruning SHALL move the entry whole into the archive directory `.proofspec/archive/<task>/`
 rather than delete it: every file the entry held — its MANIFEST, its `state` file, its LEASE,
 its `INTENT` and `acceptance.md`, its `heartbeat`, its `phase` — arrives in the archive
@@ -98,11 +99,11 @@ exactly as it stood, and nothing of the entry remains in the queue directory. No
 rewrite an archived entry afterwards.
 
 The timing criterion is unchanged. A merged entry has to keep standing for as long as some
-other TASK's basedOn claim might still ask about it: pruning early is exactly what would
-flip a graceful "based on a TASK that merged" into a false "based on a TASK the queue holds
+other TASK's `blocked` might still name it: pruning early is exactly what would flip a
+graceful "blocked by a TASK that merged" into a false "blocked by a TASK the queue holds
 no record of at all," naming a TASK that in fact finished cleanly. Once no in-flight TASK
 names it any more, that risk is gone, and the entry leaves the queue for the archive. The
-criterion reads every in-flight TASK's `base`, so pruning needs no bookkeeping of its own
+criterion reads every in-flight TASK's `blocked`, so pruning needs no bookkeeping of its own
 to decide when a name has gone quiet.
 
 The archive is the record of finished work, and it is kept rather than cleaned: completed
@@ -115,10 +116,10 @@ queue directory — and what changed is where the removed entry goes.
 
 <!-- scenarios: generated -->
 - "A merged TASK an in-flight TASK still names is kept" → tests/schedule/end-to-end.test.ts
-- "A merged TASK an in-flight TASK's base still names is not pruned" → tests/schedule/prune.test.ts
-- "A merged TASK no in-flight TASK's base names is pruned" → tests/schedule/prune.test.ts
+- "A merged TASK an in-flight TASK's `blocked` still names is not pruned" → tests/schedule/prune.test.ts
+- "A merged TASK no in-flight TASK's `blocked` names is pruned" → tests/schedule/prune.test.ts
 - "A merged TASK nothing still names is pruned from the queue directory" → tests/schedule/end-to-end.test.ts
-- "A merged TASK only a merged TASK's base still names is pruned" → tests/schedule/prune.test.ts
+- "A merged TASK only a merged TASK's `blocked` still names is pruned" → tests/schedule/prune.test.ts
 - "An in-flight TASK is never pruned" → tests/schedule/prune.test.ts
 - "The pruned entry stands in the archive whole, exactly as it stood" → tests/schedule/end-to-end.test.ts
 <!-- /scenarios -->

@@ -18,7 +18,7 @@ afterEach(async () => {
 afterEach(cleanupRepos)
 
 function manifestFor(task: string): string {
-  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
 }
 
 const FILES = {

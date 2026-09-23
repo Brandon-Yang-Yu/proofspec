@@ -5,7 +5,7 @@ make directly, instead of a human hand-writing a MANIFEST by hand. `enqueue(cwd,
 task, manifest)` (`src/cli/queue.ts`) already creates a TASK's queue entry once and refuses
 to overwrite one already there — this capability is not that write, but the one hop in front
 of it: validating a TASK name is safe to touch the filesystem with at all, and turning the
-flattened shape a model can produce into the exact `Manifest`/`ManifestBase` `readManifest`
+shape a model can produce into the exact `Manifest` `readManifest`
 (`src/inflight/manifest.ts`) already parses. `schedule`'s own charter is acting on a queue
 entry already there — one triggered pass over work already dispatched; `inflight` only ever
 reads a queue entry once one exists. Creating the entry in the first place, from a human's
@@ -42,24 +42,21 @@ refusing it after a directory has already been created under it is one step too 
 - "A plain kebab-case slug is accepted and passed through to enqueue" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
-### Requirement: enqueue_task flattens its input onto the exact Manifest shape readManifest parses
+### Requirement: enqueue_task maps its input onto the exact Manifest shape readManifest parses
 
-`enqueue_task` SHALL accept `{ task, intentRef, branch, base? }`, where a given `base` is
-`{ task, reason }`, and SHALL map it onto a `Manifest` exactly as `readManifest`
-(`src/inflight/manifest.ts`) already reads one: `base` omitted becomes `{ kind: 'main' }`;
-`base` given becomes `{ kind: 'task', task: base.task, reason: base.reason }`.
+`enqueue_task` SHALL accept `{ task, intentRef, branch, blocked? }`, where a given
+`blocked` is `{ task, reason }`, and SHALL map it onto a `Manifest` exactly as
+`readManifest` (`src/inflight/manifest.ts`) already reads one: `blocked` omitted writes
+no `blocked` field at all; `blocked` given becomes `blocked: { task, reason }` exactly.
 
-`ManifestBase`'s two shapes already say everything a hand-off needs to say about what a TASK
-was built on — the `task` shape argues why, the `main` shape needs no reason. Asking a model
-to construct that discriminated union itself, tagging `kind` by hand, is asking it to know a
-domain type it should not need to see; flattening `base` to the one thing a human hand-off
-actually varies — which TASK, and why — and inferring the `kind` tag from whether it was
-given at all is the whole of what "ergonomic" means here. No new concept is introduced: the
-mapping is total and exact, not an interpretation.
+A hand-off varies in one thing — whether some TASK blocks this one, and why — and the
+parameter's presence or absence says all of it. Asking a model to construct anything
+more than that is asking it to know a domain type it should not need to see. No new
+concept is introduced: the mapping is total and exact, not an interpretation.
 
 <!-- scenarios: generated -->
-- "A call with a base naming another TASK and a reason maps to a MANIFEST whose base is exactly {kind: 'task', task, reason}" → tests/handoff/extension.test.ts
-- "A call with no base maps to a MANIFEST whose base is {kind: 'main'}" → tests/handoff/extension.test.ts
+- "A call with a blocked naming another TASK and a reason maps to a MANIFEST whose blocked is exactly {task, reason}" → tests/handoff/extension.test.ts
+- "A call with no blocked maps to a MANIFEST carrying no blocked field at all" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
 ### Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
@@ -87,8 +84,8 @@ reason every other refusal in this tool answers `{ok: false, reason}` rather tha
 
 <!-- scenarios: generated -->
 - "A TASK already in the queue is refused, naming the collision, and its existing entry is untouched" → tests/handoff/extension.test.ts
-- "A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued" → tests/handoff/extension.test.ts
-- "A TASK not already in the queue is enqueued with the given base recorded exactly" → tests/handoff/extension.test.ts
+- "A TASK not already in the queue is enqueued with no blocked and state queued" → tests/handoff/extension.test.ts
+- "A TASK not already in the queue is enqueued with the given blocked recorded exactly" → tests/handoff/extension.test.ts
 - "A TASK whose name an archived entry already holds is refused as a value naming the archive, with the archived entry untouched" → tests/handoff/extension.test.ts
 <!-- /scenarios -->
 
@@ -96,7 +93,7 @@ reason every other refusal in this tool answers `{ok: false, reason}` rather tha
 
 `census_in_flight` (`src/handoff/extension.ts`) SHALL read the calling repo's own queue
 directory and committed specs and answer the census `inflight` computes — every requirement
-and TERM each in-flight TASK's branch has rewritten, relative to its own base — without
+and TERM each in-flight TASK's branch has rewritten, relative to the BASE_BRANCH — without
 creating, deleting, or overwriting anything on disk. A queue directory that exists but cannot
 be listed SHALL be reported as a value naming why, never thrown as an error; a TASK the census
 itself could not read carries its own named problem exactly as `inflight` already reports it,

@@ -7,8 +7,11 @@ import { cleanupRepos, makeRepo } from './support.ts'
 
 afterEach(cleanupRepos)
 
-function manifestFor(task: string): string {
-  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+/** A MANIFEST fixture: the given `blocked` recorded exactly, or no field at all when none is given. */
+function manifestFor(task: string, blocked?: { readonly task: string; readonly reason: string }): string {
+  return blocked === undefined
+    ? JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
+    : JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, blocked })
 }
 
 /** A queue a person would glance at: one working TASK with a session, one problem, one debt. */
@@ -22,16 +25,30 @@ const FILES = {
 
 // Requirement: A command answers the docket, as text for a person by default
 // Scenario: The docket command answers as text for a person by default
-// GIVEN a queue holding a TASK, a problem, and an outstanding ruling
+// GIVEN a queue holding a TASK whose MANIFEST records a `blocked` naming another TASK, one recording none,
+//      a problem, and an outstanding ruling
 // WHEN the docket command is run with no format named
-// THEN the answer is the text a person reads — the TASK's row and its state word — not the JSON a program parses
+// THEN the answer is the text a person reads — the TASK's row and its state word, the blocked TASK's line
+//      rendering blockedBy with the TASK and reason it names, the unblocked TASK's line rendering nothing of
+//      the kind — not the JSON a program parses
 it('answers the docket as text for a person by default', async () => {
-  const repo = await makeRepo(FILES)
+  const repo = await makeRepo({
+    ...FILES,
+    '.proofspec/dispatch/held/MANIFEST': manifestFor('held', { task: 'alpha', reason: 'lands behind alpha' }),
+    '.proofspec/dispatch/held/state': 'building',
+  })
 
   const answer = renderAnswer(await docket({ cwd: repo.root, docket: { listSessions: async () => [] } }))
 
   expect(answer).toContain('alpha')
   expect(answer).toContain('building')
+  // The blocked TASK's line names its blocker and the reason; the unblocked TASK's line names
+  // nothing — and the old `from <base>` naming is gone from the row entirely.
+  expect(answer).toContain('blockedBy alpha (lands behind alpha)')
+  const freeRow = answer.split('\n').find(line => line.trimStart().startsWith('alpha'))
+  expect(freeRow).toBeDefined()
+  expect(freeRow).not.toContain('blockedBy')
+  expect(answer).not.toContain('from main')
   expect(() => JSON.parse(answer)).toThrow()
 })
 
@@ -41,14 +58,21 @@ it('answers the docket as text for a person by default', async () => {
 // WHEN the docket command is asked for JSON
 // THEN the answer parses, and carries the same rows, problems, and outstanding rulings the text form does
 it('answers the docket as JSON on request, carrying the same content', async () => {
-  const repo = await makeRepo(FILES)
+  const repo = await makeRepo({
+    ...FILES,
+    '.proofspec/dispatch/held/MANIFEST': manifestFor('held', { task: 'alpha', reason: 'lands behind alpha' }),
+    '.proofspec/dispatch/held/state': 'building',
+  })
   const outcome = await docket({ cwd: repo.root, docket: { listSessions: async () => [] } })
 
   const answer = renderAnswer(outcome, { format: 'json' })
-  const parsed = JSON.parse(answer) as { rows: { task: string; state: string }[]; problems: { task: string }[]; outstanding: { key: string }[] }
+  const parsed = JSON.parse(answer) as { rows: { task: string; state: string; blocked?: { task: string; reason: string } }[]; problems: { task: string }[]; outstanding: { key: string }[] }
 
-  expect(parsed.rows.map(row => row.task)).toEqual(['alpha'])
+  expect(parsed.rows.map(row => row.task)).toEqual(['alpha', 'held'])
   expect(parsed.rows[0]?.state).toBe('building')
+  // The blocked TASK's row carries the field exactly; the free TASK's row carries no field at all.
+  expect(parsed.rows[0]).not.toHaveProperty('blocked')
+  expect(parsed.rows[1]?.blocked).toEqual({ task: 'alpha', reason: 'lands behind alpha' })
   expect(parsed.problems.map(problem => problem.task)).toEqual(['broken'])
   expect(parsed.outstanding.map(one => one.key)).toEqual(['capability:spec-tree:alpha,beta'])
 })

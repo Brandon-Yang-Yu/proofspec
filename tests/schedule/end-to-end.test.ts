@@ -55,7 +55,7 @@ function fakeActions(overrides: Partial<ScheduleActions> = {}): ScheduleActions 
 
 // Requirement: Dispatching a ready TASK starts exactly one executor session
 // Scenario: A ready TASK starts a session and takes a LEASE
-// GIVEN a queued TASK based on main
+// GIVEN a queued TASK carrying no blocked field
 // WHEN a scheduling pass runs
 // THEN the TASK's session starts exactly once, and a LEASE now stands for it
 it('starts a session for a ready TASK and takes its LEASE', async () => {
@@ -151,13 +151,14 @@ it('reclaims a stale LEASE exactly once when two passes race to reclaim it', asy
 
 // Requirement: A TASK held on another is released once the held-on TASK is no longer live
 // Scenario: A TASK held on a still in-flight TASK is not dispatched
-// GIVEN a queued TASK whose base names another TASK that is itself still in flight
+// GIVEN a queued TASK whose `blocked` names another TASK that is itself still in flight
 // WHEN a scheduling pass runs
 // THEN the held TASK's session does not start
 it('does not dispatch a TASK held on a TASK that is still live', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
-  await enterTask(repo, 'b', { edit: 'specs/cli.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md', onto: 'work/a' })
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's work" } }))
   const actions = fakeActions()
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
@@ -168,14 +169,15 @@ it('does not dispatch a TASK held on a TASK that is still live', async () => {
 
 // Requirement: A TASK held on another is released once the held-on TASK is no longer live
 // Scenario: A TASK held on a TASK that has since merged is dispatched
-// GIVEN a queued TASK whose base names a TASK whose own state has reached merged
+// GIVEN a queued TASK whose `blocked` names a TASK whose own state has reached merged
 // WHEN a scheduling pass runs
 // THEN the previously held TASK's session starts
 it('dispatches a TASK once the TASK it was held on has merged', async () => {
   const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
   await enterTask(repo, 'a', { edit: 'specs/a.md' })
   await repo.write('.proofspec/dispatch/a/state', 'merged')
-  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a' })
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's work" } }))
   const actions = fakeActions()
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
@@ -305,14 +307,15 @@ it('checks the landed-in-BASE_BRANCH question fresh from git on each pass', asyn
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it
-// GIVEN a TASK based on another whose state word is mergeable and whose branch has landed in the BASE_BRANCH
+// GIVEN a TASK whose `blocked` names another TASK whose state word is mergeable and whose branch has landed in the BASE_BRANCH
 // WHEN a scheduling pass runs
 // THEN the pass settles the held-on TASK, and dispatches the held TASK in that same pass — the
 //      hold never outlives the state word it reads
 it('dispatches a TASK held on a mergeable TASK whose branch has landed, in the same pass', async () => {
   const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
   await enterTask(repo, 'a', { edit: 'specs/a.md' })
-  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a' })
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's work" } }))
   await repo.git(['merge', 'work/a'])
   await repo.write('.proofspec/dispatch/a/state', 'mergeable')
   const actions = fakeActions()
@@ -321,14 +324,14 @@ it('dispatches a TASK held on a mergeable TASK whose branch has landed, in the s
 
   expect(plan.merged).toEqual(['a'])
   expect(plan.started).toEqual(['b'])
-  // b's base still names a, so a's entry survives this pass to answer for the hold — and its
+  // b's `blocked` still names a, so a's entry survives this pass to answer for the hold — and its
   // state word is the one this pass wrote, not the one it found.
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('merged')
 })
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it
 // Scenario: A merged TASK nothing still names is pruned from the queue directory
-// GIVEN a merged TASK no in-flight TASK's base names
+// GIVEN a merged TASK no in-flight TASK's `blocked` names
 // WHEN a scheduling pass runs
 // THEN that TASK's whole queue entry is gone from the queue directory — and stands in the archive instead
 it('prunes a merged TASK nothing still names from the queue directory', async () => {
@@ -348,7 +351,7 @@ it('prunes a merged TASK nothing still names from the queue directory', async ()
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it
 // Scenario: The pruned entry stands in the archive whole, exactly as it stood
-// GIVEN a merged TASK whose queue entry holds every conventional file, and no in-flight TASK's base names it
+// GIVEN a merged TASK whose queue entry holds every conventional file, and no in-flight TASK's `blocked` names it
 // WHEN a scheduling pass runs
 // THEN every file the entry held stands in .proofspec/archive/<task>/ byte for byte, and nothing of the entry remains in the queue directory
 it('moves the pruned entry whole into the archive, exactly as it stood', async () => {
@@ -385,14 +388,15 @@ it('moves the pruned entry whole into the archive, exactly as it stood', async (
 
 // Requirement: A merged TASK's queue entry is pruned once nothing still names it
 // Scenario: A merged TASK an in-flight TASK still names is kept
-// GIVEN a merged TASK, and an in-flight TASK whose base still names it
+// GIVEN a merged TASK, and an in-flight TASK whose `blocked` still names it
 // WHEN a scheduling pass runs
 // THEN that TASK's queue entry is still on disk
 it('does not prune a merged TASK an in-flight TASK still names', async () => {
   const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
   await enterTask(repo, 'a', { edit: 'specs/a.md' })
   await repo.write('.proofspec/dispatch/a/state', 'merged')
-  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a' })
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's work" } }))
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: fakeActions() }))
 
@@ -469,7 +473,7 @@ it("reads a reserved INTENT intentRef from the queue entry and a path value from
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   await enterTask(repo, 'b', { edit: 'specs/cli.md' })
   await withIntent(repo, 'work/a', 'rewrites the glossary term')
-  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'INTENT', branch: 'work/b', base: { kind: 'main' } }))
+  await repo.write('.proofspec/dispatch/b/MANIFEST', JSON.stringify({ intentRef: 'INTENT', branch: 'work/b' }))
   await repo.write('.proofspec/dispatch/b/INTENT', 'rewrites the executor persona')
   const seen: RelationshipJudgeInput[] = []
   const actions = fakeActions({

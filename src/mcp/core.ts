@@ -9,7 +9,7 @@ import { liveSessionCount, tmuxStartSession } from '../cli/session.ts'
 import { settleTask } from '../cli/settle.ts'
 import type { FireSchedulingPass, SchedulingPassPlan, SettleResult } from '../cli/settle.ts'
 import type { Outcome } from '../cli/types.ts'
-import type { Manifest, ManifestBase } from '../inflight/index.ts'
+import type { Manifest } from '../inflight/index.ts'
 import { BUILDING } from '../schedule/types.ts'
 import type { ScheduleActions } from '../schedule/index.ts'
 
@@ -218,12 +218,12 @@ export async function refreshHeartbeat(): Promise<void> {
 }
 
 /** The flattened shape `enqueue_task` accepts from a model, before it is mapped onto the
- *  real `Manifest`/`ManifestBase` `readManifest` (`src/inflight/manifest.ts`) already parses. */
+ *  real `Manifest` `readManifest` (`src/inflight/manifest.ts`) already parses. */
 export type EnqueueTaskInput = {
   readonly task: string
   readonly intentRef: string
   readonly branch: string
-  readonly base?: { readonly task: string; readonly reason: string }
+  readonly blocked?: { readonly task: string; readonly reason: string }
 }
 
 /** Whether a TASK name is safe to use as a filesystem path segment at all. */
@@ -247,11 +247,11 @@ export function checkTaskName(task: string): TaskNameCheck {
   }
 }
 
-/** Maps `enqueue_task`'s flattened input onto the exact `Manifest` shape `readManifest` parses. */
+/** Maps `enqueue_task`'s flattened input onto the exact `Manifest` shape `readManifest` parses:
+ *  a `blocked` omitted writes no field at all, and one given is written exactly as given. */
 export function manifestFrom(input: EnqueueTaskInput): Manifest {
-  const base: ManifestBase =
-    input.base === undefined ? { kind: 'main' } : { kind: 'task', task: input.base.task, reason: input.base.reason }
-  return { intentRef: input.intentRef, branch: input.branch, base }
+  if (input.blocked === undefined) return { intentRef: input.intentRef, branch: input.branch }
+  return { intentRef: input.intentRef, branch: input.branch, blocked: input.blocked }
 }
 
 export type EnqueueTaskResult =
@@ -333,12 +333,12 @@ const ENQUEUE_TASK_PARAMETERS = {
     task: { type: 'string', description: 'The TASK name — a plain kebab-case slug, e.g. "fix-login-redirect"' },
     intentRef: { type: 'string', description: "Where this TASK's intent is written, e.g. a spec or doc path" },
     branch: { type: 'string', description: "The TASK's own branch name" },
-    base: {
+    blocked: {
       type: 'object',
-      description: 'The other TASK this one is built on, when it is not built on main',
+      description: 'The TASK that blocks this one, when it must wait behind another TASK before starting',
       properties: {
-        task: { type: 'string', description: 'The other TASK name' },
-        reason: { type: 'string', description: 'Why this TASK is built on it' },
+        task: { type: 'string', description: 'The blocking TASK name' },
+        reason: { type: 'string', description: 'Why this TASK waits behind it' },
       },
       required: ['task', 'reason'],
     },
@@ -393,7 +393,7 @@ export const TOOL_SURFACE: readonly ToolRegistration[] = [
     name: 'census_in_flight',
     label: 'Census In-Flight',
     description:
-      'Answers what every in-flight TASK has rewritten in specs/*.md on its own branch, relative to its own base — so a census can draft against the freshest view, not a main that is about to be stale.',
+      'Answers what every in-flight TASK has rewritten in specs/*.md on its own branch, relative to the BASE_BRANCH — so a census can draft against the freshest view, not a main that is about to be stale.',
     parameters: CENSUS_IN_FLIGHT_PARAMETERS,
   },
   {

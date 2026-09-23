@@ -130,8 +130,8 @@ in review.
   reads it cold, with none of the conversation behind it.
 - **`branch`**: the branch you drafted the disposition onto — confirm the name back rather
   than assuming it is still what was first proposed if the conversation moved since.
-- **`base`** (only when this TASK is built on another in-flight TASK's work, not `main`):
-  which TASK, and why.
+- **`blocked`** (only when this TASK waits behind another TASK): which TASK, and why it
+  waits.
 
 ## Call `enqueue_task` only once the human has said go
 Confirm the four fields back to the human in plain language before calling the tool. A wrong
@@ -147,7 +147,7 @@ script is at its home before the call.
 - Call `enqueue_task` speculatively "to see what happens" — a success writes a real queue
   entry, and a `task` name spent on a false start is a collision the next real call to that
   name will hit.
-- Invent `intentRef`/`branch`/`base` values the human has not confirmed.
+- Invent `intentRef`/`branch`/`blocked` values the human has not confirmed.
 - Treat a rewritten TERM's ripple as optional — every requirement it reopens gets its own row
   in the same table, even one that reads keep.
 - Check out the TASK's branch in the main checkout itself, ever — always a dedicated worktree

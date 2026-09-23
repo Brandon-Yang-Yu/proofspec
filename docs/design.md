@@ -203,7 +203,7 @@ separate calls; the window it left was found the hard way.)
 
 **The MANIFEST carries a branch, not a footprint.** The original sketch asked a TASK to
 declare its own footprint — which files, which terms, which capabilities it depends on.
-What shipped carries `intentRef`, `branch`, `base`, and everything else is read from git on
+What shipped carries `intentRef`, `branch`, `blocked`, and everything else is read from git on
 every run, because a description of an edit can disagree with the edit, and the branch is
 the record. It is the same rule the rest of the tool applies to tests.
 

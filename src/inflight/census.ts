@@ -5,7 +5,7 @@ import type { CapabilitySpec } from '../spec-file/index.ts'
 import type { TaskFailure } from './graph.ts'
 
 /**
- * How one requirement's prose moved between a TASK's own base and its branch tip. Mirrors
+ * How one requirement's prose moved between the BASE_BRANCH and a TASK's branch tip. Mirrors
  * `TermChange`'s three arms exactly — reworded, new, gone — so a reader who knows one knows
  * the other. There is no arm for a requirement that did not move, for the same reason
  * `TermChange` carries none: a row nobody has rewritten is not part of what a TASK's branch
@@ -17,7 +17,7 @@ export type RequirementChange =
   | { readonly kind: 'gone'; readonly requirement: string; readonly before: string }
 
 /**
- * Which requirements changed between a TASK's own base and its branch tip, compared by name
+ * Which requirements changed between the BASE_BRANCH and a TASK's branch tip, compared by name
  * and whole description. A requirement moved to another file or re-ordered beside its
  * neighbours is the same description and changes nothing.
  */

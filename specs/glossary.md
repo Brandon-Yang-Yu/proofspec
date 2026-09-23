@@ -70,16 +70,18 @@ branch travels afterwards is the repo's own flow, and no concern of the queue.
 ### Term: MANIFEST
 
 The JSON hand-off a TASK's own worktree carries: an `intentRef` saying where the change
-intent is written, a `branch` on which the TASK's work is built, and a `base` naming
-what this TASK's worktree was built on — always one of two shapes: `{kind: 'main'}`, or
-`{kind: 'task', task, reason}` when this TASK's worktree was deliberately built on
-another in-flight TASK's own worktree instead. The `{kind: 'main'}` shape says the
-worktree was built on the BASE_BRANCH, whatever that branch is actually called. The
-shape predates the setting and its name stays, so a MANIFEST already on disk keeps
-reading the same. The `task` shape carries the reason argued because choosing to build
-on another TASK instead of the BASE_BRANCH is an intent a git fact alone cannot express;
-the `main` shape needs nothing more, because building on the BASE_BRANCH is the default
-course, and the default course is the one with nothing to argue.
+intent is written, a `branch` on which the TASK's work is built, and a `blocked` field
+saying whether the TASK waits behind another TASK. The field is absent when nothing
+blocks the TASK: its branch is cut from the BASE_BRANCH like any other. It is present
+as `blocked: {task, reason}` when the TASK `task` names blocks this one, and `reason`
+argues why it must wait — a sequencing choice a git fact alone cannot express, which is
+why the reason travels with the name. A TASK blocked by nothing carries no argument,
+because building from the BASE_BRANCH is the default course, and the default course is
+the one with nothing to argue.
+
+The field was named `base` before this change. The MANIFEST files standing in live
+queue entries are rewritten to the new field mechanically, and nothing is lost: queue
+files are untracked, so no commit pins the old spelling.
 
 The `intentRef` is read by one rule with two shapes. The reserved name `INTENT` names
 the TASK's own queue entry's `INTENT` file — `.proofspec/dispatch/<task>/INTENT`, a

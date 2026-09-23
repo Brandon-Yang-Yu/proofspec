@@ -1,61 +1,41 @@
 // Capability: inflight
 
 import { expect, it } from 'vitest'
-import { basesFor } from '../../src/inflight/index.ts'
+import { basesFor, computeGraph } from '../../src/inflight/index.ts'
 import type { TaskRecord } from '../../src/inflight/index.ts'
 
 function record(task: string, options: Partial<TaskRecord> = {}): TaskRecord {
   return {
     task,
     state: 'in-flight',
-    manifest: { intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } },
+    manifest: { intentRef: 'docs/x.md', branch: `work/${task}` },
     ...options,
   }
 }
 
-// Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` is of the `main` shape is read from its merge-base with the BASE_BRANCH
-// GIVEN an in-flight TASK whose base is `{kind: 'main'}`
+// Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
+// Scenario: A TASK carrying no `blocked` is read from its merge-base with the BASE_BRANCH
+// GIVEN a TASK whose MANIFEST carries no `blocked`
 // WHEN the graph decides what to measure it against
-// THEN it is measured against the BASE_BRANCH, with no basedOn claim to verify
-it('measures a TASK whose base is of the main shape against the BASE_BRANCH', () => {
+// THEN it is measured from the merge-base of its branch with the BASE_BRANCH
+it('reads a TASK carrying no blocked from its merge-base with the BASE_BRANCH', () => {
   const bases = basesFor([record('a')])
 
   expect(bases).toEqual([
-    { task: 'a', manifest: record('a').manifest, against: 'main', claim: undefined },
+    { task: 'a', manifest: record('a').manifest, against: 'main' },
   ])
 })
 
-// Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` names an in-flight TASK is read from its merge-base with that branch
-// GIVEN an in-flight TASK whose base names another in-flight TASK
+// Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
+// Scenario: A TASK whose `blocked` names a TASK that has merged is read from the BASE_BRANCH
+// GIVEN a TASK blocked on a TASK whose own state has reached merged
 // WHEN the graph decides what to measure it against
-// THEN it is measured against the named TASK's own branch, carrying the claimed reason
-it('measures a TASK whose base names an in-flight TASK against that branch', () => {
-  const target = record('a')
-  const dependent = record('b', {
-    manifest: { intentRef: 'docs/y.md', branch: 'work/b', base: { kind: 'task', task: 'a', reason: 'needs a\'s parser' } },
-  })
-
-  const bases = basesFor([target, dependent])
-
-  expect(bases.find(one => one.task === 'b')).toEqual({
-    task: 'b',
-    manifest: dependent.manifest,
-    against: 'work/a',
-    claim: { kind: 'branch', task: 'a', reason: 'needs a\'s parser', branch: 'work/a' },
-  })
-})
-
-// Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` names a TASK that has merged is read from the BASE_BRANCH instead
-// GIVEN an in-flight TASK whose base names a TASK whose own state has reached merged
-// WHEN the graph decides what to measure it against
-// THEN it is measured against the BASE_BRANCH, with no basedOn claim to verify
-it('measures a TASK whose base names a merged TASK against the BASE_BRANCH instead', () => {
+// THEN it is measured from its merge-base with the BASE_BRANCH, not from the merged TASK's
+//      branch
+it('reads a TASK whose blocked names a merged TASK from the BASE_BRANCH', () => {
   const target = record('a', { state: 'merged' })
   const dependent = record('b', {
-    manifest: { intentRef: 'docs/y.md', branch: 'work/b', base: { kind: 'task', task: 'a', reason: 'needs a\'s parser' } },
+    manifest: { intentRef: 'docs/y.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's parser" } },
   })
 
   const bases = basesFor([target, dependent])
@@ -64,30 +44,36 @@ it('measures a TASK whose base names a merged TASK against the BASE_BRANCH inste
     task: 'b',
     manifest: dependent.manifest,
     against: 'main',
-    claim: undefined,
   })
 })
 
-// Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK whose `base` names a TASK not present in the queue at all carries an
-//           unresolved claim
-// GIVEN an in-flight TASK whose base names a TASK the queue holds no record of
-// WHEN the graph decides what to measure it against
-// THEN it is measured against `main`, carrying the claim as unresolved rather than silently
-//      dropping it
-it('carries an unresolved claim when base names a TASK not present in the queue at all', () => {
+// Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
+// Scenario: A TASK whose `blocked` names a TASK not present in the queue at all carries a
+//           named problem naming that TASK
+// GIVEN a TASK whose `blocked` names a TASK the queue holds no record of
+// WHEN the graph decides what to measure it against, and is computed
+// THEN it is measured from its merge-base with the BASE_BRANCH like any other, and carries
+//      a named problem naming the TASK the queue does not hold
+it('carries a named problem naming the TASK when blocked names a TASK not present in the queue at all', () => {
   const dependent = record('b', {
-    manifest: { intentRef: 'docs/y.md', branch: 'work/b', base: { kind: 'task', task: 'ghost', reason: 'needs it' } },
+    manifest: { intentRef: 'docs/y.md', branch: 'work/b', blocked: { task: 'ghost', reason: 'needs it' } },
   })
 
   const bases = basesFor([dependent])
-
   expect(bases).toEqual([
-    { task: 'b', manifest: dependent.manifest, against: 'main', claim: { kind: 'unresolved', task: 'ghost', reason: 'needs it' } },
+    { task: 'b', manifest: dependent.manifest, against: 'main' },
   ])
+
+  const graph = computeGraph({
+    changes: [{ task: 'b', editedCapabilities: [], changedTerms: [], blockedBy: dependent.manifest.blocked }],
+    failures: [],
+    vocabulary: { terms: [], capabilities: [] },
+    queue: ['b'],
+  })
+  expect(graph.tasks.find(one => one.task === 'b')?.problem).toContain('ghost')
 })
 
-// Requirement: The graph reads each in-flight TASK from its own base
+// Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
 // Scenario: A TASK whose own state has reached merged is not read into the graph at all
 // GIVEN a TASK whose own state has reached merged
 // WHEN the graph decides what to measure

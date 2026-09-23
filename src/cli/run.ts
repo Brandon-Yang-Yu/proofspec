@@ -28,7 +28,7 @@ import type { SpecTree } from '../spec-tree/index.ts'
 import { scanSource } from '../test-scan/index.ts'
 import type { FileScan, ProofSite, ScanError, Step } from '../test-scan/index.ts'
 import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.ts'
-import type { Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, VerifiedClaim, Vocabulary } from '../inflight/index.ts'
+import type { Graph, Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, Vocabulary } from '../inflight/index.ts'
 import { docketView } from '../docket/index.ts'
 import type { QueueEntryRead, TaskPhase, TaskTimes } from '../docket/index.ts'
 import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, maxSessionsFrom, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
@@ -1075,7 +1075,7 @@ const EMPTY_VOCABULARY: Vocabulary = { terms: [], capabilities: [] }
 export async function inflight(options: RunOptions): Promise<Outcome> {
   const gathered = await gatherQueue(options)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
-  return { kind: 'inflight', report: computeGraph(gathered) }
+  return { kind: 'inflight', report: graphFrom(gathered) }
 }
 
 /**
@@ -1141,17 +1141,16 @@ export async function docket(options: RunOptions): Promise<Outcome> {
 /** Every in-flight TASK's own basis and record, alongside the raw state word `schedule` needs and
  * `inflight`'s own summary does not keep — read once so `inflight` and `schedule` read the queue
  * exactly the same way. */
-type QueueGathered =
-  | {
-      readonly ok: true
-      readonly changes: readonly TaskChange[]
-      readonly failures: readonly TaskFailure[]
-      readonly vocabulary: Vocabulary
-      readonly records: readonly TaskRecord[]
-      readonly bases: readonly TaskBasis[]
-      readonly words: ReadonlyMap<string, string>
-    }
-  | { readonly ok: false; readonly reason: string }
+type QueueGatheredOk = {
+  readonly ok: true
+  readonly changes: readonly TaskChange[]
+  readonly failures: readonly TaskFailure[]
+  readonly vocabulary: Vocabulary
+  readonly records: readonly TaskRecord[]
+  readonly words: ReadonlyMap<string, string>
+}
+
+type QueueGathered = QueueGatheredOk | { readonly ok: false; readonly reason: string }
 
 async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   const queue = await readQueue(options.cwd)
@@ -1160,7 +1159,7 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   // `specs/` directory yet answers the same empty graph as one with an empty queue, rather
   // than failing on an input nothing here would have gone on to read.
   if (queue.tasks.length === 0) {
-    return { ok: true, changes: [], failures: [], vocabulary: EMPTY_VOCABULARY, records: [], bases: [], words: new Map() }
+    return { ok: true, changes: [], failures: [], vocabulary: EMPTY_VOCABULARY, records: [], words: new Map() }
   }
 
   const specs = await readSpecFiles(options.cwd, options.specsDir ?? DEFAULT_SPECS_DIR)
@@ -1170,9 +1169,8 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   const { records, failures: recordFailures, words } = recordsFrom(queue.tasks)
   const failures: TaskFailure[] = [...recordFailures]
 
-  const bases = basesFor(records)
   const changes: TaskChange[] = []
-  for (const basis of bases) {
+  for (const basis of basesFor(records)) {
     const measured = await measure(options.cwd, basis)
     if (!measured.ok) {
       failures.push({ task: basis.task, reason: measured.reason })
@@ -1181,7 +1179,19 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
     changes.push(measured.change)
   }
 
-  return { ok: true, changes, failures, vocabulary, records, bases, words }
+  return { ok: true, changes, failures, vocabulary, records, words }
+}
+
+/** The graph over what the queue gathered. The queue's standing names ride along — merged
+ *  TASKs and unreadable ones included — because the dangling-name problem is the one graph
+ *  judgement that needs them: a `blockedBy` edge naming a TASK the queue holds no record of. */
+function graphFrom(gathered: QueueGatheredOk): Graph {
+  return computeGraph({
+    changes: gathered.changes,
+    failures: gathered.failures,
+    vocabulary: gathered.vocabulary,
+    queue: [...gathered.records.map(one => one.task), ...gathered.failures.map(one => one.task)],
+  })
 }
 
 /**
@@ -1218,10 +1228,10 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
     gathered = regathered
   }
 
-  const graph = computeGraph(gathered)
+  const graph = graphFrom(gathered)
 
   const held = new Set(
-    holdStatusFor(gathered.bases)
+    holdStatusFor(gathered.records)
       .filter(status => status.kind === 'held')
       .map(status => status.task),
   )
@@ -1416,7 +1426,9 @@ function vocabularyOf(specs: readonly CapabilitySpec[]): Vocabulary {
   }
 }
 
-/** What one in-flight TASK's branch changed, relative to its own base — or why it could not be measured. */
+/** What one in-flight TASK's branch changed, relative to the BASE_BRANCH — or why it could not
+ * be measured. The blockedBy edge is the manifest fact, carried as the TASK's MANIFEST records
+ * it; nothing about it is git's to confirm. */
 async function measure(cwd: string, basis: TaskBasis): Promise<{ readonly ok: true; readonly change: TaskChange } | { readonly ok: false; readonly reason: string }> {
   const changedPaths = await changedSpecPaths({ cwd, branch: basis.manifest.branch, against: basis.against, specsDir: DEFAULT_SPECS_DIR })
   if (!changedPaths.ok) return { ok: false, reason: changedPaths.reason }
@@ -1427,35 +1439,9 @@ async function measure(cwd: string, basis: TaskBasis): Promise<{ readonly ok: tr
   const after = (await readFileAt({ cwd, rev: basis.manifest.branch, path: glossaryPath })) ?? ''
   const changed = changedTerms({ before: readTerms(before), after: readTerms(after) }).map(one => one.term)
 
-  const basedOn = await verifiedClaim(cwd, basis)
-  if (basedOn !== undefined && !basedOn.ok) return { ok: false, reason: basedOn.reason }
   return {
     ok: true,
-    change: { task: basis.task, editedCapabilities, changedTerms: changed, basedOn: basedOn?.claim },
+    change: { task: basis.task, editedCapabilities, changedTerms: changed, blockedBy: basis.manifest.blocked },
   }
-}
-
-/**
- * Whether a TASK's basedOn claim holds, or `undefined` when it made none. A claim naming a TASK
- * not in the queue at all is broken without git being asked anything — there is no branch
- * behind the name to check ancestry against. A claim naming a real branch is checked for real;
- * a git failure while checking it is not itself a verdict on the claim, so it is propagated as
- * a reason this TASK could not be measured, the same as any other git step here.
- */
-async function verifiedClaim(
-  cwd: string,
-  basis: TaskBasis,
-): Promise<{ readonly ok: true; readonly claim: VerifiedClaim } | { readonly ok: false; readonly reason: string } | undefined> {
-  if (basis.claim === undefined) return undefined
-  const claim = basis.claim
-  if (claim.kind === 'unresolved') {
-    return { ok: true, claim: { kind: 'broken', task: claim.task, reason: claim.reason, why: `no TASK named ${claim.task} is in the queue` } }
-  }
-  const ancestry = await isAncestor({ cwd, ancestor: claim.branch, descendant: basis.manifest.branch })
-  if (!ancestry.ok) return { ok: false, reason: ancestry.reason }
-  const verified: VerifiedClaim = ancestry.isAncestor
-    ? { kind: 'holds', task: claim.task, reason: claim.reason }
-    : { kind: 'broken', task: claim.task, reason: claim.reason, why: `${claim.task}'s branch is not an ancestor` }
-  return { ok: true, claim: verified }
 }
 

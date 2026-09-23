@@ -21,38 +21,36 @@ it('refuses a MANIFEST whose JSON does not parse, naming why', () => {
 // WHEN the MANIFEST is read
 // THEN it is refused, naming `branch`
 it('refuses a MANIFEST missing a required field, naming the field', () => {
-  const result = readManifest(JSON.stringify({ intentRef: 'docs/x.md', base: { kind: 'main' } }))
+  const result = readManifest(JSON.stringify({ intentRef: 'docs/x.md' }))
 
   expect(result.ok).toBe(false)
   expect(!result.ok && result.reason).toContain('branch')
 })
 
 // Requirement: A MANIFEST that cannot stand is refused, naming why
-// Scenario: A `base` of a kind that is neither `main` nor `task` is refused
-// GIVEN a MANIFEST whose `base.kind` is `other`
+// Scenario: A `blocked` present but missing its `task` is refused, naming why
+// GIVEN a MANIFEST whose `blocked` carries a `reason` and no `task`
 // WHEN the MANIFEST is read
-// THEN it is refused
-it('refuses a base of a kind that is neither main nor task', () => {
+// THEN it is refused, naming the missing `task`
+it('refuses a blocked present but missing its task, naming why', () => {
   const result = readManifest(
-    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', base: { kind: 'other' } }),
+    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', blocked: { reason: 'needs it' } }),
   )
 
   expect(result.ok).toBe(false)
+  expect(!result.ok && result.reason).toContain('task')
 })
 
 // Requirement: A MANIFEST that cannot stand is refused, naming why
-// Scenario: A `base` of kind `task` missing its `task` or its `reason` is refused
-// GIVEN a MANIFEST whose `base.kind` is `task`, once with no `reason` and once with no `task`
+// Scenario: A `blocked` present but missing its `reason` is refused, naming why
+// GIVEN a MANIFEST whose `blocked` carries a `task` and no `reason`
 // WHEN the MANIFEST is read
-// THEN it is refused either way
-it('refuses a base of kind task missing its task or its reason', () => {
-  const missingReason = readManifest(
-    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', base: { kind: 'task', task: 'other' } }),
-  )
-  const missingTask = readManifest(
-    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', base: { kind: 'task', reason: 'needs it' } }),
+// THEN it is refused, naming the missing `reason`
+it('refuses a blocked present but missing its reason, naming why', () => {
+  const result = readManifest(
+    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', blocked: { task: 'other' } }),
   )
 
-  expect.soft(missingReason.ok).toBe(false)
-  expect.soft(missingTask.ok).toBe(false)
+  expect(result.ok).toBe(false)
+  expect(!result.ok && result.reason).toContain('reason')
 })

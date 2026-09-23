@@ -1,4 +1,4 @@
-import type { ManifestBase, ManifestRead } from './types.ts'
+import type { Manifest, ManifestRead } from './types.ts'
 
 /**
  * Reads a MANIFEST from its JSON text. A hand-off nobody can trust is worse than none, so
@@ -18,19 +18,28 @@ export function readManifest(source: string): ManifestRead {
   if (typeof intentRef !== 'string') return { ok: false, reason: 'the MANIFEST is missing its intentRef field' }
   const branch = record['branch']
   if (typeof branch !== 'string') return { ok: false, reason: 'the MANIFEST is missing its branch field' }
-  const base = readBase(record['base'])
-  if (base === undefined) return { ok: false, reason: 'the MANIFEST is missing its base field, or names a base that does not stand' }
+  const blocked = readBlocked(record['blocked'])
+  if (blocked !== undefined && !blocked.ok) return { ok: false, reason: blocked.reason }
 
-  return { ok: true, manifest: { intentRef, branch, base } }
+  return blocked === undefined
+    ? { ok: true, manifest: { intentRef, branch } }
+    : { ok: true, manifest: { intentRef, branch, blocked: blocked.blocked } }
 }
 
-function readBase(value: unknown): ManifestBase | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const record = value as Record<string, unknown>
-  if (record['kind'] === 'main') return { kind: 'main' }
-  if (record['kind'] !== 'task') return undefined
+/** A `blocked` field's read: shaped and carried, refused naming why, or absent outright. */
+type BlockedRead =
+  | { readonly ok: true; readonly blocked: NonNullable<Manifest['blocked']> }
+  | { readonly ok: false; readonly reason: string }
+
+/** A `blocked` field: absent means blocked by nothing, and present means it must carry both
+ *  its `task` and its `reason` — a field that names a blocker without saying why, or argues
+ *  a wait behind nobody, is refused naming the limb it stands without. */
+function readBlocked(value: unknown): BlockedRead | undefined {
+  if (value === undefined) return undefined
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
   const task = record['task']
   const reason = record['reason']
-  if (typeof task !== 'string' || typeof reason !== 'string') return undefined
-  return { kind: 'task', task, reason }
+  if (typeof task !== 'string') return { ok: false, reason: 'the MANIFEST carries a blocked that is missing its task' }
+  if (typeof reason !== 'string') return { ok: false, reason: 'the MANIFEST carries a blocked that is missing its reason' }
+  return { ok: true, blocked: { task, reason } }
 }

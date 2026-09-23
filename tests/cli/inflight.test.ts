@@ -15,16 +15,23 @@ function graphOf(outcome: Outcome): Graph {
 
 // Requirement: A command answers the inflight graph as JSON
 // Scenario: The `inflight` command answers JSON by default
-// GIVEN a repository with one in-flight TASK in the queue
+// GIVEN a repository with an in-flight TASK whose MANIFEST records a `blocked` naming another TASK on the queue
 // WHEN the inflight command is run with no format named
-// THEN the answer renders as JSON by default
+// THEN the answer renders as JSON by default, its TASK carrying a blockedBy edge with the task and reason —
+//      no basedOn field, no verified or broken vocabulary anywhere
 it('answers the inflight command as JSON by default', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
-  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'a', { edit: 'specs/cli.md', blocked: { task: 'b', reason: 'lands behind b' } })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md' })
 
-  const outcome = await inflight({ cwd: repo.root })
+  const answer = renderAnswer(await inflight({ cwd: repo.root }))
+  const parsed = JSON.parse(answer) as { tasks: { task: string; blockedBy: unknown }[] }
 
-  expect(() => JSON.parse(renderAnswer(outcome))).not.toThrow()
+  expect(parsed.tasks.find(one => one.task === 'a')?.blockedBy).toEqual({ task: 'b', reason: 'lands behind b' })
+  expect(parsed.tasks.find(one => one.task === 'b')?.blockedBy).toBeNull()
+  expect(answer).not.toContain('basedOn')
+  expect(answer).not.toContain('verified')
+  expect(answer).not.toContain('broken')
 })
 
 // Requirement: A command answers the inflight graph as JSON
@@ -36,7 +43,7 @@ it('exits its ok code even when the graph carries problems', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await repo.write(
     '.proofspec/dispatch/ghost/MANIFEST',
-    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/ghost', base: { kind: 'main' } }),
+    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/ghost' }),
   )
   await repo.write('.proofspec/dispatch/ghost/state', 'queued')
 
@@ -71,7 +78,7 @@ it('is a cannot-run when a real TASK is in flight but specs cannot be read', asy
   await repo.git(['checkout', '-b', 'work/a'])
   await repo.git(['commit', '--allow-empty', '-m', 'a: edit'])
   await repo.git(['checkout', 'main'])
-  await repo.write('.proofspec/dispatch/a/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a', base: { kind: 'main' } }))
+  await repo.write('.proofspec/dispatch/a/MANIFEST', JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/a' }))
   await repo.write('.proofspec/dispatch/a/state', 'queued')
 
   const outcome = await inflight({ cwd: repo.root })

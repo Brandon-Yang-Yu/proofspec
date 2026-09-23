@@ -462,8 +462,8 @@ page is a dialect of its own.
 
 Wherever the tools ask git about the BASE_BRANCH, they SHALL read its name from the
 `PROOFSPEC_BASE_BRANCH` environment variable, taking `main` when that variable is unset.
-The diff base `touched` measures a change from, the base the inflight graph's census
-measures each TASK from, the landed check a scheduling pass runs, and the landed check
+The diff base `touched` measures a change from, the branch the inflight graph's census
+measures each TASK against, the landed check a scheduling pass runs, and the landed check
 `settle_task` runs SHALL all read one resolution of the name, so no two of them measure
 against different branches.
 

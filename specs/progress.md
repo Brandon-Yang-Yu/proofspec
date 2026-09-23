@@ -132,7 +132,7 @@ conventional path, kill its same-named tmux session on the dedicated server — 
 settle a scheduling pass runs as its backstop (`specs/schedule.md`). The session kill SHALL
 go through a detached reaper process with a short delay, so the tool returns its result
 before the host session dies. The tool SHALL NOT prune the TASK's queue entry: pruning
-waits until no in-flight TASK's `base` still names it, a fact about the whole queue that
+waits until no in-flight TASK's `blocked` still names it, a fact about the whole queue that
 one session cannot answer, and it stays the scheduling pass's.
 
 The executor is the one party that knows the moment its merge lands, so it is the one that

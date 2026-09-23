@@ -422,7 +422,7 @@ function renderInflight(graph: Graph): string {
 function renderTask(task: TaskEntry): string {
   const lines = [
     `${task.task}  writes: ${nodeList(task.writes)}  reopened: ${nodeList(task.reopened)}`,
-    task.basedOn === null ? undefined : `    basedOn ${task.basedOn.task} (${task.basedOn.reason})`,
+    task.blockedBy === null ? undefined : `    blockedBy ${task.blockedBy.task} (${task.blockedBy.reason})`,
     task.problem === null ? undefined : `    problem: ${task.problem}`,
   ]
   return lines.filter(line => line !== undefined).join('\n')
@@ -479,18 +479,17 @@ function renderDocketRow(row: DocketRow): string {
   const inPhase = row.phaseAgeSeconds === null ? 'no phase' : `in phase ${humanAge(row.phaseAgeSeconds)}`
   const sinceMove = row.heartbeatAgeSeconds === null ? 'no heartbeat' : `moved ${humanAge(row.heartbeatAgeSeconds)} ago`
   const session = row.session.listed ? row.session.attach : 'no session'
-  return `  ${row.task}  ${row.state}  ${pace}  on ${row.branch} from ${baseLabel(row.base)}  ${inState}  ${inPhase}  ${sinceMove}  ${session}`
+  // The blocked naming rides in the branch's segment, the same place the row's own facts
+  // carry it — nothing at all when the MANIFEST records no blocker, the same honest absence
+  // `no phase` and `no session` spell for the facts a row may not hold.
+  const blockedBy = row.blocked === undefined ? '' : ` blockedBy ${row.blocked.task} (${row.blocked.reason})`
+  return `  ${row.task}  ${row.state}  ${pace}  on ${row.branch}${blockedBy}  ${inState}  ${inPhase}  ${sinceMove}  ${session}`
 }
 
 function renderOutstanding(ruling: OutstandingRuling): string {
   const shared = ruling.node === null ? 'a relationship this key does not name' : `${ruling.node.kind} "${ruling.node.name}"`
   const tasks = ruling.tasks.length === 0 ? '' : ` shared by ${ruling.tasks.join(', ')}`
   return `  ${shared}${tasks}\n    ${ruling.answerWith}`
-}
-
-/** A base as one word on a row: `main`, or the TASK this one was built on. */
-function baseLabel(base: DocketRow['base']): string {
-  return base.kind === 'main' ? 'main' : base.task
 }
 
 /** An age as a person reads it off a queue: seconds, then minutes, then the two-part spans a

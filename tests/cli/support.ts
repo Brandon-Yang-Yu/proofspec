@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { compareStrings } from '../../src/order.ts'
-import type { ManifestBase } from '../../src/inflight/index.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -163,14 +162,19 @@ export async function makeGitRepo(files: Readonly<Record<string, string>>): Prom
 
 /**
  * Enters a task into the conventional queue directory, on its own branch — off `main` unless
- * `onto` names another branch to build it from instead. Shared by `cli` and `inflight`'s own
- * end-to-end tests, since both prove behaviour of the same command against the same fixture
- * shape.
+ * `onto` names another branch to build it from instead. The MANIFEST records the given
+ * `blocked` exactly, and no field at all when none is given. Shared by `cli` and `inflight`'s
+ * own end-to-end tests, since both prove behaviour of the same command against the same
+ * fixture shape.
  */
 export async function enterTask(
   repo: GitRepo,
   task: string,
-  options: { readonly edit: string; readonly base?: ManifestBase; readonly onto?: string },
+  options: {
+    readonly edit: string
+    readonly blocked?: { readonly task: string; readonly reason: string }
+    readonly onto?: string
+  },
 ): Promise<void> {
   await repo.git(['checkout', options.onto ?? 'main'])
   await repo.git(['checkout', '-b', `work/${task}`])
@@ -179,7 +183,9 @@ export async function enterTask(
   await repo.git(['commit', '-m', `${task}: edit`])
   await repo.git(['checkout', 'main'])
 
-  const manifest = { intentRef: 'docs/x.md', branch: `work/${task}`, base: options.base ?? { kind: 'main' } }
+  const manifest = options.blocked === undefined
+    ? { intentRef: 'docs/x.md', branch: `work/${task}` }
+    : { intentRef: 'docs/x.md', branch: `work/${task}`, blocked: options.blocked }
   await repo.write(`.proofspec/dispatch/${task}/MANIFEST`, JSON.stringify(manifest))
   await repo.write(`.proofspec/dispatch/${task}/state`, 'queued')
 }

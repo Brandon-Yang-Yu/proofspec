@@ -1,7 +1,7 @@
 import { compareStrings } from '../order.ts'
 import { readManifest } from '../inflight/index.ts'
 import { rulingCommandFor } from '../schedule/index.ts'
-import type { ManifestBase, Node } from '../inflight/index.ts'
+import type { Manifest, Node } from '../inflight/index.ts'
 import type { RaisedEntry } from '../schedule/index.ts'
 import type { PhaseHistoryEntry } from '../cli/queue.ts'
 
@@ -66,13 +66,13 @@ export type PhaseAccountEntry = {
   readonly live: boolean
 }
 
-/** One completed TASK as the archive answers it: the TASK's name, the branch and base its
- *  MANIFEST records, when it was enqueued, when it was settled, and how long it lived — the
+/** One completed TASK as the archive answers it: the TASK's name, the branch and `blocked`
+ *  its MANIFEST records, when it was enqueued, when it was settled, and how long it lived — the
  *  last three read from the entry's own file write times on the request that asks for them. */
 export type ArchiveRecord = {
   readonly task: string
   readonly branch: string
-  readonly base: ManifestBase
+  readonly blocked: Manifest['blocked']
   readonly enqueuedAt: string
   readonly settledAt: string
   readonly livedSeconds: number
@@ -93,7 +93,7 @@ export type SessionWhereabouts =
 
 /** One queue entry as the docket answers it: the TASK's name, its state word exactly as its
  * `state` file holds it, its phase word and round exactly as its `phase` file holds them, the
- * branch and base its MANIFEST records, how long it has stood in its word, how long since its
+ * branch and `blocked` its MANIFEST records, how long it has stood in its word, how long since its
  * session last moved, how long its phase word has stood, the history of every standing it
  * stood through, and whether its session is still there to attach to. */
 export type DocketRow = {
@@ -105,7 +105,7 @@ export type DocketRow = {
   /** The round the phase file holds — absent exactly when the word is, never defaulted. */
   readonly round: number | null
   readonly branch: string
-  readonly base: ManifestBase
+  readonly blocked: Manifest['blocked']
   readonly stateAgeSeconds: number
   /** Absent — `null`, never a repeat of the word's own age — when the TASK has no heartbeat
    * file: the ordinary state of a TASK with no session. */
@@ -201,7 +201,7 @@ export function docketView(input: {
       phase: phase?.phase ?? null,
       round: phase?.round ?? null,
       branch: manifest.manifest.branch,
-      base: manifest.manifest.base,
+      blocked: manifest.manifest.blocked,
       stateAgeSeconds: secondsAgo(input.now, time.stateWrittenAt),
       heartbeatAgeSeconds: time.heartbeatWrittenAt === undefined ? null : secondsAgo(input.now, time.heartbeatWrittenAt),
       // The age of the word, not of the file: the file is rewritten on every round move, so
@@ -235,7 +235,7 @@ export function archiveView(entries: readonly ArchiveEntryRead[]): readonly Arch
     records.push({
       task: entry.task,
       branch: manifest.manifest.branch,
-      base: manifest.manifest.base,
+      blocked: manifest.manifest.blocked,
       enqueuedAt: new Date(entry.manifestWrittenAt).toISOString(),
       settledAt: new Date(entry.stateWrittenAt).toISOString(),
       // Never negative: a settle that reads before its own enqueue is a clock that moved,

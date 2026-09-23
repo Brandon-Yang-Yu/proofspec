@@ -25,10 +25,10 @@ function reportOf(outcome: Outcome): Docket {
   return outcome.report
 }
 
-/** A queue entry as a fixture writes one: a MANIFEST naming a branch off main, and a state word. */
+/** A queue entry as a fixture writes one: a MANIFEST naming a branch, and a state word. */
 function queueEntry(task: string, options: { readonly state?: string; readonly manifest?: string } = {}) {
   const state = options.state ?? 'queued'
-  const manifest = options.manifest ?? JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+  const manifest = options.manifest ?? JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
   return {
     [`.proofspec/dispatch/${task}/MANIFEST`]: manifest,
     [`.proofspec/dispatch/${task}/state`]: state,
@@ -176,19 +176,19 @@ it('carries the phase word and round exactly as the phase file holds them', asyn
 })
 
 // Requirement: The docket answers one row per queue entry
-// Scenario: A row carries the branch and base its MANIFEST records
-// GIVEN a queue holding one TASK branched off another TASK and one branched off main
+// Scenario: A row carries the branch and blocked its MANIFEST records
+// GIVEN a queue holding one TASK whose MANIFEST records a blocked naming another TASK with its reason, and one recording none
 // WHEN the docket is answered
-// THEN each row carries exactly the branch and base its own MANIFEST records — the two facts that say which work the row stands for and where it was built
-it('carries the branch and base exactly as each MANIFEST records them', async () => {
+// THEN each row carries exactly the branch and blocked its own MANIFEST records — the field absent when the MANIFEST records none, never invented
+it('carries the branch and blocked exactly as each MANIFEST records them', async () => {
   const { outcome } = await docketOver({
-    ...queueEntry('on-main', { manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/on-main', base: { kind: 'main' } }) }),
-    ...queueEntry('on-task', { manifest: JSON.stringify({ intentRef: 'docs/y.md', branch: 'work/on-task', base: { kind: 'task', task: 'on-main', reason: 'it builds on that work' } }) }),
+    ...queueEntry('free'),
+    ...queueEntry('waiting', { manifest: JSON.stringify({ intentRef: 'docs/y.md', branch: 'work/waiting', blocked: { task: 'free', reason: 'it builds on that work' } }) }),
   })
 
-  expect(reportOf(outcome).rows.map(row => [row.branch, row.base])).toEqual([
-    ['work/on-main', { kind: 'main' }],
-    ['work/on-task', { kind: 'task', task: 'on-main', reason: 'it builds on that work' }],
+  expect(reportOf(outcome).rows.map(row => [row.branch, row.blocked])).toEqual([
+    ['work/free', undefined],
+    ['work/waiting', { task: 'free', reason: 'it builds on that work' }],
   ])
 })
 
@@ -525,7 +525,7 @@ it('carries the archived history and an account closed at the settled moment', (
   const records = archiveView([
     {
       task: 'done',
-      manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/done', base: { kind: 'main' } }),
+      manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/done' }),
       manifestWrittenAt: settled - 3_600_000,
       stateWrittenAt: settled,
       history,

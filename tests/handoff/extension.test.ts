@@ -25,7 +25,7 @@ async function stateOf(root: string, task: string): Promise<string> {
   return readFile(join(root, '.proofspec', 'dispatch', task, 'state'), 'utf8')
 }
 
-async function manifestOf(root: string, task: string): Promise<unknown> {
+async function manifestOf(root: string, task: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(join(root, '.proofspec', 'dispatch', task, 'MANIFEST'), 'utf8'))
 }
 
@@ -34,7 +34,7 @@ async function manifestOf(root: string, task: string): Promise<unknown> {
 async function writeArchived(root: string, task: string): Promise<void> {
   const dir = join(root, '.proofspec', 'archive', task)
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'MANIFEST'), JSON.stringify({ intentRef: 'docs/old.md', branch: `work/${task}`, base: { kind: 'main' } }))
+  await writeFile(join(dir, 'MANIFEST'), JSON.stringify({ intentRef: 'docs/old.md', branch: `work/${task}` }))
   await writeFile(join(dir, 'state'), 'merged')
 }
 
@@ -192,61 +192,60 @@ it('still reports the TASK as queued even when its triggered pass could not run'
   expect(await stateOf(repo.root, 'a-real-task')).toBe('queued')
 })
 
-// Requirement: enqueue_task flattens its input onto the exact Manifest shape readManifest parses
-// Scenario: A call with no base maps to a MANIFEST whose base is {kind: 'main'}
-// GIVEN input with no base
+// Requirement: enqueue_task maps its input onto the exact Manifest shape readManifest parses
+// Scenario: A call with no blocked maps to a MANIFEST carrying no blocked field at all
+// GIVEN the call with blocked omitted
 // WHEN manifestFrom maps it
-// THEN the resulting Manifest's base is {kind: 'main'}
-it('maps a call with no base onto a MANIFEST whose base is {kind: main}', () => {
+// THEN the MANIFEST holds intentRef and branch and no blocked key
+it('maps a call with no blocked onto a MANIFEST carrying no blocked field at all', () => {
   const manifest = manifestFrom(VALID_INPUT)
 
-  expect(manifest).toEqual({ intentRef: 'docs/x.md', branch: 'work/a-real-task', base: { kind: 'main' } })
+  expect(manifest).toEqual({ intentRef: 'docs/x.md', branch: 'work/a-real-task' })
+  expect('blocked' in manifest).toBe(false)
 })
 
-// Requirement: enqueue_task flattens its input onto the exact Manifest shape readManifest parses
-// Scenario: A call with a base naming another TASK and a reason maps to a MANIFEST whose base is exactly {kind: 'task', task, reason}
-// GIVEN input with a base naming another TASK and a reason
+// Requirement: enqueue_task maps its input onto the exact Manifest shape readManifest parses
+// Scenario: A call with a blocked naming another TASK and a reason maps to a MANIFEST whose blocked is exactly {task, reason}
+// GIVEN the call with a blocked naming another TASK and a reason
 // WHEN manifestFrom maps it
-// THEN the resulting Manifest's base is exactly {kind: 'task', task, reason}
-it('maps a call with a base onto a MANIFEST whose base names that TASK and reason exactly', () => {
-  const input: EnqueueTaskInput = { ...VALID_INPUT, base: { task: 'earlier-task', reason: 'built on its branch' } }
+// THEN the MANIFEST carries blocked {task, reason} exactly, and nothing else beside it
+it('maps a call with a blocked onto a MANIFEST whose blocked is exactly {task, reason}', () => {
+  const input: EnqueueTaskInput = { ...VALID_INPUT, blocked: { task: 'earlier-task', reason: 'waits behind its landing' } }
 
   const manifest = manifestFrom(input)
 
   expect(manifest).toEqual({
     intentRef: 'docs/x.md',
     branch: 'work/a-real-task',
-    base: { kind: 'task', task: 'earlier-task', reason: 'built on its branch' },
+    blocked: { task: 'earlier-task', reason: 'waits behind its landing' },
   })
 })
 
 // Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
-// Scenario: A TASK not already in the queue is enqueued with base {kind: 'main'} and state queued
-// GIVEN a TASK name not already in the queue, with no base given
+// Scenario: A TASK not already in the queue is enqueued with no blocked and state queued
+// GIVEN a TASK name not already in the queue, with no blocked given
 // WHEN enqueue_task is called
-// THEN a queue entry now exists for it with base {kind: 'main'} and state queued
-it('enqueues a fresh TASK with base {kind: main} and state queued', async () => {
+// THEN a queue entry now exists for it with no blocked and state queued
+it('enqueues a fresh TASK with no blocked and state queued', async () => {
   const repo = await makeRepo({})
 
   const result = await runEnqueueTask(repo.root, VALID_INPUT, {})
 
   expect(result).toMatchObject({ ok: true, task: 'a-real-task' })
-  expect(await manifestOf(repo.root, 'a-real-task')).toEqual({
-    intentRef: 'docs/x.md',
-    branch: 'work/a-real-task',
-    base: { kind: 'main' },
-  })
+  const manifest = await manifestOf(repo.root, 'a-real-task')
+  expect(manifest).toEqual({ intentRef: 'docs/x.md', branch: 'work/a-real-task' })
+  expect('blocked' in manifest).toBe(false)
   expect(await stateOf(repo.root, 'a-real-task')).toBe('queued')
 })
 
 // Requirement: enqueue_task answers enqueue()'s own result faithfully, without throwing
-// Scenario: A TASK not already in the queue is enqueued with the given base recorded exactly
-// GIVEN a TASK name not already in the queue, with a base naming another TASK and a reason
+// Scenario: A TASK not already in the queue is enqueued with the given blocked recorded exactly
+// GIVEN a TASK name not already in the queue, with a blocked naming another TASK and a reason
 // WHEN enqueue_task is called
-// THEN the queue entry's MANIFEST records that base exactly
-it('enqueues a fresh TASK with its given base recorded exactly', async () => {
+// THEN the queue entry's MANIFEST records that blocked exactly
+it('enqueues a fresh TASK with its given blocked recorded exactly', async () => {
   const repo = await makeRepo({})
-  const input: EnqueueTaskInput = { ...VALID_INPUT, base: { task: 'earlier-task', reason: 'built on its branch' } }
+  const input: EnqueueTaskInput = { ...VALID_INPUT, blocked: { task: 'earlier-task', reason: 'waits behind its landing' } }
 
   const result = await runEnqueueTask(repo.root, input, {})
 
@@ -254,7 +253,7 @@ it('enqueues a fresh TASK with its given base recorded exactly', async () => {
   expect(await manifestOf(repo.root, 'a-real-task')).toEqual({
     intentRef: 'docs/x.md',
     branch: 'work/a-real-task',
-    base: { kind: 'task', task: 'earlier-task', reason: 'built on its branch' },
+    blocked: { task: 'earlier-task', reason: 'waits behind its landing' },
   })
 })
 
@@ -299,7 +298,6 @@ it('refuses a TASK name already in the queue, leaving its entry untouched', asyn
   expect(await manifestOf(repo.root, 'a-real-task')).toEqual({
     intentRef: 'docs/x.md',
     branch: 'work/a-real-task',
-    base: { kind: 'main' },
   })
   expect(await stateOf(repo.root, 'a-real-task')).toBe('queued')
 })
