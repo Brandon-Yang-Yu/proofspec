@@ -525,16 +525,18 @@ it('derives the default socket from the queue root, so two repos never share a s
   // Two observables carry the whole STANDARD: the shape (`proofspec-` with a
   // root-dependent tail) and the root-dependence (stable per root, distinct across roots).
   // The proof checks those two facts — it cannot and should not re-implement the hash.
-  const socketForRoot = (queueRoot: string): string => {
-    const sockets = tmuxSessionCommands('a', { worktree: `${queueRoot}/.proofspec/worktrees/a`, queueRoot, systemPrompt: '' }).map(socketOf)
+  const socketForRoot = (queueRoot: string, task = 'a'): string => {
+    const sockets = tmuxSessionCommands(task, { worktree: `${queueRoot}/.proofspec/worktrees/${task}`, queueRoot, systemPrompt: '' }).map(socketOf)
     for (const socket of sockets) expect(socket).toMatch(/^proofspec-.+$/)
     return sockets[0]!
   }
 
   const one = socketForRoot('/one')
   const two = socketForRoot('/two')
-  // Same root, same name on every build.
+  // Same root, same name on every build — whatever TASK the build is for: the server is
+  // the repo's, not the TASK's, so a different task must not move the name.
   expect(socketForRoot('/one')).toBe(one)
+  expect(socketForRoot('/one', 'b')).toBe(one)
   // Two roots, two names — the whole point of the derivation. The roots differ in every
   // component, and then again in the last one only: the hashed fact is the root's whole
   // absolute path, never its basename — two clones sharing a directory name in different
@@ -615,15 +617,23 @@ it('asks the dedicated server for the live count by its own -L socket, never the
   const derived = socketOf(tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' })[1]!)
   expect(derived).toMatch(/^proofspec-.+$/)
   const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
+  // A decoy session stands on a second throwaway server for the whole ask: the count is
+  // asked of the root's own derived server only, never summed across every server
+  // standing — so a wrapper that asks several servers answers two and fails.
+  const decoy = 'proofspec-test-count-decoy'
+  const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
   const wasCwd = process.cwd()
   try {
     await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
     await askDerived(['new-session', '-d', '-s', 'only', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'decoy', 'sleep', '60'])
     process.chdir(root)
     await expect(liveSessionCount()).resolves.toBe(1)
   } finally {
     process.chdir(wasCwd)
     await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
     await rm(root, { recursive: true, force: true })
   }
 
