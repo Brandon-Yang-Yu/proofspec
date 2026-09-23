@@ -214,7 +214,9 @@ file is written is the implementation's choice, and which server it names is not
 tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
 named by tmux's own `-L <socket>` flag rather than the default server — never the user's
 own default tmux server, and never any other named server — with a default socket name
-of `proofspec`, overridable through the `PROOFSPEC_TMUX_SOCKET` environment variable.
+derived from the queue root's absolute path: `proofspec-` followed by the first 8 hex
+digits of that path's SHA-256 digest, overridable through the `PROOFSPEC_TMUX_SOCKET`
+environment variable.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
@@ -227,7 +229,13 @@ names no cause.
 The same-named session is killed first so a TASK whose first session attempt died gets a
 working session on retry. Every tmux command reaches the dedicated server so a TASK's name
 can never collide with a session it did not create, and `PROOFSPEC_TMUX_SOCKET` lets a test
-or an acceptance run point at a throwaway, per-run socket.
+or an acceptance run point at a throwaway, per-run socket. The dedicated server keeps this
+tool's sessions off the user's own tmux server, and a fixed default name made every repo
+on the machine share that one server: one repo's sessions counted against another's
+live-session bound, and a same-named TASK in two repos killed each other's session.
+Deriving the name from the queue root gives each repo its own server, with no
+configuration. There is no special case for the single-repo user; everyone gets the
+derived name.
 
 The choice is one environment variable because everything else about starting a session
 is the same act either way, and the default stays `pi` so a queue that never names a
@@ -267,7 +275,7 @@ one kickoff message.
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
-- "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
+- "The tmux commands run against a dedicated server whose name is derived from the queue root, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
 - "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts

@@ -1,5 +1,6 @@
 // Capability: docket
 
+import { createHash } from 'node:crypto'
 import { afterEach, expect, it } from 'vitest'
 import { docket } from '../../src/cli/index.ts'
 import { commandLine, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand } from '../../src/cli/session.ts'
@@ -21,6 +22,13 @@ function reportOf(outcome: Outcome): Docket {
 
 function manifestFor(task: string): string {
   return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+}
+
+// The dedicated server's own name for a queue root — proofspec- plus the first 8 hex digits
+// of the root's SHA-256 digest. Computed here from the rule so a proof pins that the name
+// follows the path, never a literal string the implementation could share by accident.
+function derivedSocket(queueRoot: string): string {
+  return `proofspec-${createHash('sha256').update(queueRoot).digest('hex').slice(0, 8)}`
 }
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
@@ -46,7 +54,7 @@ it('carries the exact attach command for a session the server holds, asking for 
   const report = reportOf(outcome)
   expect(report.rows.find(row => row.task === 'alpha')?.session).toEqual({
     listed: true,
-    attach: 'tmux -L proofspec attach-session -t alpha',
+    attach: `tmux -L ${derivedSocket(repo.root)} attach-session -t alpha`,
   })
   expect(report.rows.find(row => row.task === 'beta')?.session).toEqual({ listed: false })
   expect(asked).toBe(1)
@@ -79,17 +87,18 @@ it('marks a session the server does not hold as absent, asking nothing further',
 // Scenario: The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default
 // GIVEN no socket override is set
 // WHEN the session-list command and the attach command are built
-// THEN both reach the dedicated proofspec server, and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
+// THEN both reach the dedicated server, and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
 it('asks the dedicated server for the session list, honoring the socket override', () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
+  const queueRoot = '/repo'
 
-  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'list-sessions'] })
-  expect(commandLine(tmuxAttachCommand('alpha'))).toBe('tmux -L proofspec attach-session -t alpha')
+  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', derivedSocket(queueRoot), 'list-sessions'] })
+  expect(commandLine(tmuxAttachCommand('alpha', queueRoot))).toBe(`tmux -L ${derivedSocket(queueRoot)} attach-session -t alpha`)
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 
-  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
-  expect(commandLine(tmuxAttachCommand('alpha'))).toBe('tmux -L proofspec-test-run-42 attach-session -t alpha')
+  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
+  expect(commandLine(tmuxAttachCommand('alpha', queueRoot))).toBe('tmux -L proofspec-test-run-42 attach-session -t alpha')
 })
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
