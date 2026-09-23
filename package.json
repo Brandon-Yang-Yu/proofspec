@@ -56,13 +56,14 @@
     "proofspec": "node --experimental-transform-types src/cli/main.ts",
     "spec:check": "pnpm proofspec check",
     "spec:write": "pnpm proofspec write",
-    "investigator": "pi --extension .pi/extensions/handoff.ts --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\""
+    "investigator": "pi --extension .pi/extensions/handoff.ts --extension node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\"",
+    "investigator:claude": "claude --mcp-config '{\"mcpServers\":{\"proofspec\":{\"command\":\"node\",\"args\":[\"--experimental-transform-types\",\"src/mcp/serve.ts\"]}}}' --append-system-prompt \"$(awk '/^---$/{n++;next} n<2{next} 1' .pi/agents/investigator.md)\""
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.86.1",
     "oxc-parser": "^0.141.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "^26.1.1",
     "@vitest/coverage-istanbul": "^4.1.10",
     "typescript": "^7.0.2",

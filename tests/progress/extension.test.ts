@@ -460,11 +460,11 @@ it('refuses a state word outside the reportable set, leaving the entry unchanged
 })
 
 // Requirement: report_task_state resolves PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK from the environment, refused when absent
-// Scenario: The registered tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory
-// GIVEN PROOFSPEC_QUEUE_ROOT/PROOFSPEC_TASK set to a real queue entry, and an ExtensionContext whose cwd names an unrelated directory
+// Scenario: The registered tool reports into PROOFSPEC_QUEUE_ROOT even when the session's own working directory names a different directory
+// GIVEN PROOFSPEC_QUEUE_ROOT/PROOFSPEC_TASK set to a real queue entry, and the session's own working directory naming an unrelated directory
 // WHEN the registered tool's execute runs
-// THEN the state is written under PROOFSPEC_QUEUE_ROOT, not under ExtensionContext.cwd
-it('reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory', async () => {
+// THEN the state is written under PROOFSPEC_QUEUE_ROOT, not under the session's own working directory
+it('reports into PROOFSPEC_QUEUE_ROOT even when the session\'s own working directory names a different directory', async () => {
   const queueRoot = await makeRepo({})
   const unrelatedCwd = await makeRepo({})
   await writeTask(queueRoot.root, 'a', { manifest: '{}', state: 'queued' })

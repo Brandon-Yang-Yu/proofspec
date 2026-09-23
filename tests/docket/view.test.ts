@@ -471,20 +471,28 @@ async function snapshot(root: string): Promise<Readonly<Record<string, { readonl
 
 // Requirement: The docket reports, and judges nothing
 // Scenario: The docket orders TASKs by name alone, whatever their ages or words
-// GIVEN a queue whose oldest TASK sorts after its youngest by name
+// GIVEN a queue whose oldest TASK sorts after its youngest by name, whose state words cut
+//      across that order, and one of whose entries cannot be read at all
 // WHEN the docket is answered
 // THEN the rows still come back in name order — no age, word, or problem moves a TASK up the list
 it('orders TASKs by name alone, whatever their ages or words', async () => {
+  // Three readable rows plus one unreadable TASK, with the ages and the words each
+  // scrambled against the names: neither age direction, nor any word-priority rule,
+  // can reproduce the name order the THEN pins, and the problem TASK never reaches
+  // the rows at all.
   const repo = await makeRepo({
-    ...queueEntry('young', { state: 'blocked-on-question' }),
-    ...queueEntry('old', { state: 'queued' }),
+    ...queueEntry('zulu', { state: 'queued' }),
+    ...queueEntry('mike', { state: 'blocked-on-question' }),
+    ...queueEntry('alpha', { state: 'queued' }),
+    ...queueEntry('bravo', { manifest: '{' }),
   })
-  await writtenAgo(repo, '.proofspec/dispatch/old/state', 86_400)
-  await writtenAgo(repo, '.proofspec/dispatch/young/state', 5)
+  await writtenAgo(repo, '.proofspec/dispatch/zulu/state', 86_400)
+  await writtenAgo(repo, '.proofspec/dispatch/alpha/state', 3_600)
+  await writtenAgo(repo, '.proofspec/dispatch/mike/state', 5)
 
   const outcome = await docket({ cwd: repo.root, now: NOW, docket: { listSessions: async () => [] } })
 
-  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['old', 'young'])
+  expect(reportOf(outcome).rows.map(row => row.task)).toEqual(['alpha', 'mike', 'zulu'])
 })
 
 // Requirement: The docket reports, and judges nothing

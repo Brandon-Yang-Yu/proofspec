@@ -1,6 +1,5 @@
+import { baseBranch } from '../base-branch.ts'
 import type { Manifest, TaskState } from './types.ts'
-
-const MAIN = 'main'
 
 /** One TASK with its MANIFEST already standing and its state already read. */
 export type TaskRecord = {
@@ -28,17 +27,17 @@ export type TaskBasis = {
 
 /**
  * Decides, for every in-flight TASK, which revision its edges are measured relative to. A
- * TASK based on `main` is measured against `main`; one based on another TASK is measured
- * against that TASK's own branch when it is itself in flight, and against `main` instead once
- * that TASK has merged — the work behind its name is by then already in `main`. A TASK whose
- * own state has reached merged is not read at all: it has nothing left to place on a graph of
- * what is still in flight.
+ * TASK built on the BASE_BRANCH is measured against it; one based on another TASK is measured
+ * against that TASK's own branch when it is itself in flight, and against the BASE_BRANCH
+ * instead once that TASK has merged — the work behind its name is by then already in the
+ * BASE_BRANCH. A TASK whose own state has reached merged is not read at all: it has nothing
+ * left to place on a graph of what is still in flight.
  *
  * A `base` naming a TASK that is not in the queue at all is a third case neither of those is:
  * unlike a merged TASK, there is no branch behind the name for the work to already be in
- * `main`. Its own edges are still measured against `main` — the TASK's own branch is real and
- * readable — but the claim itself is carried as unresolved, so it surfaces as a problem rather
- * than silently reading as a TASK that simply has no basedOn edge.
+ * the BASE_BRANCH. Its own edges are still measured against the BASE_BRANCH — the TASK's own
+ * branch is real and readable — but the claim itself is carried as unresolved, so it surfaces
+ * as a problem rather than silently reading as a TASK that simply has no basedOn edge.
  */
 export function basesFor(tasks: readonly TaskRecord[]): readonly TaskBasis[] {
   const byName = new Map(tasks.map(one => [one.task, one]))
@@ -47,17 +46,17 @@ export function basesFor(tasks: readonly TaskRecord[]): readonly TaskBasis[] {
 
 function basisFor(task: TaskRecord, byName: ReadonlyMap<string, TaskRecord>): TaskBasis {
   if (task.manifest.base.kind === 'main') {
-    return { task: task.task, manifest: task.manifest, against: MAIN, claim: undefined }
+    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: undefined }
   }
 
   const named = task.manifest.base.task
   const reason = task.manifest.base.reason
   const target = byName.get(named)
   if (target === undefined) {
-    return { task: task.task, manifest: task.manifest, against: MAIN, claim: { kind: 'unresolved', task: named, reason } }
+    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: { kind: 'unresolved', task: named, reason } }
   }
   if (target.state === 'merged') {
-    return { task: task.task, manifest: task.manifest, against: MAIN, claim: undefined }
+    return { task: task.task, manifest: task.manifest, against: baseBranch(), claim: undefined }
   }
   return {
     task: task.task,

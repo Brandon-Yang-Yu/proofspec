@@ -31,11 +31,11 @@ live.
 - "A held TASK is never ready to dispatch, however queued its own word is" → tests/schedule/lease.test.ts
 <!-- /scenarios -->
 
-### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main
+### Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 
 A scheduling pass SHALL settle a TASK when both conditions hold: the TASK's current state
-word is `mergeable`, and its MANIFEST's `branch` is an ancestor of `main`. A settle SHALL
-rewrite the TASK's state file to `merged`, remove its worktree at its conventional path,
+word is `mergeable`, and its MANIFEST's `branch` is an ancestor of the BASE_BRANCH. A settle
+SHALL rewrite the TASK's state file to `merged`, remove its worktree at its conventional path,
 and kill its same-named tmux session on the dedicated server, in that order — so a TASK the
 queue has settled leaves nothing checked out behind it. Both conditions SHALL be checked
 fresh from git at the moment of the settle, never from bookkeeping. A TASK failing either
@@ -56,7 +56,7 @@ time a pass runs. Neither caller is trusted on its word: the settle verifies bot
 conditions from git itself.
 
 Both conditions are required because each covers the other's blind spot. A branch is an
-ancestor of `main` from the moment it is cut, so ancestry alone would mark a freshly
+ancestor of the BASE_BRANCH from the moment it is cut, so ancestry alone would mark a freshly
 queued TASK `merged` before any work happened; the `mergeable` word is the executor's own
 claim the work is done. And `mergeable` alone is only a claim — the landing in git is
 the proof, which is exactly what the ancestor check supplies.
@@ -77,11 +77,11 @@ and asks nothing of a human.
 - "A TASK held on a mergeable TASK whose branch has landed is dispatched by the same pass that settles it" → tests/schedule/end-to-end.test.ts
 - "A TASK whose branch has landed but whose word is not mergeable keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
 - "A landed branch alone does not settle a TASK whose word is not mergeable" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has landed in main is named for settling" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has not landed in main is not named for settling" → tests/schedule/merge.test.ts
-- "A mergeable TASK whose branch has not landed in main keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
-- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in main" → tests/schedule/end-to-end.test.ts
-- "The landed-in-main check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
+- "A mergeable TASK whose branch has landed in the BASE_BRANCH is named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in the BASE_BRANCH is not named for settling" → tests/schedule/merge.test.ts
+- "A mergeable TASK whose branch has not landed in the BASE_BRANCH keeps its state word exactly as it stands" → tests/schedule/end-to-end.test.ts
+- "A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH" → tests/schedule/end-to-end.test.ts
+- "The landed check is made fresh from git on each pass, never from bookkeeping" → tests/schedule/end-to-end.test.ts
 - "The pass's settle kills the TASK's session through the reaper, so the pass has already answered when the kill lands" → tests/schedule/end-to-end.test.ts
 - "The settled TASK's tmux session is killed on the dedicated server" → tests/schedule/session.test.ts
 - "The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch" → tests/schedule/session.test.ts
@@ -199,20 +199,22 @@ message, never a bare exit-code summary in its place — the same standard a fai
 worktree creation keeps. Which
 agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
 variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
-SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as environment
-variables on the tmux `new-session` command, and SHALL be handed one initial user message
-as the agent's positional prompt argument — a message telling the session to begin working
-its TASK, whose exact words are the implementation's to choose. The `pi` invocation SHALL
-be run with `--approve`, `--no-extensions`, and `--extension
-<cwd>/.pi/extensions/progress.ts`. The `claude` invocation SHALL be run with
-`--append-system-prompt` carrying the executor's own system prompt, with
-`--dangerously-skip-permissions`, and with a generated MCP config naming the queue root's
-own MCP server (`specs/mcp.md`); where that generated config file is written is the
-implementation's choice, and which server it names is not. Every tmux command this action
-runs SHALL reach tmux through a dedicated, isolated server, named by tmux's own `-L
-<socket>` flag rather than the default server — never the user's own default tmux server,
-and never any other named server — with a default socket name of `proofspec`, overridable
-through the `PROOFSPEC_TMUX_SOCKET` environment variable.
+SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
+PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
+command, and SHALL be handed one initial user message as the agent's positional prompt
+argument — a message telling the session to begin working its TASK, whose exact words
+are the implementation's to choose. The `pi` invocation SHALL be run with `--approve`,
+`--no-extensions`, `--extension <cwd>/.pi/extensions/progress.ts`, and `--extension
+<cwd>/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts`.
+The `claude`
+invocation SHALL be run with `--append-system-prompt` carrying the executor's own
+system prompt, with `--dangerously-skip-permissions`, and with a generated MCP config
+naming the queue root's own MCP server (`specs/mcp.md`); where that generated config
+file is written is the implementation's choice, and which server it names is not. Every
+tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
+named by tmux's own `-L <socket>` flag rather than the default server — never the user's
+own default tmux server, and never any other named server — with a default socket name
+of `proofspec`, overridable through the `PROOFSPEC_TMUX_SOCKET` environment variable.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
@@ -231,14 +233,20 @@ The choice is one environment variable because everything else about starting a 
 is the same act either way, and the default stays `pi` so a queue that never names a
 harness runs exactly as it ran before.
 
-The session starts inside the TASK's own worktree and needs both facts — where the queue
-lives, and which TASK it is — which this action already holds at the moment it starts the
-session, so it hands them down as the two environment variables. The tool that reports
+The session starts inside the TASK's own worktree and needs three facts — where the
+queue lives, which TASK it is, and which branch its queue measures against — which this
+action already holds at the moment it starts the session, so it hands them down as the
+three environment variables. The tool that reports
 state must load in a freshly created worktree, and the copy it loads must be the current
 one. On the `pi` side, `--approve` is what lets the tool load there, the pinned
-`--extension` points at this tool's own checkout rather than whatever the TASK's branch
+`progress.ts` points at this tool's own checkout rather than whatever the TASK's branch
 carries, and `--no-extensions` keeps the worktree's own copy of the extension from loading
-beside the pinned one. On the `claude` side, the generated config carries the same
+beside the pinned ones. The second `--extension` loads the `subagent` tool, because the
+executor's work reaches its personas through fresh subagents. That pin points straight
+at the `subagent` example inside the installed `pi` package, under the queue root's
+`node_modules` — never at a file under `.pi/extensions/`, which would be a second thing
+to maintain — so the extension and the `pi` that runs it cannot drift apart. On the
+`claude` side, the generated config carries the same
 freshness reasoning for the MCP server (`specs/mcp.md`), and `--dangerously-skip-permissions`
 stands because an unattended session has nobody attached to answer an approval.
 
@@ -251,13 +259,17 @@ one kickoff message.
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
+- "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
-- "The pi invocation carries --approve and --extension pinned to this checkout's own progress extension" → tests/schedule/session.test.ts
+- "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
+- "The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
-- "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables naming the main checkout and the TASK" → tests/schedule/session.test.ts
+- "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
+- "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
+- "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
@@ -305,6 +317,10 @@ rule: the question and the reading stay the one shared thing.
 - "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never answers is not waited on past the configured timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never closes its own stdin still returns instead of hanging, because judge closes it first" → tests/schedule/judge-cli.test.ts
+- "PROOFSPEC_JUDGE_BIN naming claude runs one headless one-shot claude process" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the answer is read to the same verdict" → tests/schedule/judge-cli.test.ts
+- "Whichever binary runs, the same relationship is asked the same question" → tests/schedule/judge-cli.test.ts
+- "With PROOFSPEC_JUDGE_BIN unset, or naming pi, the judge process is the pinned one-shot pi process" → tests/schedule/judge-cli.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process

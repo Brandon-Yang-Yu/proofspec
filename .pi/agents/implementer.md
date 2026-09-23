@@ -1,6 +1,7 @@
 ---
 name: implementer
-description: Implements code for one step — either tests-red (write tests that fail for the right reason) or build-green (make the tests pass). Explores via codebase-memory before editing. Does not plan, review, or commit.
+description: >-
+  Implements code for one step — either tests-red (write tests that fail for the right reason) or build-green (make the tests pass). Explores via codebase-memory before editing. Does not plan, review, or commit.
 tools: read, write, edit, grep, find, ls, bash
 ---
 

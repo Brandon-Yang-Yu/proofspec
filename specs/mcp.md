@@ -22,6 +22,10 @@ way through the server is the same product disagreeing with itself. The tools ar
 once; the transports only carry calls to them.
 
 <!-- scenarios: generated -->
+- "A change to each tool's behavior reaches both transports together" → tests/mcp/server.test.ts
+- "A tool answers the same values whichever transport carries its call" → tests/mcp/server.test.ts
+- "Each tool is registered under the same parameters on both transports" → tests/mcp/server.test.ts
+- "The server exposes the same five tools under the same names, and no others" → tests/mcp/server.test.ts
 <!-- /scenarios -->
 
 ### Requirement: An adapter carries transport only, never a rule
@@ -36,6 +40,8 @@ copy gets edited, the other stands, and the two harnesses drift apart with no si
 to point at. One core with two thin adapters is the shape that keeps that from starting.
 
 <!-- scenarios: generated -->
+- "The MCP adapter carries calls to the core unchanged, and answers back unchanged" → tests/mcp/adapter.test.ts
+- "The pi adapter carries calls to the core unchanged, and answers back unchanged" → tests/mcp/adapter.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The MCP server runs from the queue root's own checkout, never the TASK's worktree
@@ -49,6 +55,7 @@ checkout is where the current tools live. A session that must report its state n
 current tools, not its branch's possibly stale copy.
 
 <!-- scenarios: generated -->
+- "The MCP server a session loads runs from the queue root's own checkout, never the TASK's worktree" → tests/mcp/checkout.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
@@ -63,4 +70,8 @@ Claude Code transport fires it from hooks that run this entry. The write is the 
 thing, so the `heartbeat` file means the same whichever harness the session runs in.
 
 <!-- scenarios: generated -->
+- "The Claude Code hooks run the heartbeat CLI entry on the session's moves, refreshing the TASK's heartbeat" → tests/mcp/heartbeat.test.ts
+- "The heartbeat CLI entry does nothing else" → tests/mcp/heartbeat.test.ts
+- "The heartbeat CLI entry performs the same heartbeat write the pi events trigger" → tests/mcp/heartbeat.test.ts
+- "The heartbeat CLI entry writes nothing when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/mcp/heartbeat.test.ts
 <!-- /scenarios -->

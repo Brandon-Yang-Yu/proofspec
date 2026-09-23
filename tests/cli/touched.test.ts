@@ -203,12 +203,12 @@ it('reports cannot-run for an address no touched requirement carries', async () 
 })
 
 // Requirement: A command says which scenarios a change touched
-// Scenario: A change committed since the branch left main is counted
-// GIVEN a branch that has committed a change to a PROOF since it left main
+// Scenario: A change committed since the branch left the BASE_BRANCH is counted
+// GIVEN a branch that has committed a change to a PROOF since it left the BASE_BRANCH
 // WHEN the touched command runs
 // THEN its requirement counts the scenario among those reached, because the question is what
 //      this branch touched rather than what is uncommitted
-it('counts a change committed on the branch since it left main', async () => {
+it('counts a change committed on the branch since it left the BASE_BRANCH', async () => {
   const repo = await makeGitRepo(inSync())
   await repo.git(['checkout', '-b', 'work'])
   await repo.write(TEST_PATH, bodyEdited())
@@ -285,7 +285,7 @@ it('counts the lines that prove nothing, and gives them when they are asked for'
   const summary = summaryOf(await touched({ cwd: repo.root }))
   const lines = unmatchedOf(await touched({ cwd: repo.root, ask: { kind: 'unmatched' } }))
 
-  expect(summary).toEqual(expect.objectContaining({ requirements: [], unmatched: 1 }))
+  expect(summary).toEqual({ kind: 'summary', base: expect.any(String), requirements: [], unmatched: 1 })
   expect(lines.lines).toEqual([
     { file: 'tests/support.ts', from: 1, to: 1, source: 'export const helper = 2' },
   ])

@@ -105,12 +105,12 @@ and every other TASK's census still answers.
 `enqueue_task` is the one hop in front of a write the investigation agent cannot make by
 hand-writing files; `census_in_flight` is the one hop in front of a read it cannot make by
 walking every in-flight TASK's own worktree itself. The investigator's own census only ever
-sees the working tree it is standing in — whatever `main` looked like when that worktree was
-cut — so a requirement another in-flight TASK is rewriting on a branch not yet merged stays
-invisible to it until this tool asks git on the agent's behalf. Answering rather than
-throwing is the same reason every one of `enqueue_task`'s own refusals is a value: a model
-driving this tool through a conversation needs an unreadable repo back as something it can
-read and relay to the human, not an exception it has to catch.
+sees the working tree it is standing in — whatever the BASE_BRANCH looked like when that
+worktree was cut — so a requirement another in-flight TASK is rewriting on a branch not
+yet merged stays invisible to it until this tool asks git on the agent's behalf. Answering
+rather than throwing is the same reason every one of `enqueue_task`'s own refusals is a value:
+a model driving this tool through a conversation needs an unreadable repo back as something
+it can read and relay to the human, not an exception it has to catch.
 
 <!-- scenarios: generated -->
 - "A queue entry naming a branch that does not exist is a named problem, not a thrown error" → tests/handoff/census.test.ts
