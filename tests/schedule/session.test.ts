@@ -535,8 +535,12 @@ it('derives the default socket from the queue root, so two repos never share a s
   const two = socketForRoot('/two')
   // Same root, same name on every build.
   expect(socketForRoot('/one')).toBe(one)
-  // Two roots, two names — the whole point of the derivation.
+  // Two roots, two names — the whole point of the derivation. The roots differ in every
+  // component, and then again in the last one only: the hashed fact is the root's whole
+  // absolute path, never its basename — two clones sharing a directory name in different
+  // parents are two repos, and must never share a server.
   expect(two).not.toBe(one)
+  expect(socketForRoot('/x/repo')).not.toBe(socketForRoot('/y/repo'))
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
@@ -589,7 +593,7 @@ it('lets PROOFSPEC_TMUX_SOCKET override which dedicated server is targeted', () 
 // WHEN it is built
 // THEN it reaches tmux through -L on the dedicated server — the same socket the start commands
 //      use, and the one PROOFSPEC_TMUX_SOCKET overrides — never the user's default server
-it('asks the dedicated server for the live count by its own -L socket, never the default one', () => {
+it('asks the dedicated server for the live count by its own -L socket, never the default one', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
   // Derive-compare: the count command and the start commands are built for the same queue
   // root, and the count command names the same -L socket they do — the claim's own "the
@@ -599,6 +603,29 @@ it('asks the dedicated server for the live count by its own -L socket, never the
   const queueRoot = '/repo'
   const [, start] = tmuxSessionCommands('a', { worktree: `${queueRoot}/.proofspec/worktrees/a`, queueRoot, systemPrompt: '' })
   expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', socketOf(start), 'list-sessions'] })
+
+  // The runtime half: a scheduling pass asks the zero-argument counter, which sources its
+  // queue root from the cwd it runs in — the same fact PROOFSPEC_QUEUE_ROOT carries. One
+  // session stands on a real root's own derived server, the counter runs from inside that
+  // root, and the count reaches it — proving the runtime ask and the built command name
+  // one server, with no override anywhere to hide a wrong root behind. The shape is held
+  // before any tmux runs, so the red suite can never stand a session on the machine's
+  // real bare-name server by way of the retired default.
+  const root = await mkdtemp(join(tmpdir(), 'proofspec-count-socket-'))
+  const derived = socketOf(tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' })[1]!)
+  expect(derived).toMatch(/^proofspec-.+$/)
+  const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
+  const wasCwd = process.cwd()
+  try {
+    await askDerived(['kill-server']).catch(() => {})
+    await askDerived(['new-session', '-d', '-s', 'only', 'sleep', '60'])
+    process.chdir(root)
+    await expect(liveSessionCount()).resolves.toBe(1)
+  } finally {
+    process.chdir(wasCwd)
+    await askDerived(['kill-server']).catch(() => {})
+    await rm(root, { recursive: true, force: true })
+  }
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
   expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
