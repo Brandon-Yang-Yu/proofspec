@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
+import { listTmuxSessions, liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
 import type { TmuxCommand } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
@@ -131,6 +131,62 @@ it('throws an error carrying tmux\'s own stderr when starting the session fails'
     await rm(brokenSocketRoot, { recursive: true, force: true })
   }
 })
+
+// Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+// Scenario: A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored
+// GIVEN a ready TASK whose name no session carries on the dedicated tmux server, so the kill before the start fails its ordinary way
+// WHEN startSession runs
+// THEN no error is thrown, and a detached session named for the TASK stands on that server
+it('stands a session even when the kill before it finds no stale session, that failure staying ignored', async () => {
+  // A fake pi on a throwaway PATH slot that parks — writes a marker, then sleeps — so the
+  // started session stays standing while it is observed, and the marker says its harness
+  // really ran. Never the real pi: an unattended start in a test has no business running it.
+  const base = await mkdtemp(join(tmpdir(), 'proofspec-start-stands-'))
+  const parkedFile = join(base, 'parked')
+  await writeFile(join(base, 'pi'), `#!/bin/sh\ntouch ${JSON.stringify(parkedFile)}\nsleep 60\n`)
+  await chmod(join(base, 'pi'), 0o755)
+  // The persona is read before any tmux call, so the repo carries one.
+  const repo = await makeGitRepo({ 'a.txt': 'a', '.pi/agents/executor.md': 'You are the executor.\n' })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+
+  const socket = 'proofspec-test-start-stands'
+  process.env.PROOFSPEC_TMUX_SOCKET = socket
+  // tmuxStartSession spawns its tmux clients with this process's own environment, and the
+  // server the start brings up is started by one of those clients — so the fake pi rides
+  // this process's PATH. The kill-server first keeps an older server with an older PATH
+  // from answering, the same reasoning the metacharacters scenario records.
+  const previousPath = process.env.PATH
+  process.env.PATH = `${base}:${previousPath ?? ''}`
+  await execFileAsync('tmux', ['-L', socket, 'kill-server']).catch(() => {})
+  try {
+    // The real composition — worktree, persona, kill, start. Nothing carries the TASK's
+    // name on the fresh server, so the kill fails its ordinary way right here. That this
+    // resolves anyway is the scenario's point: an implementation that threw on the kill's
+    // own failure dies on this very line, so the sibling above's throw can only come from
+    // the start.
+    await expect(tmuxStartSession(repo.root, 'a')).resolves.toBeUndefined()
+
+    // Wait for the parked harness before reading the server, so "a session stands"
+    // describes one whose process really runs, not one still spinning up.
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline && !existsSync(parkedFile)) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    expect(existsSync(parkedFile), 'the started session\'s harness never ran').toBe(true)
+
+    // Exactly one session stands on the throwaway server, named for the TASK — read the
+    // way the docket reads it, over the same socket override the start honored.
+    await expect(listTmuxSessions()).resolves.toEqual(['a'])
+    // Detached: no client attached, the only way an unattended session may stand.
+    const listing = await execFileAsync('tmux', ['-L', socket, 'list-sessions'])
+    expect(listing.stdout).not.toContain('(attached)')
+  } finally {
+    await execFileAsync('tmux', ['-L', socket, 'kill-server']).catch(() => {})
+    if (previousPath === undefined) delete process.env.PATH
+    else process.env.PATH = previousPath
+    await rm(base, { recursive: true, force: true })
+  }
+}, 15000)
 
 // Requirement: A scheduling pass rewrites a mergeable TASK's state to merged once its branch has landed in the BASE_BRANCH
 // Scenario: The settled TASK's worktree is removed from its conventional path, freeing its branch for a later dispatch

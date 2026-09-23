@@ -258,6 +258,7 @@ one kickoff message.
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
+- "A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
