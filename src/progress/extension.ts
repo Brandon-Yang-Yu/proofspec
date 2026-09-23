@@ -70,16 +70,18 @@ export function executeReportTaskPhase(
 /** `settle_task`'s pi boundary, pulled out for the same reason: a test calls it with a
  *  constructed `ExtensionContext` and proves the settle resolves its queue from the
  *  environment, never from `ctx.cwd`. The settle itself is the shared one the scheduling pass
- *  runs — the tool adds no conditions of its own and skips none. */
+ *  runs — the tool adds no conditions of its own and skips none. The five leading params are
+ *  the execute signature pi imposes; what this boundary adds of its own rides the trailing
+ *  options object, so the addition never compounds the imposed positionals (style rule 4). */
 export function executeSettleTask(
   toolCallId: string,
   params: Readonly<Record<string, unknown>>,
   signal: AbortSignal | undefined,
   onUpdate: unknown,
   ctx: ExtensionContext,
-  fireSchedulingPass?: FireSchedulingPass,
+  options?: { readonly fireSchedulingPass?: FireSchedulingPass },
 ): Promise<PiToolResult> {
-  return piExecute(defaultCore(fireSchedulingPass), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
+  return piExecute(defaultCore(options?.fireSchedulingPass), 'settle_task')(toolCallId, params, signal, onUpdate, ctx)
 }
 
 /**

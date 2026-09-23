@@ -79,7 +79,7 @@ export async function settleTask(options: { readonly queueRoot: string; readonly
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its branch ${manifest.branch} has not landed in ${base}` }
   }
   await writeState(options.queueRoot, options.task, 'merged')
-  const finding = await fireSchedulingPass(options)
+  const finding = await fireTheSchedulingPass(options)
   await teardownTask(options.queueRoot, options.task)
   return finding === undefined ? { ok: true, task: options.task } : { ok: true, task: options.task, finding }
 }
@@ -90,8 +90,8 @@ export async function settleTask(options: { readonly queueRoot: string; readonly
  *  is caught and carried, never thrown: the landing is already settled, and a pass that
  *  cannot start must not un-settle it. With no action given, nothing fires — the shared
  *  settle also serves the pass's own backstop caller, and a pass firing a pass from inside
- *  a pass serves nothing. */
-async function fireSchedulingPass(options: { readonly queueRoot: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<string | undefined> {
+ *  a pass serves nothing. Named for the act, distinct from the injected action it reads. */
+async function fireTheSchedulingPass(options: { readonly queueRoot: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<string | undefined> {
   if (options.fireSchedulingPass === undefined) return undefined
   try {
     await options.fireSchedulingPass(schedulingPassFor(options.queueRoot))

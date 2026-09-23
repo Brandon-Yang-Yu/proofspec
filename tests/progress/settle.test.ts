@@ -179,7 +179,7 @@ it('settles the TASK named by the environment, never the session\'s own working 
   process.env.PROOFSPEC_TASK = 'registered'
   const fakeContext = { cwd: unrelated.root } as unknown as ExtensionContext
 
-  const result = await executeSettleTask('call-1', {}, undefined, undefined, fakeContext, fireNothing)
+  const result = await executeSettleTask('call-1', {}, undefined, undefined, fakeContext, { fireSchedulingPass: fireNothing })
 
   expect(result.details).toEqual({ ok: true, task: 'registered' })
   expect(await stateOf(repo.root, 'registered')).toBe('merged')
@@ -295,7 +295,7 @@ it('never fires a scheduling pass on a refusal', async () => {
   const byBranch = await runSettleTask({ queueRoot: unlanded.root, task: 'refused-branch' }, fire)
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
-  const byEnv = await executeSettleTask('call-3', {}, undefined, undefined, { cwd: noEnv.root } as unknown as ExtensionContext, fire)
+  const byEnv = await executeSettleTask('call-3', {}, undefined, undefined, { cwd: noEnv.root } as unknown as ExtensionContext, { fireSchedulingPass: fire })
 
   expect(byWord.ok).toBe(false)
   expect(byBranch.ok).toBe(false)
