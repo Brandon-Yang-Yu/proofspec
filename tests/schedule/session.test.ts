@@ -653,22 +653,31 @@ it('derives the default socket from the queue root, so two repos never share a s
   // And one path is one repo however it is spelled: a symlinked alias of a real root
   // names the same queue, and the same queue derives the same name. A derivation hashing
   // the spelling as handed would move the name with the alias and fail here, on any
-  // machine, with no reliance on the machine's own symlinked tmpdir. Every command of the
-  // build is held to it, never the kill's alone — the claim says every command.
+  // machine, with no reliance on the machine's own symlinked tmpdir. The builds carry a
+  // non-empty prompt and a worktree that stands on disk — the two facts a production
+  // build always holds — so no switch keyed on either can turn inside them; every
+  // command of each build is held to it and to the shape, never the kill's alone.
   const holder = await mkdtemp(join(tmpdir(), 'proofspec-socket-spelling-'))
   try {
     const root = join(holder, 'root')
-    await mkdir(root)
+    await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
     const alias = join(holder, 'alias')
     symlinkSync(root, alias)
-    const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' }).map(socketOf)
-    const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: '' }).map(socketOf)
+    const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' }).map(socketOf)
+    const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: 'you are the executor' }).map(socketOf)
     for (const socket of [...byRoot, ...byAlias]) expect(socket).toMatch(/^proofspec-.+$/)
     // The within-build tie too, for roots that stand on disk — the same one-server fact
     // `socketForRoot` holds for the synthetic roots, so this proof carries it for both.
     expect(new Set(byRoot).size).toBe(1)
-    expect(new Set(byAlias).size).toBe(1)
     expect(byAlias).toEqual(byRoot)
+    // And two real roots sharing a directory name under different parents are two repos:
+    // the whole-path fact, held on disk the same as off it — the exact two-clones harm
+    // this scenario exists to prevent.
+    const rootA = join(holder, 'a', 'repo')
+    const rootB = join(holder, 'b', 'repo')
+    await mkdir(rootA, { recursive: true })
+    await mkdir(rootB, { recursive: true })
+    expect(socketForRoot(rootA)).not.toBe(socketForRoot(rootB))
   } finally {
     await rm(holder, { recursive: true, force: true })
   }
