@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, realpathSync, symlinkSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import { listTmuxSessions, liveSessionCount, promptBodyFrom, reaperFor, resolveSessionWorktree, sessionStartFor, teardownTask, tmuxKillSessionCommand, tmuxListSessionsCommand, tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
@@ -848,6 +848,16 @@ it('asks the dedicated server for the live count by its own -L socket, never the
     // that reads this root's derived server, fresh, answers both.
     await askDerived(['new-session', '-d', '-s', 'second', 'sleep', '60'])
     await expect(liveSessionCount(root)).resolves.toBe(2)
+    // The spelling half: the root handed through a symlinked alias of itself — the count
+    // still reads the same derived server's list, so a reader that canonicalizes only
+    // some spellings splits from the scheduler's server and fails here.
+    const alias = join(dirname(root), `alias-of-${basename(root)}`)
+    symlinkSync(root, alias)
+    try {
+      await expect(liveSessionCount(alias)).resolves.toBe(2)
+    } finally {
+      await rm(alias, { force: true })
+    }
   } finally {
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})

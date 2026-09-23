@@ -3,8 +3,9 @@
 import { afterEach, expect, it } from 'vitest'
 import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { docket } from '../../src/cli/index.ts'
 import { commandLine, listTmuxSessions, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
@@ -150,6 +151,20 @@ it('asks the repo\'s own dedicated server for the session list, honoring the soc
     await askDerived(['new-session', '-d', '-s', 'alpha', 'sleep', '60'])
     await askDecoy(['new-session', '-d', '-s', 'beta', 'sleep', '60'])
     await expect(listTmuxSessions(root)).resolves.toEqual(['alpha'])
+    // The spelling half: the queue root handed through a symlinked alias of itself —
+    // both spellings name one queue, and one queue asks one server. The builders and the
+    // reader all carry the alias, and the answer is still the derived server's own list,
+    // so a surface that canonicalizes only some spellings splits from the scheduler's
+    // server and fails here.
+    const alias = join(dirname(root), `alias-of-${basename(root)}`)
+    symlinkSync(root, alias)
+    try {
+      expect(socketOf(tmuxListSessionsCommand(alias))).toBe(rootDerived)
+      expect(socketOf(tmuxAttachCommand('alpha', alias))).toBe(rootDerived)
+      await expect(listTmuxSessions(alias)).resolves.toEqual(['alpha'])
+    } finally {
+      await rm(alias, { force: true })
+    }
   } finally {
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})
