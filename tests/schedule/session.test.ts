@@ -242,6 +242,20 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   })
   expect(reaperFor('a', '/repo').args).toEqual(['-c', expect.stringContaining('tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"')])
 
+  // And on disk, where the handed and canonical spellings of one path differ: the reaper
+  // resolves the same socket the start commands name for the same root — a settle's kill
+  // cannot land on a server's other spelling while the session stands on the one the
+  // start chose. The build holds the worktree on disk, as a production start does.
+  const holder = await mkdtemp(join(tmpdir(), 'proofspec-reaper-spelling-'))
+  try {
+    const root = join(holder, 'root')
+    await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
+    const [, start] = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' })
+    expect(reaperFor('a', root).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
+  } finally {
+    await rm(holder, { recursive: true, force: true })
+  }
+
   const socket = 'proofspec-test-run-42'
   process.env.PROOFSPEC_TMUX_SOCKET = socket
   expect(reaperFor('a', '/repo').reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socket)
