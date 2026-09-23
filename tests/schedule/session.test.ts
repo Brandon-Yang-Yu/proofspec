@@ -633,6 +633,11 @@ it('asks the dedicated server for the live count by its own -L socket, never the
     await askDecoy(['new-session', '-d', '-s', 'decoy-two', 'sleep', '60'])
     process.chdir(root)
     await expect(liveSessionCount()).resolves.toBe(1)
+    // And the answer moves with the derived server's own list — a wrapper that asks some
+    // fixed other server answers its own constant twice, not one then two. Only the ask
+    // that reads this root's derived server, fresh, answers both.
+    await askDerived(['new-session', '-d', '-s', 'second', 'sleep', '60'])
+    await expect(liveSessionCount()).resolves.toBe(2)
   } finally {
     process.chdir(wasCwd)
     await askDerived(['kill-server']).catch(() => {})
@@ -661,6 +666,9 @@ it('reads the live count from the sessions standing on the server itself', async
     // `sleep` keeps each session's process alive, so the session stands until killed below.
     await tmux(['new-session', '-d', '-s', 'one', 'sleep', '60'])
     await tmux(['new-session', '-d', '-s', 'two', 'sleep', '60'])
+    // A second window inside the first session: the unit counted is the session, never
+    // the window — a window-counting implementation answers three here and fails.
+    await tmux(['new-window', '-t', 'one'])
 
     await expect(liveSessionCount()).resolves.toBe(2)
 
