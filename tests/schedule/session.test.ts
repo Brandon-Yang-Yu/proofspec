@@ -242,16 +242,21 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   })
   expect(reaperFor('a', '/repo').args).toEqual(['-c', expect.stringContaining('tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"')])
 
-  // And on disk, where the handed and canonical spellings of one path differ: the reaper
-  // resolves the same socket the start commands name for the same root — a settle's kill
-  // cannot land on a server's other spelling while the session stands on the one the
-  // start chose. The build holds the worktree on disk, as a production start does.
+  // And on disk, with the two spellings manufactured rather than inherited from the
+  // machine's own tmpdir: a symlinked alias of the root names the same queue, the start
+  // command is built from the root spelling, and the reaper — handed the alias — must
+  // still resolve the socket that start named. A reaper hashing the handed spelling
+  // kills on the alias's other name for the same server and leaks the session; on a
+  // symlink-free tmpdir this is the only form that still discriminates. The build holds
+  // the worktree on disk, as a production start does.
   const holder = await mkdtemp(join(tmpdir(), 'proofspec-reaper-spelling-'))
   try {
     const root = join(holder, 'root')
     await mkdir(join(root, '.proofspec', 'worktrees', 'a'), { recursive: true })
+    const alias = join(holder, 'alias')
+    symlinkSync(root, alias)
     const [, start] = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: 'you are the executor' })
-    expect(reaperFor('a', root).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
+    expect(reaperFor('a', alias).reapEnv.PROOFSPEC_REAP_SOCKET).toBe(socketOf(start))
   } finally {
     await rm(holder, { recursive: true, force: true })
   }
