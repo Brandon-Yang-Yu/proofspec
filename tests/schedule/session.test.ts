@@ -682,8 +682,8 @@ it('runs against a dedicated tmux server derived from the queue root, never the 
 // GIVEN the socket override unset, and two different queue roots
 // WHEN the tmux commands to start a TASK's session are built for each root
 // THEN every command reaches tmux through -L on a name of the per-repo
-//      proofspec-<short hash> shape — the same name for the same root on every build, and a
-//      different name for the other root
+//      proofspec-<short hash> shape — the same name for the same root on every build and
+//      however that root is spelled, and a different name for the other root
 it('derives the default socket from the queue root, so two repos never share a server', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 

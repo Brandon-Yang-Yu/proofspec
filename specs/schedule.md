@@ -213,11 +213,11 @@ naming the queue root's own MCP server (`specs/mcp.md`); where that generated co
 file is written is the implementation's choice, and which server it names is not. Every
 tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
 named by tmux's own `-L <socket>` flag rather than the default server — never the user's
-own default tmux server,
-and never any other named server — and its default socket name SHALL be per-repo:
-`proofspec-` followed by the first 8 hex digits of the SHA-256 digest of the queue root's
-absolute path, so two repos on one machine never share a server.
-`PROOFSPEC_TMUX_SOCKET` SHALL override the derived name.
+own default tmux server, and never any other named server — and its default socket name
+SHALL be per-repo: `proofspec-` followed by the first 8 hex digits of the SHA-256 digest
+of the queue root's absolute path, so two repos on one machine never share a server, and
+one path derives one name however it is spelled. `PROOFSPEC_TMUX_SOCKET` SHALL override
+the derived name.
 
 A ready TASK may reach this action with no worktree ever opened for it, or with one torn
 down independently of its queue entry — nothing about a queue entry standing guarantees a
