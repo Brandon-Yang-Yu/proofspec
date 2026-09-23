@@ -151,8 +151,12 @@ before the caller ever saw whether the settle succeeded.
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
+- "A settle whose scheduling pass cannot even be started still succeeds, reporting the failure as a finding" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
+- "A successful settle fires one scheduling pass against the queue root, after the state word is rewritten and before the teardown" → tests/progress/settle.test.ts
+- "No refusal ever fires a scheduling pass" → tests/progress/settle.test.ts
+- "The pass a settle fires is the merge hooks' own scheduling command, started so the settle's teardown cannot take it with it" → tests/progress/settle.test.ts
 - "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory" → tests/progress/settle.test.ts
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
