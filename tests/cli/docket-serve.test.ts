@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import { realpathSync, symlinkSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname, basename } from 'node:path'
 import { rm } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
@@ -125,7 +125,7 @@ it('answers the page at / and the JSON the page reads at /docket', async () => {
 
 // Requirement: A command serves the docket as a page
 // Scenario: The listener answers the loopback interface on the port derived from the queue root by default
-// GIVEN the command asked to serve with no port named, over a queue whose root's absolute path is known
+// GIVEN the command asked to serve with no port named, over a queue whose root's absolute path is known — and that root spelled three ways: as it stands, through a whole-path symlink, and through a mid-path symlink on the route to it
 // WHEN the server stands
 // THEN it listens on the loopback interface at the port derived from that path — 4567 plus the numeric value of the path's SHA-256 digest taken modulo 1000, a number from 4567 through 5566 — the same port the same queue root derives on every run, however that root is spelled
 it('listens on the loopback at the port derived from the queue root by default', async () => {
@@ -138,12 +138,18 @@ it('listens on the loopback at the port derived from the queue root by default',
   expect((await request('/docket', port)).status).toBe(200)
   await served.stop()
 
-  // One path, one port — however the path is spelled. A symlinked alias of the same root
-  // names the same queue, and the same queue derives the same port: a derivation hashing
-  // the spelling as handed would move the port with the alias and fail here, on any
-  // machine, with no reliance on the machine's own symlinked tmpdir.
+  // One path, one port — however the path is spelled. A whole-path symlinked alias of
+  // the root and a mid-path symlink on the route to it each name the same queue, and the
+  // same queue derives the same port: a derivation hashing the spelling as handed, or
+  // resolving symlinks only when the handed path is itself one, moves the port with the
+  // spelling and fails here, on any machine, with no reliance on the machine's own
+  // symlinked tmpdir.
   const alias = join(served.root, '..', 'alias-of-same-queue')
   await symlinkSync(served.root, alias)
+  const parent = dirname(served.root)
+  const midParent = join(parent, '..', 'midparent-of-same-queue')
+  await symlinkSync(parent, midParent)
+  const midPath = join(midParent, basename(served.root))
   try {
     const aliased = await serveOver(FILES, { root: alias })
     try {
@@ -151,8 +157,17 @@ it('listens on the loopback at the port derived from the queue root by default',
     } finally {
       await aliased.stop()
     }
+    // One at a time: both spellings derive the same port, so the second can only stand
+    // once the first has given the port back.
+    const midway = await serveOver(FILES, { root: midPath })
+    try {
+      expect(midway.port).toBe(port)
+    } finally {
+      await midway.stop()
+    }
   } finally {
     await rm(alias, { force: true })
+    await rm(midParent, { force: true })
   }
 })
 
