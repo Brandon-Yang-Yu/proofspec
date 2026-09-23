@@ -664,6 +664,10 @@ it('derives the default socket from the queue root, so two repos never share a s
     const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' }).map(socketOf)
     const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: '' }).map(socketOf)
     for (const socket of [...byRoot, ...byAlias]) expect(socket).toMatch(/^proofspec-.+$/)
+    // The within-build tie too, for roots that stand on disk — the same one-server fact
+    // `socketForRoot` holds for the synthetic roots, so this proof carries it for both.
+    expect(new Set(byRoot).size).toBe(1)
+    expect(new Set(byAlias).size).toBe(1)
     expect(byAlias).toEqual(byRoot)
   } finally {
     await rm(holder, { recursive: true, force: true })
