@@ -286,7 +286,42 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
   } finally {
     await tmux(['kill-server']).catch(() => {})
   }
-}, 10000)
+
+  // The derived-default landing half — the same landing, with no override anywhere, so
+  // the spawned kill runs in the default state the builder's values above only describe.
+  // The session stands on the repo's own derived server; a teardown that spawned its own
+  // bare, no-`-L` kill would leave that session standing and fail here. A survivor on a
+  // second named server must outlive the teardown untouched — one server holds one repo's
+  // sessions, and the kill reaches that server alone.
+  delete process.env.PROOFSPEC_TMUX_SOCKET
+  const repoDerived = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(repoDerived, 'settled-derived', { edit: 'a.txt' })
+  await repoDerived.git(['worktree', 'add', join(repoDerived.root, '.proofspec', 'worktrees', 'settled-derived'), 'work/settled-derived'])
+  const [, derivedStart] = tmuxSessionCommands('settled-derived', { worktree: join(repoDerived.root, '.proofspec/worktrees/settled-derived'), queueRoot: repoDerived.root, systemPrompt: '' })
+  const derived = socketOf(derivedStart)
+  expect(derived).toMatch(/^proofspec-.+$/)
+  const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
+  const decoy = 'proofspec-test-reaper-decoy'
+  const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
+  const stands = (ask: (args: readonly string[]) => Promise<unknown>, name: string) => ask(['has-session', '-t', name]).then(() => true, () => false)
+  await askDerived(['kill-server']).catch(() => {})
+  await askDecoy(['kill-server']).catch(() => {})
+  try {
+    await askDerived(['new-session', '-d', '-s', 'settled-derived', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'survivor', 'sleep', '60'])
+    await teardownTask(repoDerived.root, 'settled-derived')
+    await expect(stands(askDerived, 'settled-derived')).resolves.toBe(true)
+    const gone = Date.now() + 5000
+    while (Date.now() < gone && (await stands(askDerived, 'settled-derived'))) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    await expect(stands(askDerived, 'settled-derived')).resolves.toBe(false)
+    await expect(stands(askDecoy, 'survivor')).resolves.toBe(true)
+  } finally {
+    await askDerived(['kill-server']).catch(() => {})
+    await askDecoy(['kill-server']).catch(() => {})
+  }
+}, 20000)
 
 // The start command's own command words are `sh <runner script path>` — pi's whole
 // invocation, with every flag and text it needs, lives in that script's content, so every
