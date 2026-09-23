@@ -110,18 +110,20 @@ it('throws an error carrying tmux\'s own stderr when starting the session fails'
   // The reproducible forcing, the acceptance run's own: a regular file standing where
   // tmux's socket directory would be (tmux resolves -L <name> to <TMUX_TMPDIR>/tmux-<uid>/
   // <name>), under a throwaway TMUX_TMPDIR and a throwaway PROOFSPEC_TMUX_SOCKET. The
-  // server cannot stand, so this is a real start failing with tmux's own words on stderr —
-  // and the kill before the start fails the same ordinary way, staying ignored exactly as
-  // in production, so the throw can only come from the start.
+  // server cannot stand, so this is a real start failing with tmux's own words on stderr.
+  // The kill fails the same ordinary way and stays ignored; this forcing cannot by itself
+  // attribute the throw to the start — the healthy-start sibling below pins that half.
   const previousTmuxTmpdir = process.env.TMUX_TMPDIR
   const brokenSocketRoot = await mkdtemp(join(tmpdir(), 'proofspec-tmux-'))
   process.env.TMUX_TMPDIR = brokenSocketRoot
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-start-fails'
-  // @types/node marks getuid optional because Windows lacks it; tmux is POSIX-only, so the
-  // fallback is for the type system alone, never reached where this test runs.
-  const uid = process.getuid?.() ?? 0
-  await writeFile(join(brokenSocketRoot, `tmux-${uid}`), '')
   try {
+    // @types/node marks getuid optional because Windows lacks it; tmux is POSIX-only, so
+    // the fallback is for the type system alone, never reached where this test runs.
+    const uid = process.getuid?.() ?? 0
+    // A regular file where the socket directory would be — inside the try so a failed
+    // write still restores TMUX_TMPDIR, which no afterEach cleans up.
+    await writeFile(join(brokenSocketRoot, `tmux-${uid}`), '')
     // tmux's own diagnostic — wording only tmux writes, which a summary naming no cause
     // (a bare exit code) never carries.
     await expect(tmuxStartSession(repo.root, 'a')).rejects.toThrow(/is not a directory/)
