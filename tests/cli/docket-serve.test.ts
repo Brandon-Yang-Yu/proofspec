@@ -1,5 +1,6 @@
 // Capability: cli
 
+import { createHash } from 'node:crypto'
 import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
@@ -37,13 +38,38 @@ async function freePort(): Promise<number> {
   })
 }
 
-/** Serves the docket over a fixture queue, on the port named (or the default when none is). */
+/** A port this test holds open until `release` is called — the collision a serve must
+ *  refuse, held by a listener the serve did not make. */
+async function holdPort(): Promise<{ readonly port: number; release(): Promise<void> }> {
+  const holder = createNetServer()
+  const port = await new Promise((resolve, reject) => {
+    holder.once('error', reject)
+    holder.listen(0, '127.0.0.1', () => resolve((holder.address() as AddressInfo).port))
+  })
+  return {
+    port,
+    release: () => new Promise(resolve => holder.close(() => resolve())),
+  }
+}
+
+// The port the docket serves on when the caller names none: 4567 plus the queue root's
+// SHA-256 digest taken as a number, modulo 1000. Computed here from the rule so a proof
+// pins that the port follows the path, never a literal the implementation could share by
+// accident.
+function derivedPort(queueRoot: string): number {
+  const hex = createHash('sha256').update(queueRoot).digest('hex')
+  return 4567 + Number(BigInt(`0x${hex}`) % 1000n)
+}
+
+/** Serves the docket over a fixture queue, on the port named (or the default when none is).
+ *  Answers with the server and the fixture's own root, because the default port is derived
+ *  from that root and a proof computes its expectation from the real path. */
 async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number; readonly host?: string } = {}) {
   const repo = await makeRepo(files)
   const served = await serveDocket({ cwd: repo.root, port: options.port, host: options.host, docket: { listSessions: async () => [] } })
   if (!served.ok) throw new Error(`serving did not start: ${served.reason}`)
   standing.push(served)
-  return served
+  return { ...served, root: repo.root }
 }
 
 /** This machine's own non-loopback IPv4 address — an interface a caller could name. */
@@ -85,17 +111,18 @@ it('answers the page at / and the JSON the page reads at /docket', async () => {
 })
 
 // Requirement: A command serves the docket as a page
-// Scenario: The listener answers the loopback interface at port 4567 by default
-// GIVEN the command asked to serve with no port named
+// Scenario: The listener answers the loopback interface on the port derived from the queue root by default
+// GIVEN the command asked to serve with no port named, over a queue whose root's absolute path is known
 // WHEN the server stands
-// THEN it listens on the loopback interface at the conventional port — the URL a person opens is localhost:4567
-it('listens on the loopback at the conventional port by default', async () => {
+// THEN it listens on the loopback interface at the port derived from that path — 4567 plus the numeric value of the path's SHA-256 digest taken modulo 1000, a number from 4567 through 5566 — the same port the same queue root derives on every run
+it('listens on the loopback at the port derived from the queue root by default', async () => {
   const served = await serveOver(FILES)
+  const port = derivedPort(served.root)
 
-  expect(served.url).toBe('http://localhost:4567/')
+  expect(served.url).toBe(`http://localhost:${port}/`)
   expect(served.host).toBe('127.0.0.1')
-  expect(served.port).toBe(4567)
-  expect((await request('/docket', 4567)).status).toBe(200)
+  expect(served.port).toBe(port)
+  expect((await request('/docket', port)).status).toBe(200)
 })
 
 // Requirement: A command serves the docket as a page
@@ -162,4 +189,24 @@ it('serves on the interface a caller names with --host', async () => {
   const json = await askAt(host, served.port, '/docket')
   expect(json.status).toBe(200)
   expect(json.headers.get('content-type')).toContain('application/json')
+})
+
+// Requirement: A command serves the docket as a page
+// Scenario: A port already taken fails the serve fast, naming the port it could not get and --port as the override
+// GIVEN the port a serve wants is already held by another listener
+// WHEN the command is asked to serve wanting that port
+// THEN it fails outright — naming the port it could not get, and naming --port as the override — and never falls back to another port on its own
+it('fails the serve outright when the port is already taken, naming the port and --port', async () => {
+  const held = await holdPort()
+  const repo = await makeRepo(FILES)
+
+  const refused = await serveDocket({ cwd: repo.root, port: held.port, docket: { listSessions: async () => [] } })
+  if (refused.ok) throw new Error('serving started on a port another listener already holds')
+  expect(refused.reason).toContain(String(held.port))
+  expect(refused.reason).toContain('--port')
+
+  // No server left standing: once the holder lets go, the port refuses connections — the
+  // refused serve left nothing on it, and the refusal itself says it took no other.
+  await held.release()
+  await expect(request('/docket', held.port)).rejects.toThrow()
 })

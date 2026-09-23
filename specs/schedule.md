@@ -270,7 +270,7 @@ one kickoff message.
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
-- "The tmux commands run against a dedicated server, never the user's default or any other named one" → tests/schedule/session.test.ts
+- "The tmux commands run against a dedicated server whose name is derived from the queue root, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
 - "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts

@@ -451,9 +451,10 @@ page is a dialect of its own.
 <!-- scenarios: generated -->
 - "A named --host is the interface served on" → tests/cli/docket-serve.test.ts
 - "A port a caller names is the port served on" → tests/cli/docket-serve.test.ts
+- "A port already taken fails the serve fast, naming the port it could not get and --port as the override" → tests/cli/docket-serve.test.ts
 - "Asked to serve, the command answers the page at / and the JSON the page reads at /docket" → tests/cli/docket-serve.test.ts
 - "Serving runs until stopped, and stopping releases the port" → tests/cli/docket-serve.test.ts
-- "The listener answers the loopback interface at port 4567 by default" → tests/cli/docket-serve.test.ts
+- "The listener answers the loopback interface on the port derived from the queue root by default" → tests/cli/docket-serve.test.ts
 - "The listener answers the loopback interface only" → tests/cli/docket-serve.test.ts
 <!-- /scenarios -->
 
