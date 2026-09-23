@@ -373,9 +373,14 @@ function runOrThrow(command: TmuxCommand): Promise<void> {
       stderr += chunk
     })
     child.once('error', reject)
-    child.once('exit', code => {
+    // `close`, not `exit`: `exit` can fire while the stderr stream is still open, and a
+    // truncated cause is the name-no-cause summary this throw exists to replace.
+    child.once('close', code => {
       if (code === 0) resolve()
-      else reject(new Error(`${commandLine(command)}: ${stderr.trim()}`))
+      else {
+        const cause = stderr.trim()
+        reject(new Error(cause === '' ? commandLine(command) : `${commandLine(command)}: ${cause}`))
+      }
     })
   })
 }
