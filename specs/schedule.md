@@ -193,7 +193,10 @@ The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST fo
 is not itself a worktree, reusing it unchanged only when it is — and start the executor
 agent there in a detached tmux session named for the TASK, first killing any same-named
 session already there. A creation that fails SHALL throw an error carrying git's own
-stderr in its message, never a bare "could not create" summary in stderr's place. Which
+stderr in its message, never a bare "could not create" summary in stderr's place. A
+session start that fails SHALL throw an error carrying tmux's own stderr in its
+message, never a bare exit-code summary in its place — the same standard a failed
+worktree creation keeps. Which
 agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
 variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
 SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
@@ -254,6 +257,8 @@ one kickoff message.
 - "A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
+- "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
+- "A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
