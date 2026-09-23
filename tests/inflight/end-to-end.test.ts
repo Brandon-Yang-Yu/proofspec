@@ -69,76 +69,52 @@ it('answers identically, in the same order, on two runs over an unmoved reposito
   expect(JSON.parse(first).relationships).toHaveLength(1)
 })
 
-// Requirement: A basedOn edge holds only when the ancestry it claims is real
-// Scenario: A basedOn claim verified true through real git draws the edge
-// GIVEN a TASK whose branch is really built on top of the TASK it claims as its base, both in flight
+// Requirement: The graph draws a blockedBy edge straight from the MANIFEST
+// Scenario: A `blocked` naming a TASK absent from the queue is a named problem, not a broken claim
+// GIVEN a TASK blocked on a name the queue does not hold
 // WHEN the inflight command is run
-// THEN the dependent TASK carries a basedOn edge naming the claimed reason, and no problem
-it('draws a basedOn edge through real git when the claimed ancestry is real', async () => {
+// THEN the answer carries a problem naming that TASK, the blockedBy edge still stands, and no
+//      ancestry verdict appears anywhere
+it('names a problem, not a broken claim, when blocked names a TASK absent from the queue', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
-  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
-  await enterTask(repo, 'b', { edit: 'specs/cli.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/cli.md' })
+  await repo.write(
+    '.proofspec/dispatch/b/MANIFEST',
+    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'ghost', reason: 'needs it' } }),
+  )
 
   const graph = graphOf(await inflight({ cwd: repo.root }))
 
   const b = graph.tasks.find(one => one.task === 'b')
-  expect(b?.basedOn).toEqual({ task: 'a', reason: "needs a's work" })
-  expect(b?.problem).toBeNull()
-})
-
-// Requirement: A basedOn edge holds only when the ancestry it claims is real
-// Scenario: A basedOn claim verified false through real git reports the problem, not the edge
-// GIVEN a TASK whose branch was built independently of the TASK it falsely claims as its base
-// WHEN the inflight command is run
-// THEN the TASK carries no basedOn edge and a problem naming the claim, while its own writes still show
-it('reports a problem through real git when the claimed ancestry is false', async () => {
-  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
-  await enterTask(repo, 'a', { edit: 'specs/cli.md' })
-  await enterTask(repo, 'c', { edit: 'specs/cli.md', base: { kind: 'task', task: 'a', reason: 'claims a, falsely' } })
-
-  const graph = graphOf(await inflight({ cwd: repo.root }))
-
-  const c = graph.tasks.find(one => one.task === 'c')
-  expect(c?.basedOn).toBeNull()
-  expect(c?.problem).toBe("claimed basedOn a, but a's branch is not an ancestor")
-  expect(c?.writes).toEqual([{ kind: 'capability', name: 'cli' }])
-})
-
-// Requirement: A basedOn edge holds only when the ancestry it claims is real
-// Scenario: A basedOn claim naming a TASK absent from the queue is reported as unresolved end to end
-// GIVEN a TASK whose base names a TASK the queue holds no record of
-// WHEN the inflight command is run
-// THEN the TASK carries no basedOn edge and a problem naming the claim, while its own writes still show
-it('reports an unresolved claim through the real command when the named TASK is not in the queue', async () => {
-  const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
-  await enterTask(repo, 'b', { edit: 'specs/cli.md', base: { kind: 'task', task: 'ghost', reason: 'needs it' } })
-
-  const graph = graphOf(await inflight({ cwd: repo.root }))
-
-  const b = graph.tasks.find(one => one.task === 'b')
-  expect(b?.basedOn).toBeNull()
   expect(b?.problem).toContain('ghost')
+  expect(b?.blockedBy).toEqual({ task: 'ghost', reason: 'needs it' })
   expect(b?.writes).toEqual([{ kind: 'capability', name: 'cli' }])
+  expect(JSON.stringify(graph)).not.toContain('ancestor')
 })
 
-// Requirement: The graph reads each in-flight TASK from its own base
-// Scenario: A TASK based on a merged TASK measures against the BASE_BRANCH even though its own branch was
-//           built on top of the merged TASK's
-// GIVEN a TASK whose base names a TASK that has since merged into the BASE_BRANCH
+// Requirement: The graph reads each in-flight TASK from the BASE_BRANCH
+// Scenario: A TASK whose `blocked` names a merged TASK measures against the BASE_BRANCH even
+//           though its own branch was built on the merged TASK's
+// GIVEN a TASK whose `blocked` names a TASK that has since merged, while its own branch was
+//       built on top of the merged TASK's
 // WHEN the census reads what the dependent TASK rewrote
 // THEN it is measured from the BASE_BRANCH, not the merged branch, so work the BASE_BRANCH
 //      already holds is not counted twice
-it('measures against the BASE_BRANCH, not the merged branch, when base names a merged TASK', async () => {
+it('measures against the BASE_BRANCH, not the merged branch, when blocked names a merged TASK', async () => {
   const repo = await makeGitRepo({ 'specs/a.md': '# a\n', 'specs/b.md': '# b\n' })
   await enterTask(repo, 'a', { edit: 'specs/a.md' })
   await repo.write('.proofspec/dispatch/a/state', 'merged')
-  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a', base: { kind: 'task', task: 'a', reason: "needs a's work" } })
+  await enterTask(repo, 'b', { edit: 'specs/b.md', onto: 'work/a' })
+  await repo.write(
+    '.proofspec/dispatch/b/MANIFEST',
+    JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's work" } }),
+  )
 
   const graph = graphOf(await inflight({ cwd: repo.root }))
 
   const b = graph.tasks.find(one => one.task === 'b')
   expect(b?.writes).toEqual([{ kind: 'capability', name: 'a' }, { kind: 'capability', name: 'b' }])
-  expect(b?.basedOn).toBeNull()
+  expect(b?.blockedBy).toEqual({ task: 'a', reason: "needs a's work" })
 })
 
 // Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches

@@ -63,10 +63,10 @@ function twoRequirementSpec(first: string, second: string): string {
   ].join('\n')
 }
 
-/** Writes a queue entry for a TASK whose base is the `main` shape — built on the BASE_BRANCH,
- *  whatever that branch is called in this repo. */
+/** Writes a queue entry for a TASK carrying no `blocked` — built on the BASE_BRANCH, whatever
+ *  that branch is called in this repo. */
 async function queueTask(repo: GitRepo, task: string, state: string): Promise<void> {
-  const manifest = { intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } }
+  const manifest = { intentRef: 'docs/x.md', branch: `work/${task}` }
   await repo.write(`.proofspec/dispatch/${task}/MANIFEST`, JSON.stringify(manifest))
   await repo.write(`.proofspec/dispatch/${task}/state`, state)
 }
@@ -130,7 +130,7 @@ it('measures the diff from the branch PROOFSPEC_BASE_BRANCH names', async () => 
 
 // Requirement: Every place that asks git about the BASE_BRANCH reads one name
 // Scenario: The census measures each TASK against the branch PROOFSPEC_BASE_BRANCH names
-// GIVEN a queue holding an in-flight TASK whose base holds nothing live to measure against, and PROOFSPEC_BASE_BRANCH
+// GIVEN a queue holding an in-flight TASK whose MANIFEST records no `blocked`, and PROOFSPEC_BASE_BRANCH
 //      naming a branch other than main
 // WHEN the census computes what each in-flight TASK is measured against
 // THEN that TASK is measured against the named branch

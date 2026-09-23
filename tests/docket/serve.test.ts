@@ -27,7 +27,7 @@ type StandingJson = { readonly phase: string; readonly round: number; readonly s
 type AccountEntryJson = { readonly word: string; readonly totalSeconds: number; readonly roundsReached: number; readonly live: boolean }
 
 function manifestFor(task: string): string {
-  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
 }
 
 /** A queue a page would be left open on: one working TASK, one problem, one unpaid ruling. */
@@ -227,10 +227,13 @@ const SETTLED_AT = new Date('2025-01-01T10:30:00.000Z')
 
 /** An archived entry as the prune leaves one, with both write times pinned by hand and —
  *  when the TASK kept one — a phase history standing in its entry beside them. */
-async function writeArchived(root: string, task: string, options: { readonly enqueuedAt: Date; readonly settledAt: Date; readonly history?: readonly { readonly phase: string; readonly round: number; readonly since: number }[] }): Promise<void> {
+async function writeArchived(root: string, task: string, options: { readonly enqueuedAt: Date; readonly settledAt: Date; readonly history?: readonly { readonly phase: string; readonly round: number; readonly since: number }[]; readonly blocked?: { readonly task: string; readonly reason: string } }): Promise<void> {
   const dir = join(root, '.proofspec', 'archive', task)
   await mkdir(dir, { recursive: true })
-  await writeFile(join(dir, 'MANIFEST'), manifestFor(task))
+  const manifest = options.blocked === undefined
+    ? manifestFor(task)
+    : JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, blocked: options.blocked })
+  await writeFile(join(dir, 'MANIFEST'), manifest)
   await writeFile(join(dir, 'state'), 'merged')
   if (options.history !== undefined) {
     await writeFile(join(dir, 'phase-history'), `${options.history.map(entry => JSON.stringify(entry)).join('\n')}\n`)
@@ -239,18 +242,18 @@ async function writeArchived(root: string, task: string, options: { readonly enq
   await utimes(join(dir, 'state'), options.settledAt, options.settledAt)
 }
 
-async function archiveAnswer(port: number): Promise<{ records: { task: string; branch: string; base: { kind: string }; enqueuedAt: string; settledAt: string; livedSeconds: number; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }> {
+async function archiveAnswer(port: number): Promise<{ records: { task: string; branch: string; blocked?: { task: string; reason: string }; enqueuedAt: string; settledAt: string; livedSeconds: number; phaseHistory: StandingJson[] | null; phaseAccount: AccountEntryJson[] | null }[] }> {
   return JSON.parse(await get('/archive', port))
 }
 
 // Requirement: The page answers the archive of completed TASKs
 // Scenario: The archive answer carries one record per archived TASK, each holding the fields read from its own files
-// GIVEN an archive holding one completed TASK, its two write times pinned by hand
+// GIVEN an archive holding one completed TASK blocked on another TASK, its two write times pinned by hand
 // WHEN the archive's JSON is fetched
-// THEN it carries exactly one record for it — the TASK's name, the branch and base its MANIFEST records, the two moments and the duration read from its own files' write times, and its phase history and account both absent, the TASK having kept none
+// THEN it carries exactly one record for it — the TASK's name, the branch and `blocked` its MANIFEST records, the two moments and the duration read from its own files' write times, and its phase history and account both absent, the TASK having kept none
 it('answers one record per archived TASK with its own files\' facts', async () => {
   const { repo, served } = await serveOver({})
-  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT })
+  await writeArchived(repo.root, 'first', { enqueuedAt: ENQUEUED_AT, settledAt: SETTLED_AT, blocked: { task: 'second', reason: 'stacked on it' } })
 
   const answer = await archiveAnswer(served.port)
 
@@ -258,7 +261,7 @@ it('answers one record per archived TASK with its own files\' facts', async () =
     {
       task: 'first',
       branch: 'work/first',
-      base: { kind: 'main' },
+      blocked: { task: 'second', reason: 'stacked on it' },
       enqueuedAt: ENQUEUED_AT.toISOString(),
       settledAt: SETTLED_AT.toISOString(),
       livedSeconds: 90 * 60,

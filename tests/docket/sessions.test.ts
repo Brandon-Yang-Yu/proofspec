@@ -20,7 +20,7 @@ function reportOf(outcome: Outcome): Docket {
 }
 
 function manifestFor(task: string): string {
-  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+  return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}` })
 }
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server

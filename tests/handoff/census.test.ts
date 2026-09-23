@@ -33,7 +33,7 @@ async function enterCensusTask(repo: GitRepo, task: string, description: string)
   await repo.git(['commit', '-m', `${task}: rewrite`])
   await repo.git(['checkout', 'main'])
 
-  const manifest = { intentRef: 'specs/cli.md', branch: `work/${task}`, base: { kind: 'main' } }
+  const manifest = { intentRef: 'specs/cli.md', branch: `work/${task}` }
   await repo.write(`.proofspec/dispatch/${task}/MANIFEST`, JSON.stringify(manifest))
   await repo.write(`.proofspec/dispatch/${task}/state`, 'queued')
 }
@@ -97,7 +97,7 @@ it('answers no TASK for an empty queue, rather than a refusal', async () => {
 // THEN the problem comes back as a value naming the TASK, never as a thrown error
 it('answers a missing branch as a named problem, never a thrown error', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': CLI_SPEC })
-  const manifest = { intentRef: 'specs/cli.md', branch: 'work/ghost', base: { kind: 'main' } }
+  const manifest = { intentRef: 'specs/cli.md', branch: 'work/ghost' }
   await repo.write('.proofspec/dispatch/ghost/MANIFEST', JSON.stringify(manifest))
   await repo.write('.proofspec/dispatch/ghost/state', 'queued')
 

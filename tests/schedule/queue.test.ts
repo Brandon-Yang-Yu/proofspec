@@ -53,7 +53,7 @@ it('overwrites a state file with exactly the word given, whatever it is', async 
   expect(await stateOf(repo.root, 'a')).toBe('not-a-recognized-word')
 })
 
-const MANIFEST: Manifest = { intentRef: 'docs/x.md', branch: 'work/a', base: { kind: 'main' } }
+const MANIFEST: Manifest = { intentRef: 'docs/x.md', branch: 'work/a' }
 
 // Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there
 // Scenario: enqueue creates a new TASK's MANIFEST and initial queued state
@@ -79,7 +79,7 @@ it('refuses a TASK name already in the queue, leaving its entry untouched', asyn
   const repo = await makeRepo({})
   await enqueue(repo.root, 'a', MANIFEST)
   await writeState(repo.root, 'a', 'building')
-  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2', base: { kind: 'main' } }
+  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2' }
 
   const result = await enqueue(repo.root, 'a', attempted)
 
@@ -96,7 +96,7 @@ it('refuses a TASK name already in the queue, leaving its entry untouched', asyn
 it('refuses a TASK name already standing in the archive, leaving the archive untouched', async () => {
   const repo = await makeRepo({})
   await writeArchived(repo.root, 'a', { manifest: JSON.stringify(MANIFEST), state: 'merged' })
-  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2', base: { kind: 'main' } }
+  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2' }
 
   const result = await enqueue(repo.root, 'a', attempted)
 
@@ -128,8 +128,8 @@ it('enqueues a fresh name while the archive stands, refusing nothing', async () 
 // THEN exactly one succeeds and the other refuses, and the surviving entry is whichever one won, not a mix of both
 it('creates exactly one entry when two enqueue calls race on the same TASK name', async () => {
   const repo = await makeRepo({})
-  const manifestA: Manifest = { intentRef: 'docs/a.md', branch: 'work/a', base: { kind: 'main' } }
-  const manifestB: Manifest = { intentRef: 'docs/b.md', branch: 'work/b', base: { kind: 'main' } }
+  const manifestA: Manifest = { intentRef: 'docs/a.md', branch: 'work/a' }
+  const manifestB: Manifest = { intentRef: 'docs/b.md', branch: 'work/b' }
 
   const [first, second] = await Promise.all([enqueue(repo.root, 'a', manifestA), enqueue(repo.root, 'a', manifestB)])
 

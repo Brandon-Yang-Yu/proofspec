@@ -9,7 +9,7 @@ function change(task: string, options: Partial<TaskChange> = {}): TaskChange {
     task,
     editedCapabilities: [],
     changedTerms: [],
-    basedOn: undefined,
+    blockedBy: undefined,
     ...options,
   }
 }
@@ -24,6 +24,7 @@ it('reports a writes edge for every CAPABILITY_FILE the branch edited', () => {
     changes: [change('a', { editedCapabilities: ['cli', 'guard'] })],
     failures: [],
     vocabulary: { terms: [], capabilities: [] },
+    queue: ['a'],
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
@@ -43,6 +44,7 @@ it('reports a writes edge for every TERM whose definition changed', () => {
     changes: [change('a', { changedTerms: ['MANIFEST'] })],
     failures: [],
     vocabulary: { terms: [{ term: 'MANIFEST', definition: 'a hand-off' }], capabilities: [] },
+    queue: ['a'],
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
@@ -62,6 +64,7 @@ it('reaches a CAPABILITY_FILE whose requirement words use a changed TERM', () =>
       terms: [{ term: 'MANIFEST', definition: 'a hand-off' }],
       capabilities: [{ capability: 'inflight', texts: ['A MANIFEST that cannot stand is refused'] }],
     },
+    queue: ['a'],
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
@@ -86,6 +89,7 @@ it('reaches a CAPABILITY_FILE whose requirement uses a TERM defined in terms of 
       ],
       capabilities: [{ capability: 'inflight', texts: ['Every other TASK still answers'] }],
     },
+    queue: ['a'],
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
@@ -105,6 +109,7 @@ it('reports only the writes edge for a CAPABILITY_FILE both edited and reopened'
       terms: [{ term: 'MANIFEST', definition: 'a hand-off' }],
       capabilities: [{ capability: 'inflight', texts: ['A MANIFEST that cannot stand is refused'] }],
     },
+    queue: ['a'],
   })
 
   const task = graph.tasks.find(one => one.task === 'a')
@@ -112,43 +117,80 @@ it('reports only the writes edge for a CAPABILITY_FILE both edited and reopened'
   expect(task?.reopened).toEqual([])
 })
 
-// Requirement: A basedOn edge holds only when the ancestry it claims is real
-// Scenario: A basedOn edge carrying its reason is drawn when the claimed ancestry is real
-// GIVEN a TASK whose claimed ancestry over another TASK is verified real
+// Requirement: The graph draws a blockedBy edge straight from the MANIFEST
+// Scenario: A `blockedBy` edge carrying its reason is drawn straight from the MANIFEST
+// GIVEN a TASK whose MANIFEST carries `blocked` naming a TASK that stands on the queue in flight
 // WHEN the graph is computed
-// THEN it draws a basedOn edge carrying the claimed reason
-it('draws a basedOn edge carrying its reason when the claimed ancestry is real', () => {
+// THEN a blockedBy edge is drawn to the named TASK, carrying exactly the reason the MANIFEST
+//      records
+it('draws a blockedBy edge carrying its reason straight from the MANIFEST', () => {
   const graph = computeGraph({
-    changes: [change('b', { basedOn: { kind: 'holds', task: 'a', reason: "needs a's parser" } })],
+    changes: [change('b', { blockedBy: { task: 'a', reason: "needs a's parser" } })],
     failures: [],
     vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b'],
   })
 
   const task = graph.tasks.find(one => one.task === 'b')
-  expect(task?.basedOn).toEqual({ task: 'a', reason: "needs a's parser" })
+  expect(task?.blockedBy).toEqual({ task: 'a', reason: "needs a's parser" })
   expect(task?.problem).toBeNull()
 })
 
-// Requirement: A basedOn edge holds only when the ancestry it claims is real
-// Scenario: A claimed ancestry that does not hold draws no edge and reports a problem naming the claim
-// GIVEN a TASK whose claimed ancestry over another TASK does not verify
+// Requirement: The graph draws a blockedBy edge straight from the MANIFEST
+// Scenario: A `blockedBy` edge is drawn though neither branch is an ancestor of the other
+// GIVEN a blocked TASK where neither its branch nor the blocker's branch is an ancestor of
+//       the other — a fact the computation's input never carries, holding only names, edits,
+//       and the manifest fact itself
 // WHEN the graph is computed
-// THEN it draws no basedOn edge and carries a problem naming the claim
-it('draws no basedOn edge and reports a problem when the claimed ancestry does not hold', () => {
+// THEN the edge is drawn anyway and no problem is reported for it — nothing is verified in git
+it('draws a blockedBy edge though neither branch is an ancestor of the other', () => {
   const graph = computeGraph({
-    changes: [change('b', { basedOn: { kind: 'broken', task: 'a', reason: "needs a's parser", why: "a's branch is not an ancestor" } })],
+    changes: [
+      change('a'),
+      change('b', { blockedBy: { task: 'a', reason: "needs a's parser" } }),
+    ],
     failures: [],
     vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b'],
   })
 
   const task = graph.tasks.find(one => one.task === 'b')
-  expect(task?.basedOn).toBeNull()
-  expect(task?.problem).toBe("claimed basedOn a, but a's branch is not an ancestor")
+  expect(task?.blockedBy).toEqual({ task: 'a', reason: "needs a's parser" })
+  expect(task?.problem).toBeNull()
 })
 
-// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
+// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
+// Scenario: A node a `blockedBy` edge already explains is not reported
+// GIVEN two TASK joined by a blockedBy edge and a third, unblocked TASK, all three sharing
+//       one spec file
+// WHEN relationships are computed
+// THEN the blocked pair sharing the file alone raises no relationship — sequencing by design —
+//      and the third TASK's overlap with either does raise one, naming all three
+it('does not report a node a blockedBy edge already explains', () => {
+  const blockedPair = [
+    change('a', { editedCapabilities: ['cli'] }),
+    change('b', { editedCapabilities: ['cli'], blockedBy: { task: 'a', reason: "needs a's parser" } }),
+  ]
+  const pair = computeGraph({
+    changes: blockedPair,
+    failures: [],
+    vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b'],
+  })
+  expect(pair.relationships).toEqual([])
+
+  const withThird = computeGraph({
+    changes: [...blockedPair, change('c', { editedCapabilities: ['cli'] })],
+    failures: [],
+    vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b', 'c'],
+  })
+  expect(withThird.relationships).toEqual([{ node: { kind: 'capability', name: 'cli' }, tasks: ['a', 'b', 'c'] }])
+})
+
+// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
 // Scenario: A node two in-flight TASK are attached to is one relationship naming both
-// GIVEN two in-flight TASK that both wrote the same CAPABILITY_FILE, with no basedOn edge between them
+// GIVEN two in-flight TASK that both wrote the same CAPABILITY_FILE, with no blockedBy edge between them
 // WHEN the graph is computed
 // THEN one relationship names both TASK on that node
 it('reports one relationship naming both TASK sharing a node', () => {
@@ -156,12 +198,13 @@ it('reports one relationship naming both TASK sharing a node', () => {
     changes: [change('a', { editedCapabilities: ['cli'] }), change('b', { editedCapabilities: ['cli'] })],
     failures: [],
     vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b'],
   })
 
   expect(graph.relationships).toEqual([{ node: { kind: 'capability', name: 'cli' }, tasks: ['a', 'b'] }])
 })
 
-// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
+// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
 // Scenario: A node three TASK share is named once, not as three pairs
 // GIVEN three in-flight TASK that all wrote the same CAPABILITY_FILE
 // WHEN the graph is computed
@@ -175,30 +218,13 @@ it('names a node three TASK share once, not as three pairs', () => {
     ],
     failures: [],
     vocabulary: { terms: [], capabilities: [] },
+    queue: ['a', 'b', 'c'],
   })
 
   expect(graph.relationships).toEqual([{ node: { kind: 'capability', name: 'cli' }, tasks: ['a', 'b', 'c'] }])
 })
 
-// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
-// Scenario: A node a verified basedOn edge already explains is not reported
-// GIVEN two in-flight TASK sharing a node, one of them verified basedOn the other
-// WHEN the graph is computed
-// THEN no relationship is reported for that node
-it('does not report a node a verified basedOn edge already explains', () => {
-  const graph = computeGraph({
-    changes: [
-      change('a', { editedCapabilities: ['cli'] }),
-      change('b', { editedCapabilities: ['cli'], basedOn: { kind: 'holds', task: 'a', reason: "needs a's parser" } }),
-    ],
-    failures: [],
-    vocabulary: { terms: [], capabilities: [] },
-  })
-
-  expect(graph.relationships).toEqual([])
-})
-
-// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no basedOn edge already explaining it
+// Requirement: A relationship is a shared CAPABILITY_FILE or TERM with no blockedBy edge already explaining it
 // Scenario: Two TASK that both changed only unrelated TERM do not relate on the glossary file alone
 // GIVEN two in-flight TASK that each changed a different, unrelated TERM
 // WHEN the graph is computed
@@ -217,6 +243,7 @@ it('does not relate two TASK on the glossary file alone', () => {
       ],
       capabilities: [],
     },
+    queue: ['a', 'b'],
   })
 
   expect(graph.relationships).toEqual([])

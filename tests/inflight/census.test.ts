@@ -21,7 +21,7 @@ function taskRead(task: string, capabilities: readonly CapabilityRead[]): TaskCa
   return { task, branch: `work/${task}`, capabilities }
 }
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A rewritten requirement's description is answered as reworded, carrying both texts
 // GIVEN a TASK whose branch rewrote one requirement's description
 // WHEN the census is computed
@@ -52,9 +52,9 @@ it('answers a rewritten requirement as reworded, carrying both texts', () => {
   })
 })
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A requirement the branch added is answered as new, carrying only the after text
-// GIVEN a TASK whose branch added a requirement its own base did not declare
+// GIVEN a TASK whose branch added a requirement the BASE_BRANCH did not declare
 // WHEN the census is computed
 // THEN that requirement is answered as new, carrying only the text the branch now has
 it('answers an added requirement as new, carrying only the after text', () => {
@@ -68,11 +68,11 @@ it('answers an added requirement as new, carrying only the after text', () => {
   ])
 })
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A requirement the branch removed is answered as gone, carrying only the before text
-// GIVEN a TASK whose branch removed a requirement its own base declared
+// GIVEN a TASK whose branch removed a requirement the BASE_BRANCH declared
 // WHEN the census is computed
-// THEN that requirement is answered as gone, carrying only the text the base had
+// THEN that requirement is answered as gone, carrying only the text the BASE_BRANCH had
 it('answers a removed requirement as gone, carrying only the before text', () => {
   const before = spec({ requirements: [requirement('An old promise', 'the old text')] })
   const after = spec({})
@@ -84,9 +84,9 @@ it('answers a removed requirement as gone, carrying only the before text', () =>
   ])
 })
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A requirement neither end moved is absent from the census entirely
-// GIVEN a TASK whose branch left one requirement's description exactly as its base had it
+// GIVEN a TASK whose branch left one requirement's description exactly as the BASE_BRANCH had it
 // WHEN the census is computed
 // THEN that TASK is absent from the census entirely, because it rewrote nothing
 it('leaves a TASK that rewrote nothing out of the census entirely', () => {
@@ -98,7 +98,7 @@ it('leaves a TASK that rewrote nothing out of the census entirely', () => {
   expect(census.tasks).toEqual([])
 })
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A rewritten TERM is answered beside that file's rewritten requirements
 // GIVEN a TASK whose branch reworded both a TERM and a requirement defined in the same capability file
 // WHEN the census is computed
@@ -124,7 +124,7 @@ it('answers a rewritten TERM beside that file\'s requirements', () => {
   ])
 })
 
-// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to its own base
+// Requirement: The census names every requirement and TERM a TASK's branch rewrote, relative to the BASE_BRANCH
 // Scenario: A TASK whose own census could not be read is a named problem, and every other TASK still answers
 // GIVEN a queue holding one TASK whose branch could not be read and one whose branch rewrote a requirement
 // WHEN the census is computed
