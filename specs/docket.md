@@ -143,7 +143,7 @@ things.
 - "A session not listed is marked absent, and nothing further asked about it" → tests/docket/sessions.test.ts
 - "A session the server holds is listed on the row with its exact attach command" → tests/docket/sessions.test.ts
 - "The server's session list is read from tmux's own output, one name per line" → tests/docket/sessions.test.ts
-- "The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default" → tests/docket/sessions.test.ts
+- "The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same per-repo default" → tests/docket/sessions.test.ts
 <!-- /scenarios -->
 
 ### Requirement: The answer names every relationship raised but not yet ruled

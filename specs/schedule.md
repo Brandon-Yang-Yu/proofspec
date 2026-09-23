@@ -261,6 +261,7 @@ one kickoff message.
 - "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
+- "The default socket is derived from the queue root, so two repos never share a server" → tests/schedule/session.test.ts
 - "The pi invocation carries --approve and --extension pinned twice over — this checkout's own progress extension, and the subagent extension inside the installed pi package" → tests/schedule/session.test.ts
 - "The pi invocation disables extension auto-discovery, so the worktree's own copy of progress.ts never loads alongside the pinned one" → tests/schedule/session.test.ts
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts

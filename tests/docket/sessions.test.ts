@@ -2,7 +2,8 @@
 
 import { afterEach, expect, it } from 'vitest'
 import { docket } from '../../src/cli/index.ts'
-import { commandLine, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand } from '../../src/cli/session.ts'
+import { commandLine, parseSessionNames, tmuxAttachCommand, tmuxListSessionsCommand, tmuxSessionCommands } from '../../src/cli/session.ts'
+import type { TmuxCommand } from '../../src/cli/session.ts'
 import type { Docket } from '../../src/docket/index.ts'
 import type { Outcome } from '../../src/cli/index.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
@@ -21,6 +22,32 @@ function reportOf(outcome: Outcome): Docket {
 
 function manifestFor(task: string): string {
   return JSON.stringify({ intentRef: 'docs/x.md', branch: `work/${task}`, base: { kind: 'main' } })
+}
+
+/** The socket a built tmux command reaches its server through — the value its own `-L`
+ *  names. A command with no `-L` at all would reach the user's default server, the exact
+ *  thing this requirement forbids, so the missing flag is itself the failure to report. */
+function socketOf(command: TmuxCommand): string {
+  const flag = command.args.indexOf('-L')
+  expect(flag).toBeGreaterThanOrEqual(0)
+  return command.args[flag + 1]!
+}
+
+/** The per-repo default the start commands derive for a queue root — the name every other
+ *  tmux surface must agree with for the same root. Read off the built start command rather
+ *  than re-derived here, so what the docket expects can never drift from what the scheduler
+ *  actually asks. A derivation still answering the machine's shared bare `proofspec` name
+ *  would make every comparison against this value vacuous, so the per-repo shape —
+ *  `proofspec-` with a root-dependent tail — is held here, at the source. */
+function derivedSocketFor(queueRoot: string): string {
+  const [, start] = tmuxSessionCommands('a', {
+    worktree: `${queueRoot}/.proofspec/worktrees/a`,
+    queueRoot,
+    systemPrompt: 'irrelevant to the socket',
+  })
+  const socket = socketOf(start)
+  expect(socket).toMatch(/^proofspec-.+$/)
+  return socket
 }
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
@@ -44,9 +71,12 @@ it('carries the exact attach command for a session the server holds, asking for 
   const outcome = await docket({ cwd: repo.root, docket: { listSessions } })
 
   const report = reportOf(outcome)
+  // The row's exact command attaches through the socket this repo's own server derives —
+  // the same name the start commands target for the same queue root — read off those
+  // commands, never pinned, so the row cannot name a server the scheduler never asked.
   expect(report.rows.find(row => row.task === 'alpha')?.session).toEqual({
     listed: true,
-    attach: 'tmux -L proofspec attach-session -t alpha',
+    attach: `tmux -L ${derivedSocketFor(repo.root)} attach-session -t alpha`,
   })
   expect(report.rows.find(row => row.task === 'beta')?.session).toEqual({ listed: false })
   expect(asked).toBe(1)
@@ -76,20 +106,24 @@ it('marks a session the server does not hold as absent, asking nothing further',
 })
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
-// Scenario: The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same default
-// GIVEN no socket override is set
-// WHEN the session-list command and the attach command are built
-// THEN both reach the dedicated proofspec server, and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
-it('asks the dedicated server for the session list, honoring the socket override', () => {
+// Scenario: The session list is asked of the dedicated server through PROOFSPEC_TMUX_SOCKET, with the same per-repo default
+// GIVEN no socket override is set, and a queue root
+// WHEN the session-list command and the attach command are built for that root
+// THEN both reach that root's own derived server — the same per-repo default the start
+//      commands target for the same root — and PROOFSPEC_TMUX_SOCKET moves both to the socket it names
+it('asks the repo\'s own dedicated server for the session list, honoring the socket override', () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
+  const queueRoot = '/repo'
 
-  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec', 'list-sessions'] })
-  expect(commandLine(tmuxAttachCommand('alpha'))).toBe('tmux -L proofspec attach-session -t alpha')
+  const derived = derivedSocketFor(queueRoot)
+
+  expect(socketOf(tmuxListSessionsCommand(queueRoot))).toBe(derived)
+  expect(socketOf(tmuxAttachCommand('alpha', queueRoot))).toBe(derived)
 
   process.env.PROOFSPEC_TMUX_SOCKET = 'proofspec-test-run-42'
 
-  expect(tmuxListSessionsCommand()).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
-  expect(commandLine(tmuxAttachCommand('alpha'))).toBe('tmux -L proofspec-test-run-42 attach-session -t alpha')
+  expect(tmuxListSessionsCommand(queueRoot)).toEqual({ command: 'tmux', args: ['-L', 'proofspec-test-run-42', 'list-sessions'] })
+  expect(commandLine(tmuxAttachCommand('alpha', queueRoot))).toBe('tmux -L proofspec-test-run-42 attach-session -t alpha')
 })
 
 // Requirement: A row carries where the TASK's session lives, read from the dedicated tmux server
