@@ -617,9 +617,11 @@ it('asks the dedicated server for the live count by its own -L socket, never the
   const derived = socketOf(tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' })[1]!)
   expect(derived).toMatch(/^proofspec-.+$/)
   const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', derived, ...args])
-  // A decoy session stands on a second throwaway server for the whole ask: the count is
-  // asked of the root's own derived server only, never summed across every server
-  // standing — so a wrapper that asks several servers answers two and fails.
+  // A decoy pair of sessions stands on a second throwaway server for the whole ask: the
+  // count is asked of the root's own derived server only. Two decoys, not one, so no
+  // aggregation across servers can answer 1 — a summing wrapper answers 3, a
+  // max-across-servers wrapper answers 2, and a wrapper pointed at the decoy alone
+  // answers 2; only asking the derived server and it alone answers 1.
   const decoy = 'proofspec-test-count-decoy'
   const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
   const wasCwd = process.cwd()
@@ -627,7 +629,8 @@ it('asks the dedicated server for the live count by its own -L socket, never the
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})
     await askDerived(['new-session', '-d', '-s', 'only', 'sleep', '60'])
-    await askDecoy(['new-session', '-d', '-s', 'decoy', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'decoy-one', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'decoy-two', 'sleep', '60'])
     process.chdir(root)
     await expect(liveSessionCount()).resolves.toBe(1)
   } finally {

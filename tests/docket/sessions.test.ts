@@ -137,10 +137,12 @@ it('asks the repo\'s own dedicated server for the session list, honoring the soc
   const root = await mkdtemp(join(tmpdir(), 'proofspec-docket-socket-'))
   const rootDerived = derivedSocketFor(root)
   const askDerived = (args: readonly string[]) => execFileAsync('tmux', ['-L', rootDerived, ...args])
-  // A decoy session — named `alpha`, same as the real one — stands on a second throwaway
-  // server for the whole ask: the list is read from the root's own derived server only,
-  // never concatenated across every server standing, so a wrapper that asks several
-  // servers answers two alphas and fails.
+  // A decoy session under its own distinct name stands on a second throwaway server for
+  // the whole ask: the list is read from the root's own derived server only. The decoy's
+  // name is not the real one's, so no aggregation or misdirection can answer ['alpha'] —
+  // concatenation and union both answer ['alpha', 'beta'], and a wrapper that reads the
+  // decoy server instead answers ['beta']; only asking the derived server and it alone
+  // answers ['alpha'].
   const decoy = 'proofspec-test-docket-decoy'
   const askDecoy = (args: readonly string[]) => execFileAsync('tmux', ['-L', decoy, ...args])
   const wasCwd = process.cwd()
@@ -148,7 +150,7 @@ it('asks the repo\'s own dedicated server for the session list, honoring the soc
     await askDerived(['kill-server']).catch(() => {})
     await askDecoy(['kill-server']).catch(() => {})
     await askDerived(['new-session', '-d', '-s', 'alpha', 'sleep', '60'])
-    await askDecoy(['new-session', '-d', '-s', 'alpha', 'sleep', '60'])
+    await askDecoy(['new-session', '-d', '-s', 'beta', 'sleep', '60'])
     process.chdir(root)
     await expect(listTmuxSessions()).resolves.toEqual(['alpha'])
   } finally {
