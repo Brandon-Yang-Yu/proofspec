@@ -2,7 +2,7 @@
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, symlinkSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -622,7 +622,7 @@ it('runs against a dedicated tmux server derived from the queue root, never the 
 // THEN every command reaches tmux through -L on a name of the per-repo
 //      proofspec-<short hash> shape — the same name for the same root on every build, and a
 //      different name for the other root
-it('derives the default socket from the queue root, so two repos never share a server', () => {
+it('derives the default socket from the queue root, so two repos never share a server', async () => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 
   // The algorithm itself is pinned by the sibling scenario above; what only this proof
@@ -646,6 +646,21 @@ it('derives the default socket from the queue root, so two repos never share a s
   // parents are two repos, and must never share a server.
   expect(two).not.toBe(one)
   expect(socketForRoot('/x/repo')).not.toBe(socketForRoot('/y/repo'))
+
+  // And one path is one repo however it is spelled: a symlinked alias of a real root
+  // names the same queue, and the same queue derives the same name. A derivation hashing
+  // the spelling as handed would move the name with the alias and fail here, on any
+  // machine, with no reliance on the machine's own symlinked tmpdir.
+  const holder = await mkdtemp(join(tmpdir(), 'proofspec-socket-spelling-'))
+  try {
+    const root = join(holder, 'root')
+    await mkdir(root)
+    const alias = join(holder, 'alias')
+    symlinkSync(root, alias)
+    expect(socketForRoot(alias)).toBe(socketForRoot(root))
+  } finally {
+    await rm(holder, { recursive: true, force: true })
+  }
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed

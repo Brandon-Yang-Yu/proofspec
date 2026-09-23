@@ -1,8 +1,9 @@
 // Capability: cli
 
 import { createHash } from 'node:crypto'
-import { realpathSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { realpathSync, symlinkSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { rm } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
@@ -71,15 +72,17 @@ function derivedPort(queueRoot: string): number {
   return 4567 + Number(BigInt(`0x${hex}`) % 1000n)
 }
 
-/** Serves the docket over a fixture queue, on the port named (or the default when none is).
- *  Answers with the server and the fixture's own root, because the default port is derived
- *  from that root and a proof computes its expectation from the real path. */
-async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number; readonly host?: string } = {}) {
+/** Serves the docket over a fixture queue, on the port named (or the default when none
+ *  is), at the root named (a fresh fixture's when none is). Answers with the server and
+ *  the root served from, because the default port is derived from that root and a proof
+ *  computes its expectation from the real path. */
+async function serveOver(files: Readonly<Record<string, string>>, options: { readonly port?: number; readonly host?: string; readonly root?: string } = {}) {
   const repo = await makeRepo(files)
-  const served = await serveDocket({ cwd: repo.root, port: options.port, host: options.host, docket: { listSessions: async () => [] } })
+  const cwd = options.root ?? repo.root
+  const served = await serveDocket({ cwd, port: options.port, host: options.host, docket: { listSessions: async () => [] } })
   if (!served.ok) throw new Error(`serving did not start: ${served.reason}`)
   standing.push(served)
-  return { ...served, root: repo.root }
+  return { ...served, root: cwd }
 }
 
 /** This machine's own non-loopback IPv4 address — an interface a caller could name. */
@@ -133,6 +136,24 @@ it('listens on the loopback at the port derived from the queue root by default',
   expect(served.host).toBe('127.0.0.1')
   expect(served.port).toBe(port)
   expect((await request('/docket', port)).status).toBe(200)
+  await served.stop()
+
+  // One path, one port — however the path is spelled. A symlinked alias of the same root
+  // names the same queue, and the same queue derives the same port: a derivation hashing
+  // the spelling as handed would move the port with the alias and fail here, on any
+  // machine, with no reliance on the machine's own symlinked tmpdir.
+  const alias = join(served.root, '..', 'alias-of-same-queue')
+  await symlinkSync(served.root, alias)
+  try {
+    const aliased = await serveOver(FILES, { root: alias })
+    try {
+      expect(aliased.port).toBe(port)
+    } finally {
+      await aliased.stop()
+    }
+  } finally {
+    await rm(alias, { force: true })
+  }
 })
 
 // Requirement: A command serves the docket as a page
