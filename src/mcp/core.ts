@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
 import { piJudge } from '../cli/judge.ts'
@@ -6,7 +7,7 @@ import { appendPhaseHistory, enqueue, readPhase, writeHeartbeat, writePhase, wri
 import { schedule } from '../cli/run.ts'
 import { liveSessionCount, tmuxStartSession } from '../cli/session.ts'
 import { settleTask } from '../cli/settle.ts'
-import type { FireSchedulingPass, SettleResult } from '../cli/settle.ts'
+import type { FireSchedulingPass, SchedulingPassPlan, SettleResult } from '../cli/settle.ts'
 import type { Outcome } from '../cli/types.ts'
 import type { Manifest, ManifestBase } from '../inflight/index.ts'
 import { BUILDING } from '../schedule/types.ts'
@@ -270,6 +271,20 @@ function realScheduleActions(cwd: string): ScheduleActions {
   }
 }
 
+/** The real fire a successful settle runs when nothing else is given: starts the pass the
+ *  plan names the way the reaper is started (`reapSession`, `src/cli/session.ts`) — detached
+ *  and unref'd, in a process group of its own — so the pass survives the settle's own
+ *  teardown. The settle awaits only whether the pass *started* (never its exit): a start
+ *  that cannot even happen surfaces as the ok limb's finding, never a failed settle. */
+function realFireSchedulingPass(plan: SchedulingPassPlan): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(plan.command, [...plan.args], { detached: true, stdio: 'ignore' })
+    child.once('error', reject)
+    child.once('spawn', () => resolve())
+    child.unref()
+  })
+}
+
 /**
  * The whole of `enqueue_task`'s own job: validate the TASK name, flatten the input onto a
  * real `Manifest`, then answer exactly what `enqueue()` answers — its own write outcome is
@@ -396,7 +411,7 @@ export const TOOL_SURFACE: readonly ToolRegistration[] = [
   {
     name: 'settle_task',
     label: 'Settle Task',
-    description: 'Settles this session\'s own TASK once its merge has landed in the BASE_BRANCH: re-verifies from git that the TASK is mergeable and its branch is an ancestor of that branch, then rewrites the state to merged, removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
+    description: 'Settles this session\'s own TASK once its merge has landed in the BASE_BRANCH: re-verifies from git that the TASK is mergeable and its branch is an ancestor of that branch, then rewrites the state to merged, fires one best-effort scheduling pass against the queue root — detached, so it survives the teardown — removes the TASK\'s worktree, and kills this session through a delayed reaper. Refuses, touching nothing, when either condition fails.',
     parameters: SETTLE_TASK_PARAMETERS,
   },
 ]
@@ -517,7 +532,7 @@ export function createToolCore(options?: { readonly scheduleActions?: ScheduleAc
     settle_task: async () => {
       const envResult = resolveReportEnv(process.env)
       if (!envResult.ok) return envResult
-      return runSettleTask(envResult.env, options?.fireSchedulingPass)
+      return runSettleTask(envResult.env, options?.fireSchedulingPass ?? realFireSchedulingPass)
     },
     call(tool, args, cwd = process.cwd()) {
       // Read through the object's own field, never a closure copy: a rule changed on the core

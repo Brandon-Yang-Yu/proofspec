@@ -55,9 +55,11 @@ export type FireSchedulingPass = (plan: SchedulingPassPlan) => void | Promise<vo
 /**
  * Settles one TASK once both conditions hold, refusing as a value and touching nothing when
  * either fails. Performed in order — the state word first, because it is the fact the rest
- * of the queue keys on (a hold releases on `merged`; the pruner waits for it); then the
- * worktree and the session, which are residue — the session killed by the reaper inside
- * `teardownTask`, a short delay after this call has already answered.
+ * of the queue keys on (a hold releases on `merged`; the pruner waits for it); then the one
+ * scheduling pass a successful settle fires, before anything is torn down so the pass finds
+ * the queue exactly as the landing left it; then the worktree and the session, which are
+ * residue — the session killed by the reaper inside `teardownTask`, a short delay after this
+ * call has already answered.
  */
 export async function settleTask(options: { readonly queueRoot: string; readonly task: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<SettleResult> {
   const manifest = await manifestFor(options.queueRoot, options.task)
@@ -77,11 +79,33 @@ export async function settleTask(options: { readonly queueRoot: string; readonly
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its branch ${manifest.branch} has not landed in ${base}` }
   }
   await writeState(options.queueRoot, options.task, 'merged')
+  const finding = await fireSchedulingPass(options)
   await teardownTask(options.queueRoot, options.task)
-  return { ok: true, task: options.task }
+  return finding === undefined ? { ok: true, task: options.task } : { ok: true, task: options.task, finding }
+}
+
+/** Fires the settle's one scheduling pass and answers what it reported: nothing when the
+ *  pass was started, the failure as a finding when it could not even be started — sync or
+ *  async. The fire is best-effort by contract (a later pass repairs the queue), so a failure
+ *  is caught and carried, never thrown: the landing is already settled, and a pass that
+ *  cannot start must not un-settle it. With no action given, nothing fires — the shared
+ *  settle also serves the pass's own backstop caller, and a pass firing a pass from inside
+ *  a pass serves nothing. */
+async function fireSchedulingPass(options: { readonly queueRoot: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<string | undefined> {
+  if (options.fireSchedulingPass === undefined) return undefined
+  try {
+    await options.fireSchedulingPass(schedulingPassFor(options.queueRoot))
+    return undefined
+  } catch (error) {
+    return `the scheduling pass could not be started: ${messageOf(error)}`
+  }
 }
 
 /** The state word as a refusal names it — a word in quotes, and a missing file named as missing. */
 function describe(word: string | undefined): string {
   return word === undefined ? 'missing' : `"${word}"`
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
