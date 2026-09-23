@@ -240,7 +240,11 @@ it('kills the settled TASK\'s tmux session on the dedicated server', async () =>
     PROOFSPEC_REAP_SOCKET: derivedSocketFor('/repo'),
     PROOFSPEC_REAP_TASK: 'a',
   })
-  expect(reaperFor('a', '/repo').args).toEqual(['-c', expect.stringContaining('tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"')])
+  // The script itself, exactly — not a substring of it: the whole line is the STANDARD's
+  // own words, and a script that also ran a bare `tmux kill-session` on the user's default
+  // server would keep every substring check green while doing the machine-global harm
+  // this requirement exists to prevent.
+  expect(reaperFor('a', '/repo').args).toEqual(['-c', 'sleep "$PROOFSPEC_REAP_SECONDS" && exec tmux -L "$PROOFSPEC_REAP_SOCKET" kill-session -t "$PROOFSPEC_REAP_TASK"'])
 
   // And on disk, with the two spellings manufactured rather than inherited from the
   // machine's own tmpdir: a symlinked alias of the root names the same queue, the start
