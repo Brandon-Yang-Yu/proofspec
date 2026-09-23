@@ -650,14 +650,17 @@ it('derives the default socket from the queue root, so two repos never share a s
   // And one path is one repo however it is spelled: a symlinked alias of a real root
   // names the same queue, and the same queue derives the same name. A derivation hashing
   // the spelling as handed would move the name with the alias and fail here, on any
-  // machine, with no reliance on the machine's own symlinked tmpdir.
+  // machine, with no reliance on the machine's own symlinked tmpdir. Every command of the
+  // build is held to it, never the kill's alone — the claim says every command.
   const holder = await mkdtemp(join(tmpdir(), 'proofspec-socket-spelling-'))
   try {
     const root = join(holder, 'root')
     await mkdir(root)
     const alias = join(holder, 'alias')
     symlinkSync(root, alias)
-    expect(socketForRoot(alias)).toBe(socketForRoot(root))
+    const byRoot = tmuxSessionCommands('a', { worktree: join(root, '.proofspec/worktrees/a'), queueRoot: root, systemPrompt: '' }).map(socketOf)
+    const byAlias = tmuxSessionCommands('a', { worktree: join(alias, '.proofspec/worktrees/a'), queueRoot: alias, systemPrompt: '' }).map(socketOf)
+    expect(byAlias).toEqual(byRoot)
   } finally {
     await rm(holder, { recursive: true, force: true })
   }
