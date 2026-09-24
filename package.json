@@ -42,6 +42,7 @@
   "files": [
     "dist",
     "src",
+    ".claude/agents",
     ".pi/agents",
     ".pi/extensions"
   ],

@@ -433,36 +433,98 @@ export async function tmuxStartSession(cwd: string, task: string): Promise<void>
   await runOrThrow(start)
 }
 
-/** Where the queue root's own checkout ships the heartbeat CLI entry — one repo-relative
- *  path, so the hook command naming it can never drift from the file it names. */
-const HEARTBEAT_ENTRY_PATH = ['src', 'mcp', 'heartbeat.ts'] as const
+/** Where ProofSpec's own checkout ships the heartbeat CLI entry — TypeScript source,
+ *  so the hook command naming it also carries the transform flag node needs to run it. */
+const CHECKOUT_HEARTBEAT_ENTRY_PATH = ['src', 'mcp', 'heartbeat.ts'] as const
 
-/** The command line every Claude Code hook runs: the heartbeat CLI entry out of the queue
- *  root's own checkout, the same freshness rule the MCP config carries — run from the main
- *  checkout, never the TASK's own branch's possibly stale copy. */
+/** Where an installed ProofSpec package ships the built heartbeat CLI entry — the same
+ *  built-JavaScript rule `INSTALLED_SERVER_ENTRY_PATH` carries: node strips no types from
+ *  a `.ts` file under `node_modules`, so a project that installed ProofSpec has no source
+ *  entry it can run. */
+const INSTALLED_HEARTBEAT_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'heartbeat.js'] as const
+
+/** The command line every Claude Code hook runs: the heartbeat CLI entry the queue root
+ *  holds — that checkout's own TypeScript entry when the root is ProofSpec's own checkout,
+ *  the installed package's built entry otherwise — the same two-kind rule and freshness
+ *  rule the MCP config carries: run from the queue root, never the TASK's own branch's
+ *  possibly stale copy. */
 function heartbeatHookCommand(queueRoot: string): string {
-  return `node --experimental-transform-types ${join(queueRoot, ...HEARTBEAT_ENTRY_PATH)}`
+  const args = isProofspecCheckout(queueRoot)
+    ? ['--experimental-transform-types', join(queueRoot, ...CHECKOUT_HEARTBEAT_ENTRY_PATH)]
+    : [join(queueRoot, ...INSTALLED_HEARTBEAT_ENTRY_PATH)]
+  return `node ${args.join(' ')}`
+}
+
+/** The events Claude Code reports a session's moves through — the hook-bearing
+ *  counterparts of the `pi` transport's observable moves, and the four events a dispatch
+ *  wires the heartbeat entry to. */
+const REPORTED_MOVE_EVENTS = ['UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
+
+/** The settings file a dispatched Claude Code session reads its hooks from, relative to
+ *  the TASK's worktree. */
+const CLAUDE_SETTINGS_PATH = ['.claude', 'settings.json'] as const
+
+/** The settings standing in the TASK's worktree, or nothing while none stands. A file
+ *  that does not parse reads as no settings at all — a `.claude/settings.json` Claude
+ *  Code itself could not load carries no keys worth preserving, and the heartbeat's
+ *  wiring must not be held hostage to it. */
+async function readClaudeSettings(worktree: string): Promise<unknown> {
+  try {
+    return JSON.parse(await readFile(join(worktree, ...CLAUDE_SETTINGS_PATH), 'utf8'))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' || error instanceof SyntaxError) return undefined
+    throw error
+  }
+}
+
+/** A JSON object, as opposed to an array, a string, or any other JSON value. */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Whether any group under one event already carries a command hook running `command` —
+ *  the shape a dispatch checks before appending its own group, so a re-dispatch of a TASK
+ *  whose worktree is reused adds no second copy of the heartbeat hook. */
+function carriesCommandHook(groups: readonly unknown[], command: string): boolean {
+  return groups.some(group => {
+    if (!isJsonObject(group) || !Array.isArray(group.hooks)) return false
+    return group.hooks.some(hook => isJsonObject(hook) && hook.command === command)
+  })
+}
+
+/** The hook wiring merged into the settings already standing: every key outside `hooks`
+ *  and every event's existing groups stand as they were, and the heartbeat's own group
+ *  joins each reported-move event — appended when the event does not already run the
+ *  heartbeat's command, left alone when it does. */
+function mergeHeartbeatHookSettings(
+  existing: unknown,
+  hook: { readonly type: 'command'; readonly command: string },
+): Record<string, unknown> {
+  const base = isJsonObject(existing) ? existing : {}
+  const hooks = isJsonObject(base.hooks) ? base.hooks : {}
+  const mergedHooks: Record<string, unknown> = { ...hooks }
+  for (const event of REPORTED_MOVE_EVENTS) {
+    const groups = Array.isArray(hooks[event]) ? hooks[event] : []
+    mergedHooks[event] = carriesCommandHook(groups, hook.command) ? groups : [...groups, { hooks: [hook] }]
+  }
+  return { ...base, hooks: mergedHooks }
 }
 
 /**
  * Writes the hook wiring a dispatched Claude Code session runs with: `.claude/settings.json`
  * in the TASK's worktree, running the heartbeat CLI entry on every event the harness reports
- * a session's move through. The `pi` transport needs no wiring of its own — its extension
- * subscribes the same write to its own events — so this file is written only for `claude`.
+ * a session's move through. Merged, never replaced: the worktree's settings file is the
+ * project's own committed one — a project may wire its own hooks there beside whatever a
+ * session adds — and the executor commits the worktree's file, so a replacement would ride
+ * the TASK's own merge into the project's history as an erasure of its settings. The `pi`
+ * transport needs no wiring of its own — its extension subscribes the same write to its own
+ * events — so this file is written only for `claude`.
  */
 async function writeClaudeHookSettings(worktree: string, queueRoot: string): Promise<void> {
-  const hook = { type: 'command', command: heartbeatHookCommand(queueRoot) }
-  const oneEvent = { hooks: [hook] }
-  const settings = {
-    hooks: {
-      UserPromptSubmit: [oneEvent],
-      PreToolUse: [oneEvent],
-      PostToolUse: [oneEvent],
-      Stop: [oneEvent],
-    },
-  }
+  const hook = { type: 'command', command: heartbeatHookCommand(queueRoot) } as const
+  const settings = mergeHeartbeatHookSettings(await readClaudeSettings(worktree), hook)
   await mkdir(join(worktree, '.claude'), { recursive: true })
-  await writeFile(join(worktree, '.claude', 'settings.json'), `${JSON.stringify(settings, null, 2)}\n`)
+  await writeFile(join(worktree, ...CLAUDE_SETTINGS_PATH), `${JSON.stringify(settings, null, 2)}\n`)
 }
 
 /** Runs a command, ignoring whether it succeeded — `tmux kill-session` on a name with no

@@ -1,7 +1,7 @@
 // Capability: mcp
 
 import { spawn } from 'node:child_process'
-import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative as relativePath, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,10 +30,34 @@ afterEach(() => {
  *  harness fires it, environment and all. */
 const HEARTBEAT_ENTRY = fileURLToPath(new URL('../../src/mcp/heartbeat.ts', import.meta.url))
 
-/** Where the entry ships inside a checkout of this product — the one repo-relative path a
- *  conforming hook command may name, pinned by the intent ("the heartbeat CLI entry under
- *  src/mcp/"). */
+/** Where the entry ships inside a checkout of this product — the repo-relative path a
+ *  conforming hook command names when the queue root is that checkout (an installed
+ *  project's root names its built copy instead, pinned by the installed-root scenario
+ *  below). */
 const SHIPPED_ENTRY_RELATIVE = relativePath(resolve(dirname(HEARTBEAT_ENTRY), '..', '..'), HEARTBEAT_ENTRY)
+
+/** Where an installed ProofSpec package ships the built heartbeat CLI entry — the path a
+ *  conforming hook command names when the queue root is a project that installed
+ *  ProofSpec, not the checkout itself. */
+const INSTALLED_ENTRY_RELATIVE = join('node_modules', 'proofspec', 'dist', 'mcp', 'heartbeat.js')
+
+/** A stand-in for the built heartbeat entry an installed package ships at that path: the
+ *  same write the real entry performs, as plain JavaScript a hook's `node` runs with no
+ *  transform flag. The real entry's own behavior is proven by the same-write scenarios
+ *  below, which run the real TypeScript entry as a process; this stand-in proves what only
+ *  the installed path can — that the hook's command runs the file an install puts there. */
+const BUILT_HEARTBEAT_STANDIN = `import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+const queueRoot = process.env.PROOFSPEC_QUEUE_ROOT
+const task = process.env.PROOFSPEC_TASK
+if (queueRoot !== undefined && task !== undefined) {
+  try {
+    await writeFile(join(queueRoot, '.proofspec', 'dispatch', task, 'heartbeat'), new Date().toISOString())
+  } catch (error) {
+    if (!('code' in error) || error.code !== 'ENOENT') throw error
+  }
+}
+`
 
 /** How one drive of the entry ended: its exit code, the stderr that names the cause in a
  *  failing assertion's message, and the throwaway working directory the entry ran in. */
@@ -257,6 +281,27 @@ async function readSettings(path: string): Promise<unknown> {
   }
 }
 
+/** Every command the settings' hooks run for one event, in order — the flattened list
+ *  behind both "the project's own hook stands" and "no second copy was added". */
+function hookCommands(settings: unknown, event: string): readonly string[] {
+  if (typeof settings !== 'object' || settings === null) return []
+  const hooks = (settings as { hooks?: unknown }).hooks
+  if (typeof hooks !== 'object' || hooks === null) return []
+  const groups = (hooks as Record<string, unknown>)[event]
+  if (!Array.isArray(groups)) return []
+  const commands: string[] = []
+  for (const group of groups) {
+    if (typeof group !== 'object' || group === null) continue
+    const hookList = (group as { hooks?: unknown }).hooks
+    if (!Array.isArray(hookList)) continue
+    for (const hook of hookList) {
+      const command = typeof hook === 'object' && hook !== null ? (hook as { command?: unknown }).command : undefined
+      if (typeof command === 'string') commands.push(command)
+    }
+  }
+  return commands
+}
+
 /** Runs `action` with a stand-in `tmux` first on `PATH` — one that accepts every command and
  *  starts nothing. The dispatch's own start then runs for real (worktree, persona, commands
  *  built) while no server and no harness is ever started, so the wiring a dispatched session
@@ -397,14 +442,53 @@ it('changes only the heartbeat file, leaving the rest of the entry exactly as it
 })
 
 // Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
-// Scenario: The Claude Code hooks run the heartbeat CLI entry on the session's moves, refreshing the TASK's heartbeat
+// Scenario: When the queue root is ProofSpec's own checkout, the hooks run that checkout's own src/mcp/heartbeat.ts
+// GIVEN a queue root that is ProofSpec's own checkout, and a Claude Code executor session started for a TASK the way this product's dispatch starts one
+// WHEN the session's hook wiring is read
+// THEN the move-bearing hooks name that checkout's own src/mcp/heartbeat.ts entry
+it('wires the checkout\'s own src/mcp/heartbeat.ts entry when the queue root is ProofSpec\'s own checkout', async () => {
+  // The queue root is pinned as ProofSpec's own checkout by its package.json name, the one
+  // fact the entry choice reads. No live `claude` run and no fired hook here — this case
+  // pins which entry the wiring names; the installed-root scenario below is the one that
+  // fires a hook for real.
+  const repo = await makeGitRepo({
+    'a.txt': 'a',
+    'package.json': `${JSON.stringify({ name: 'proofspec' }, null, 2)}\n`,
+    '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
+  })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+
+  await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
+
+  const worktree = join(repo.root, '.proofspec', 'worktrees', 'a')
+  const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
+  expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
+  if (settings === undefined) return
+  // The claim names the hooks — plural, every event the harness reports a move through — so
+  // each of the four events is pinned to exactly the checkout's own entry, not only the
+  // first hook a walk through the file finds.
+  const checkoutCommand = `node --experimental-transform-types ${join(repo.root, SHIPPED_ENTRY_RELATIVE)}`
+  for (const event of REPORTED_MOVE_EVENTS) {
+    expect(
+      hookCommands(settings, event),
+      `the ${event} hooks do not run exactly the checkout's own src/mcp/heartbeat.ts entry`,
+    ).toEqual([checkoutCommand])
+  }
+})
+
+// Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
+// Scenario: When the queue root is a project that installed ProofSpec, the hooks run the installed package's built heartbeat entry, refreshing the TASK's heartbeat on a reported move
 // GIVEN the environment naming a TASK's queue entry, and a Claude Code executor session started for that TASK the way this product's dispatch starts one
 // WHEN the session makes a move the harness reports
-// THEN the hooks the harness fires on that move run the heartbeat CLI entry, and the TASK's heartbeat is refreshed in its queue entry
+// THEN the hooks the harness fires on that move run the installed package's built heartbeat entry, and the TASK's heartbeat is refreshed in its queue entry
 // No live `claude` run: the dispatch's own start stands the wiring up with only the terminal
 // multiplexer stood in for, one reported move is driven the way the harness drives its hooks,
 // and the heartbeat is read.
-it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, refreshing the TASK\'s heartbeat', async () => {
+it('runs the installed package\'s built heartbeat entry from the Claude Code hooks on a reported move, refreshing the TASK\'s heartbeat', async () => {
+  // The queue root is a project that installed ProofSpec: no package.json names `proofspec`, so
+  // the wiring must name the installed package's built entry — the copy an install actually
+  // puts under the queue root, run by plain `node` because it is built JavaScript.
   const repo = await makeGitRepo({
     'a.txt': 'a',
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
@@ -424,18 +508,21 @@ it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, 
   expect(hook, 'no move-bearing hook runs the heartbeat CLI entry').toBeDefined()
   if (anyHook === undefined || hook === undefined) return
 
-  // The STANDARD's own sentence is "the Claude Code harness's hooks call it" — the hook
-  // must run the heartbeat CLI entry itself, not refresh a heartbeat by its own means. So
-  // the command has to name the entry file at the location this product ships it (the same
-  // repo-relative path the real entry holds here), and that file — planted from this repo's
-  // real entry — is what runs when the hook fires. A command that writes an instant by its
-  // own means, or names an entry-shaped path where no file will ever ship, fails here.
+  // The file the hook runs is the installed package's built entry — a build output this
+  // repo's tests never assume stands, so what stands at that path in the proof is a
+  // stand-in performing the same write the real entry performs (the same-write scenarios
+  // above run the real TypeScript entry itself), planted beside the package.json an
+  // install ships that marks the package ESM. The STANDARD's own sentence is "the Claude
+  // Code harness's hooks call it": the hook must run the file at the installed path, and a
+  // hook that refreshes the heartbeat by any other means, or names a path where nothing
+  // runnable will ever ship, fails here.
   expect(
     relativePath(repo.root, hook.entryPath),
-    `the hook names the entry at a path this product does not ship (${hook.command})`,
-  ).toBe(SHIPPED_ENTRY_RELATIVE)
+    `the hook names the entry at a path an installed package does not ship (${hook.command})`,
+  ).toBe(INSTALLED_ENTRY_RELATIVE)
   await mkdir(dirname(hook.entryPath), { recursive: true })
-  await copyFile(HEARTBEAT_ENTRY, hook.entryPath)
+  await writeFile(hook.entryPath, BUILT_HEARTBEAT_STANDIN)
+  await writeFile(join(repo.root, 'node_modules', 'proofspec', 'package.json'), `${JSON.stringify({ name: 'proofspec', type: 'module' }, null, 2)}\n`)
 
   const fired = await fireHook({ worktree, event: hook.event, command: hook.command, session: { queueRoot: repo.root, task: 'a' } })
 
@@ -445,3 +532,84 @@ it('runs the heartbeat CLI entry from the Claude Code hooks on a reported move, 
     `the hook the harness fires on a reported move refreshed no heartbeat in the TASK's queue entry (exited ${fired.code}: ${fired.stderr.trim()})`,
   ).toBe(true)
 }, 20000)
+
+// Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
+// Scenario: The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing
+// GIVEN a TASK whose worktree's committed .claude/settings.json carries the project's own settings and its own hooks
+// WHEN a Claude Code executor session is started for that TASK the way this product's dispatch starts one
+// THEN the file stands with every one of the project's settings and hook groups as it was, the heartbeat's hook group joined to each reported-move event's groups
+it('joins the settings already standing in the TASK\'s worktree, erasing nothing', async () => {
+  // The project's own committed settings — a key the wiring never touches (`permissions`),
+  // and its own hook group on one of the four events the wiring does touch — exactly the
+  // shape a real project's `.claude/settings.json` holds beside whatever a session adds.
+  const ownHookCommand = '"$CLAUDE_PROJECT_DIR"/scripts/enter-worktree.sh'
+  const repo = await makeGitRepo({
+    'a.txt': 'a',
+    '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
+    '.claude/settings.json': `${JSON.stringify({
+      permissions: { allow: ['Bash(git add:*)'] },
+      hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: ownHookCommand }] }] },
+    }, null, 2)}\n`,
+  })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+
+  await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
+
+  const worktree = join(repo.root, '.proofspec', 'worktrees', 'a')
+  const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
+  expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
+  if (settings === undefined) return
+
+  const heartbeatCommand = `node ${join(repo.root, INSTALLED_ENTRY_RELATIVE)}`
+  const heartbeatGroup = { hooks: [{ type: 'command', command: heartbeatCommand }] }
+  const ownGroup = { hooks: [{ type: 'command', command: ownHookCommand }] }
+  // One whole-file equality rather than per-key sampling: the claim promises every one of the
+  // project's settings and hook groups stands, and only the whole object pinned can prove
+  // "every" — an implementation preserving the sampled keys but dropping another would pass
+  // a sampled read.
+  expect(settings, 'the merged settings are not exactly the project\'s own settings joined by the heartbeat\'s hook').toEqual({
+    permissions: { allow: ['Bash(git add:*)'] },
+    hooks: {
+      PreToolUse: [ownGroup, heartbeatGroup],
+      UserPromptSubmit: [heartbeatGroup],
+      PostToolUse: [heartbeatGroup],
+      Stop: [heartbeatGroup],
+    },
+  })
+})
+
+// Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
+// Scenario: A dispatch into a worktree already wired adds no second copy of the heartbeat hook
+// GIVEN a TASK whose worktree's settings already carry the heartbeat's hook wiring
+// WHEN a second session start runs for that TASK the way this product's dispatch starts one
+// THEN each reported-move event's hook groups stand as they were — no second copy of the heartbeat's hook
+it('adds no second copy of the heartbeat hook when a re-dispatch finds the wiring already standing', async () => {
+  const repo = await makeGitRepo({
+    'a.txt': 'a',
+    '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
+  })
+  await enterTask(repo, 'a', { edit: 'a.txt' })
+  process.env.PROOFSPEC_EXECUTOR = 'claude'
+
+  // Two starts for one TASK — the shape a retry after a dead first session takes, with the
+  // worktree (and its settings file) reused rather than recreated.
+  await withFakeTmux(async () => {
+    await tmuxStartSession(repo.root, 'a')
+    await tmuxStartSession(repo.root, 'a')
+  })
+
+  const worktree = join(repo.root, '.proofspec', 'worktrees', 'a')
+  const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
+  expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
+  if (settings === undefined) return
+  // Equality with the wiring the first dispatch wrote — not a count — because the claim
+  // promises the groups stood as they were, and a count would let a rewritten command pass.
+  const heartbeatCommand = `node ${join(repo.root, INSTALLED_ENTRY_RELATIVE)}`
+  for (const event of REPORTED_MOVE_EVENTS) {
+    expect(
+      hookCommands(settings, event),
+      `the ${event} hooks did not stand as they were after the re-dispatch`,
+    ).toEqual([heartbeatCommand])
+  }
+})
