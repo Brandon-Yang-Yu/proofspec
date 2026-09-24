@@ -160,7 +160,7 @@ still exists, because the queue lives there.
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
-- "A settle whose own current folder is removed right after the pass starts still starts a pass that runs against the queue root" → tests/progress/settle.test.ts
+- "A settle whose own current folder is removed right after the pass starts still starts the pass with its working folder set to the queue root, and the pass survives that removal" → tests/progress/settle.test.ts
 - "A settle whose scheduling pass cannot even be started still succeeds, reporting the failure as a finding" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
