@@ -57,7 +57,8 @@ that copy may be out of date. The queue root holds the current tools. A session 
 current tools to report its state and settle its TASK.
 
 <!-- scenarios: generated -->
-- "The MCP server a session loads runs from the queue root's own checkout, never the TASK's worktree" → tests/mcp/checkout.test.ts
+- "When the queue root is ProofSpec's own checkout, the MCP server a session loads runs from that checkout's own src/mcp/serve.ts, never the TASK's worktree's" → tests/mcp/checkout.test.ts
+- "When the queue root is a project that installed ProofSpec, the MCP server a session loads runs from the installed package's built server, never the TASK's worktree's" → tests/mcp/checkout.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
