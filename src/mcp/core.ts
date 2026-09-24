@@ -281,7 +281,7 @@ function realScheduleActions(cwd: string): ScheduleActions {
  *  that cannot even happen surfaces as the ok limb's finding, never a failed settle. */
 function realFireSchedulingPass(plan: SchedulingPassPlan): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(plan.command, [...plan.args], { detached: true, stdio: 'ignore' })
+    const child = spawn(plan.command, [...plan.args], { cwd: plan.cwd, detached: true, stdio: 'ignore' })
     child.once('error', reject)
     child.once('spawn', () => resolve())
     child.unref()
