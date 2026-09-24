@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,9 +113,15 @@ const PROGRESS_EXTENSION_PATH = ['.pi', 'extensions', 'progress.ts'] as const
  *  drifting apart — they version together. */
 const SUBAGENT_EXTENSION_PATH = ['node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'] as const
 
-/** Where the queue root's own checkout ships the stdio MCP server entry — one repo-relative
- *  path, so the config naming it can never drift from the file it names. */
-const MCP_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
+/** Where ProofSpec's own checkout ships the stdio MCP server entry — TypeScript source,
+ *  so the config naming it also carries the transform flag node needs to run it. */
+const CHECKOUT_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
+
+/** Where an installed ProofSpec package ships the built stdio MCP server entry. Built
+ *  JavaScript, not `node_modules/proofspec/src/mcp/serve.ts`: node strips no types from a
+ *  `.ts` file under `node_modules`, so a project that installed ProofSpec has no source
+ *  entry it can run. */
+const INSTALLED_SERVER_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'serve.js'] as const
 
 /** The two harnesses an executor session can run in. Subscription auth lives only inside
  *  the Claude Code harness, and `pi` is the default — the choice is operational
@@ -278,7 +284,7 @@ const RUNNER_SCRIPT =
 /** The same one line for the `claude` harness: the same executor persona
  *  (`--append-system-prompt`, read from the same prompt file), `--dangerously-skip-permissions`
  *  because an unattended session has nobody attached to answer an approval, and a generated
- *  MCP config naming the queue root's own MCP server — the transport that puts the five
+ *  MCP config naming the MCP server the queue root holds — the transport that puts the five
  *  tools in the session's hands. The config rides a file for the same size reason every
  *  other payload does, and its path — not its contents — is what the environment carries.
  *  The kickoff rides FIRST, before every flag: `--mcp-config` takes space-separated values,
@@ -287,13 +293,31 @@ const RUNNER_SCRIPT =
 const CLAUDE_RUNNER_SCRIPT =
   'exec claude "$PROOFSPEC_KICKOFF" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG"'
 
-/** A Claude Code MCP config naming the queue root's own server — the one config every
- *  Claude Code session this product starts is handed (`specs/schedule.md`, `specs/mcp.md`).
- *  The server it names runs from the queue root's own checkout, never the TASK's worktree,
- *  for the same freshness reason the `pi` invocation pins its `--extension`. */
+/** Whether the queue root is ProofSpec's own checkout rather than a project that installed
+ *  ProofSpec — read off the root's `package.json` name, the one fact that names the checkout
+ *  itself rather than anything installed under it. No readable `package.json`, or one whose
+ *  name is anything else, reads as an installing project: the config then names the built
+ *  server under `node_modules`, the only ProofSpec copy such a root holds. */
+function isProofspecCheckout(queueRoot: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(queueRoot, 'package.json'), 'utf8')) as { name?: unknown }
+    return manifest.name === 'proofspec'
+  } catch {
+    return false
+  }
+}
+
+/** A Claude Code MCP config naming the server the queue root actually holds (`specs/mcp.md`)
+ *  — always under the queue root, never a copy inside the TASK's worktree, for the same
+ *  freshness reason the `pi` invocation pins its `--extension`. ProofSpec's own checkout
+ *  names its TypeScript entry under `--experimental-transform-types`; any other queue root
+ *  names the installed package's built server, run by plain `node` because it is built
+ *  JavaScript. */
 function mcpConfigFor(queueRoot: string): string {
-  const server = { command: 'node', args: ['--experimental-transform-types', join(queueRoot, ...MCP_SERVER_ENTRY_PATH)] }
-  return `${JSON.stringify({ mcpServers: { proofspec: server } }, null, 2)}\n`
+  const args = isProofspecCheckout(queueRoot)
+    ? ['--experimental-transform-types', join(queueRoot, ...CHECKOUT_SERVER_ENTRY_PATH)]
+    : [join(queueRoot, ...INSTALLED_SERVER_ENTRY_PATH)]
+  return `${JSON.stringify({ mcpServers: { proofspec: { command: 'node', args } } }, null, 2)}\n`
 }
 
 /** The files a session start hands its harness through, and their paths: the system prompt
