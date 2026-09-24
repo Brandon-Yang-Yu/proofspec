@@ -3,11 +3,30 @@
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { check } from '../../src/cli/index.ts'
-import { CAPABILITY, cleanupRepos, makeRepo, specFile, testFile } from './support.ts'
+import { CAPABILITY, cleanupRepos, makeRepo, REQUIREMENT, specFile, testFile } from './support.ts'
 
 afterEach(cleanupRepos)
 
 const SCENARIOS = ['A first behavior', 'A second behavior']
+
+/**
+ * A proof file spelled `.test.tsx` whose it bodies hold real JSX, so a discovery that found
+ * the file but a scan that could not parse TSX would still fail the check that reads it.
+ */
+function tsxTestFile(scenarios: readonly string[]): string {
+  const blocks = scenarios.map(scenario =>
+    [
+      `// Requirement: ${REQUIREMENT}`,
+      `// Scenario: ${scenario}`,
+      `// THEN the demonstrated claim holds`,
+      `it(${JSON.stringify(scenario)}, () => {`,
+      `  const node = <button type="button">{${JSON.stringify(scenario)}}</button>`,
+      `  expect(node.props.type).toBe('button')`,
+      `})`,
+    ].join('\n'),
+  )
+  return [`// Capability: ${CAPABILITY}`, '', ...blocks].join('\n')
+}
 
 // Requirement: It runs in a conventional repo with no configuration
 // Scenario: The conventional layout is checked with no locations given
@@ -41,6 +60,27 @@ it('checks a repo whose files sit in unconventional places', async () => {
   })
 
   const outcome = await check({ cwd: repo.root, specsDir: 'docs/spec', testsDir: 'test' })
+
+  expect(outcome.kind).toBe('checked')
+  if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')
+  expect(outcome.report.status).toBe('pass')
+})
+
+// Requirement: It runs in a conventional repo with no configuration
+// Scenario: Component suites named .test.tsx are discovered like any other test
+// GIVEN a repo whose recorded proofs live in a .test.tsx file holding JSX, under tests/
+// WHEN the check runs on the conventional layout
+// THEN the verdict is agreement, which it could only reach by discovering and parsing the
+//      .test.tsx file — a discovery that skipped it would report the recorded scenarios
+//      as declared but never proven
+it('checks a repo whose proofs sit in a discovered .test.tsx file', async () => {
+  const testPath = 'tests/demo.test.tsx'
+  const repo = await makeRepo({
+    [`specs/${CAPABILITY}.md`]: specFile({ recorded: SCENARIOS, testPath }),
+    [testPath]: tsxTestFile(SCENARIOS),
+  })
+
+  const outcome = await check({ cwd: repo.root })
 
   expect(outcome.kind).toBe('checked')
   if (outcome.kind !== 'checked') throw new Error('expected a checked outcome')

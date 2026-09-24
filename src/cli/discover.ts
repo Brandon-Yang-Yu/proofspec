@@ -27,8 +27,14 @@ export type Discovery<Found> =
 
 /** The test files under a directory, walked recursively so nested suites are found too. */
 export async function readTestFiles(cwd: string, testsDir: string): Promise<Discovery<SourceFile>> {
-  return readFiles(cwd, testsDir, { recursive: true, suffix: '.test.ts' })
+  return readFiles(cwd, testsDir, { recursive: true, suffixes: TEST_SUFFIXES })
 }
+
+/**
+ * A repo's proofs sit in `.test.ts` and `.test.tsx` alike: component suites render JSX, and
+ * the scan parses either from the filename's extension, so both spellings are conventional.
+ */
+const TEST_SUFFIXES = ['.test.ts', '.test.tsx'] as const
 
 /** The capability files directly under a directory, each named for the capability it holds. */
 export async function readSpecFiles(cwd: string, specsDir: string): Promise<Discovery<SpecFileRead>> {
@@ -46,7 +52,7 @@ export async function readSpecFiles(cwd: string, specsDir: string): Promise<Disc
 async function readFiles(
   cwd: string,
   dir: string,
-  match: { readonly recursive: boolean; readonly suffix: string },
+  match: { readonly recursive: boolean; readonly suffix?: string; readonly suffixes?: readonly string[] },
 ): Promise<Discovery<SourceFile>> {
   // `resolve` honours a location given as an absolute path, where `join` would glue it
   // onto the repo root and read from a directory nobody named.
@@ -54,7 +60,8 @@ async function readFiles(
   const names = await listDir(base, { recursive: match.recursive })
   if (names === undefined) return { ok: false, reason: `${dir} could not be read` }
 
-  const matching = names.filter(name => name.endsWith(match.suffix)).sort(compareStrings)
+  const suffixes = match.suffixes ?? (match.suffix !== undefined ? [match.suffix] : [])
+  const matching = names.filter(name => suffixes.some(suffix => name.endsWith(suffix))).sort(compareStrings)
   const files = await Promise.all(
     matching.map(async (name): Promise<SourceFile> => ({
       // Reported relative to the repo root however the location was spelled, because the

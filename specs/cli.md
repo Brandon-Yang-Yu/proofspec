@@ -44,6 +44,7 @@ setting: there is no compiler to point at and no project to build.
 
 <!-- scenarios: generated -->
 - "Both locations can be pointed at where a repo keeps them" → tests/cli/locations.test.ts
+- "Component suites named .test.tsx are discovered like any other test" → tests/cli/locations.test.ts
 - "Locations given as absolute paths are read from exactly there" → tests/cli/locations.test.ts
 - "Tests given by the caller are read as they stand" → tests/cli/locations.test.ts
 - "The conventional layout is checked with no locations given" → tests/cli/locations.test.ts
