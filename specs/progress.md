@@ -129,7 +129,10 @@ ancestor of the BASE_BRANCH, fresh from git. Either condition failing, it SHALL 
 worktree, and the session stand exactly as they were. Both holding, it SHALL perform the
 settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its
 conventional path, kill its same-named tmux session on the dedicated server — the same
-settle a scheduling pass runs as its backstop (`specs/schedule.md`). The session kill SHALL
+settle a scheduling pass runs as its backstop (`specs/schedule.md`). The one scheduling
+pass a successful settle fires SHALL be started with its working folder set to the queue
+root. The plan the settle starts the pass from SHALL carry the queue root as that working
+folder — the same root the plan's `--dir` argument already names. The session kill SHALL
 go through a detached reaper process with a short delay, so the tool returns its result
 before the host session dies. The tool SHALL NOT prune the TASK's queue entry: pruning
 waits until no in-flight TASK's `blocked` still names it, a fact about the whole queue that
@@ -146,17 +149,25 @@ executor-triggered teardown safe at all. The session being killed is the very pr
 whose tool call this is, and a kill that took effect at once would cut the answer off
 before the caller ever saw whether the settle succeeded.
 
+The pass's working folder is fixed to the queue root because the settle removes the very
+folder its caller stands in: `settle_task` is called from inside the TASK's own worktree,
+and the settle's teardown deletes that worktree, so a pass started standing in that folder
+cannot be relied on to come up. The queue root is the folder the settle can be certain
+still exists, because the queue lives there.
+
 <!-- scenarios: generated -->
 - "A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
+- "A settle whose own current folder is removed right after the pass starts still starts a pass that runs against the queue root" → tests/progress/settle.test.ts
 - "A settle whose scheduling pass cannot even be started still succeeds, reporting the failure as a finding" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A successful settle fires one scheduling pass against the queue root, after the state word is rewritten and before the teardown" → tests/progress/settle.test.ts
 - "No refusal ever fires a scheduling pass" → tests/progress/settle.test.ts
 - "The pass a settle fires is the merge hooks' own scheduling command, started so the settle's teardown cannot take it with it" → tests/progress/settle.test.ts
+- "The plan the settle starts sets the queue root as the pass's working folder" → tests/progress/settle.test.ts
 - "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory" → tests/progress/settle.test.ts
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->
