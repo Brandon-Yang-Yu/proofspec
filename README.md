@@ -85,12 +85,13 @@ tools (`enqueue_task`, `census_in_flight`, `report_task_state`, `report_task_pha
 `settle_task`):
 
 ```sh
-mkdir -p .pi/agents .pi/extensions
+mkdir -p .pi/agents .pi/extensions .claude/agents
 cp node_modules/proofspec/.pi/agents/*.md .pi/agents/
 cp node_modules/proofspec/.pi/extensions/handoff.ts .pi/extensions/
 cp node_modules/proofspec/.pi/extensions/progress.ts .pi/extensions/
+cp node_modules/proofspec/.claude/agents/*.md .claude/agents/
 printf '.proofspec/dispatch/\n.proofspec/worktrees/\n' >> .gitignore
-git add .gitignore .pi package.json package-lock.json   # or pnpm-lock.yaml
+git add .gitignore .claude .pi package.json package-lock.json   # or pnpm-lock.yaml
 git commit -m "chore: adopt the ProofSpec docket pipeline"
 ```
 
@@ -99,7 +100,10 @@ branches from what is committed. Commit your tests too, if they are not yet. Onl
 queue and its worktrees are ignored — `.proofspec/reviews.jsonl`, the committed ledger
 of recorded reviews, stays committable. The personas ship as this repo runs them —
 written against its own conventions (pnpm scripts, a codebase-memory index, its agent
-rules); your copies in `.pi/agents/` are yours to edit.
+rules); your copies in `.pi/agents/` are yours to edit. The `.claude/agents/` copies
+are the same personas for Claude Code executor sessions (`PROOFSPEC_EXECUTOR=claude`):
+Claude Code reads its subagents from `.claude/agents/` the way `pi` reads them from
+`.pi/agents/` — edit both, or whichever harness you run.
 
 **3. Queue the retrofit TASK.** One ask is enough — there is no spec prose yet, so
 nothing needs a disposition review. First create the empty spec directory: the queue

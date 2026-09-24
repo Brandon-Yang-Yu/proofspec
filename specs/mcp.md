@@ -68,13 +68,40 @@ The CLI SHALL offer a heartbeat entry that resolves `PROOFSPEC_QUEUE_ROOT` and
 when either is unset — and performs the same heartbeat write the `pi` events trigger. It
 SHALL do nothing else. The Claude Code harness's hooks call it.
 
+The hooks a dispatched session wires SHALL run the entry the queue root holds: that
+checkout's own `src/mcp/heartbeat.ts` when the queue root is ProofSpec's own checkout,
+the installed package's built `node_modules/proofspec/dist/mcp/heartbeat.js` when it is
+a project that installed ProofSpec — the same two-kind rule the MCP server entry
+carries, and for the same freshness reason: run from the queue root, never the TASK's
+own worktree's possibly stale copy.
+
 One write, two triggers: the `pi` transport fires the write from its own events, and the
 Claude Code transport fires it from hooks that run this entry. The write is the one shared
 thing, so the `heartbeat` file means the same whichever harness the session runs in.
 
 <!-- scenarios: generated -->
-- "The Claude Code hooks run the heartbeat CLI entry on the session's moves, refreshing the TASK's heartbeat" → tests/mcp/heartbeat.test.ts
 - "The heartbeat CLI entry does nothing else" → tests/mcp/heartbeat.test.ts
 - "The heartbeat CLI entry performs the same heartbeat write the pi events trigger" → tests/mcp/heartbeat.test.ts
 - "The heartbeat CLI entry writes nothing when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/mcp/heartbeat.test.ts
+- "When the queue root is ProofSpec's own checkout, the hooks run that checkout's own src/mcp/heartbeat.ts" → tests/mcp/heartbeat.test.ts
+- "When the queue root is a project that installed ProofSpec, the hooks run the installed package's built heartbeat entry, refreshing the TASK's heartbeat on a reported move" → tests/mcp/heartbeat.test.ts
+<!-- /scenarios -->
+
+### Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
+
+The hook wiring a dispatched Claude Code session runs with SHALL be merged into the
+`.claude/settings.json` already standing in the TASK's worktree: every setting the file
+carries outside the four reported-move events SHALL stand exactly as it was, the heartbeat's
+hook group SHALL join each of those events' existing groups, and a dispatch into a worktree
+already wired SHALL add no second copy.
+
+The worktree's `.claude/settings.json` is the project's own committed file — a project may
+wire its own hooks there (an install hook, a worktree convention) beside whatever a session
+adds. A dispatch that replaces the file erases the project's settings, and the executor
+commits the worktree's file, so the erasure would ride the TASK's own merge into the
+project's history.
+
+<!-- scenarios: generated -->
+- "A dispatch into a worktree already wired adds no second copy of the heartbeat hook" → tests/mcp/heartbeat.test.ts
+- "The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing" → tests/mcp/heartbeat.test.ts
 <!-- /scenarios -->
