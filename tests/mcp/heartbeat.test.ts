@@ -464,13 +464,17 @@ it('wires the checkout\'s own src/mcp/heartbeat.ts entry when the queue root is 
   const worktree = join(repo.root, '.proofspec', 'worktrees', 'a')
   const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
   expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
-  const hook = settings === undefined ? undefined : entryHookFrom(settings, { worktree, queueRoot: repo.root })
-  expect(hook, 'no move-bearing hook runs the heartbeat CLI entry').toBeDefined()
-  if (hook === undefined) return
-  expect(
-    relativePath(repo.root, hook.entryPath),
-    `the hook names the entry at a path this checkout does not ship (${hook.command})`,
-  ).toBe(SHIPPED_ENTRY_RELATIVE)
+  if (settings === undefined) return
+  // The claim names the hooks — plural, every event the harness reports a move through — so
+  // each of the four events is pinned to exactly the checkout's own entry, not only the
+  // first hook a walk through the file finds.
+  const checkoutCommand = `node --experimental-transform-types ${join(repo.root, SHIPPED_ENTRY_RELATIVE)}`
+  for (const event of REPORTED_MOVE_EVENTS) {
+    expect(
+      hookCommands(settings, event),
+      `the ${event} hooks do not run exactly the checkout's own src/mcp/heartbeat.ts entry`,
+    ).toEqual([checkoutCommand])
+  }
 })
 
 // Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks
@@ -556,16 +560,23 @@ it('joins the settings already standing in the TASK\'s worktree, erasing nothing
   const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
   expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
   if (settings === undefined) return
-  const record = settings as Record<string, unknown>
-  expect(record.permissions, 'a setting outside hooks was erased').toEqual({ allow: ['Bash(git add:*)'] })
 
   const heartbeatCommand = `node ${join(repo.root, INSTALLED_ENTRY_RELATIVE)}`
-  // The project's own group stands first on the event it lived on — joined, not replaced —
-  // and the heartbeat's group stands on every reported-move event beside it.
-  expect(hookCommands(settings, 'PreToolUse'), 'the project\'s own PreToolUse hook was erased or reordered').toEqual([ownHookCommand, heartbeatCommand])
-  for (const event of ['UserPromptSubmit', 'PostToolUse', 'Stop'] as const) {
-    expect(hookCommands(settings, event), `the ${event} event carries more than the heartbeat\'s hook`).toEqual([heartbeatCommand])
-  }
+  const heartbeatGroup = { hooks: [{ type: 'command', command: heartbeatCommand }] }
+  const ownGroup = { hooks: [{ type: 'command', command: ownHookCommand }] }
+  // One whole-file equality rather than per-key sampling: the claim promises every one of the
+  // project's settings and hook groups stands, and only the whole object pinned can prove
+  // "every" — an implementation preserving the sampled keys but dropping another would pass
+  // a sampled read.
+  expect(settings, 'the merged settings are not exactly the project\'s own settings joined by the heartbeat\'s hook').toEqual({
+    permissions: { allow: ['Bash(git add:*)'] },
+    hooks: {
+      PreToolUse: [ownGroup, heartbeatGroup],
+      UserPromptSubmit: [heartbeatGroup],
+      PostToolUse: [heartbeatGroup],
+      Stop: [heartbeatGroup],
+    },
+  })
 })
 
 // Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
@@ -592,10 +603,13 @@ it('adds no second copy of the heartbeat hook when a re-dispatch finds the wirin
   const settings = await readSettings(join(worktree, '.claude', 'settings.json'))
   expect(settings, 'the dispatched Claude Code session carries no hooks config').toBeDefined()
   if (settings === undefined) return
+  // Equality with the wiring the first dispatch wrote — not a count — because the claim
+  // promises the groups stood as they were, and a count would let a rewritten command pass.
+  const heartbeatCommand = `node ${join(repo.root, INSTALLED_ENTRY_RELATIVE)}`
   for (const event of REPORTED_MOVE_EVENTS) {
     expect(
-      hookCommands(settings, event).length,
-      `the ${event} event carries more than the one heartbeat hook the re-dispatch left behind`,
-    ).toBe(1)
+      hookCommands(settings, event),
+      `the ${event} hooks did not stand as they were after the re-dispatch`,
+    ).toEqual([heartbeatCommand])
   }
 })
