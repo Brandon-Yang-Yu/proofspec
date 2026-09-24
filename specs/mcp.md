@@ -44,18 +44,21 @@ to point at. One core with two thin adapters is the shape that keeps that from s
 - "The pi adapter carries calls to the core unchanged, and answers back unchanged" → tests/mcp/adapter.test.ts
 <!-- /scenarios -->
 
-### Requirement: The MCP server runs from the queue root's own checkout, never the TASK's worktree
+### Requirement: The MCP server is the ProofSpec copy the queue root holds, never the TASK's worktree's
 
-The MCP server process SHALL be started from the queue root's own checkout, never from the
-TASK's own worktree.
+The MCP server a session loads SHALL be the copy of ProofSpec that the queue root holds.
+When the queue root is ProofSpec's own checkout, the server SHALL be that checkout's own
+`src/mcp/serve.ts`. When the queue root is a project that installed ProofSpec, the server
+SHALL be the installed package's built server, `node_modules/proofspec/dist/mcp/serve.js`
+under the queue root. The server SHALL NOT be any copy inside the TASK's own worktree.
 
-A freshly created worktree carries whatever copy of the tools the TASK's branch holds, and
-a TASK's branch is cut from `main` at some earlier, possibly stale point; the queue root's
-checkout is where the current tools live. A session that must report its state needs the
-current tools, not its branch's possibly stale copy.
+A TASK's worktree holds the tools as its branch had them when the branch was cut, and
+that copy may be out of date. The queue root holds the current tools. A session needs the
+current tools to report its state and settle its TASK.
 
 <!-- scenarios: generated -->
-- "The MCP server a session loads runs from the queue root's own checkout, never the TASK's worktree" → tests/mcp/checkout.test.ts
+- "When the queue root is ProofSpec's own checkout, the MCP server a session loads runs from that checkout's own src/mcp/serve.ts, never the TASK's worktree's" → tests/mcp/checkout.test.ts
+- "When the queue root is a project that installed ProofSpec, the MCP server a session loads runs from the installed package's built server, never the TASK's worktree's" → tests/mcp/checkout.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A heartbeat CLI entry performs the same heartbeat write, called by the Claude Code hooks

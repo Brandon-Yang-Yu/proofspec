@@ -583,10 +583,14 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
   const configPath = start.args[configIndex]!.slice('PROOFSPEC_MCP_CONFIG='.length)
   const config = JSON.parse(await readFile(configPath, 'utf8')) as { mcpServers?: Record<string, { command?: unknown; args?: unknown }> }
   // Which server the config names is the promise, so identity is asserted, not just
-  // location: the one server it names is the queue root's own MCP server — the stdio
-  // server entry this checkout ships, `src/mcp/serve.ts` under the queue root. A config
-  // naming a different entry, or a second server beside the real one, is a different
-  // answer than the one claimed.
+  // location: the one server it names is the queue root's own MCP server. This queue
+  // root is a project that installed ProofSpec — `/repo` is a bare path the commands
+  // are built from, nothing is ever stood up on disk under it, so the kind is stated
+  // by the package.json-name rule: no `package.json` there, so not ProofSpec's own
+  // checkout — and that kind's entry is the installed package's built server,
+  // `node_modules/proofspec/dist/mcp/serve.js` under the queue root. A config naming
+  // a different entry, or a second server beside the real one, is a different answer
+  // than the one claimed.
   const entries = Object.entries(config.mcpServers ?? {})
   expect(entries.length, 'the config must name exactly one MCP server').toBe(1)
   for (const [, server] of entries) {
@@ -595,7 +599,7 @@ it('starts the claude invocation when PROOFSPEC_EXECUTOR names claude', async ()
     expect(
       words,
       `the server the config names is not the queue root's own MCP server entry`,
-    ).toContain(join(queueRoot, 'src', 'mcp', 'serve.ts'))
+    ).toContain(join(queueRoot, 'node_modules', 'proofspec', 'dist', 'mcp', 'serve.js'))
     const paths = words.filter(word => word.includes('/'))
     expect(
       paths.some(path => sitsUnderPath(queueRoot, path)),
