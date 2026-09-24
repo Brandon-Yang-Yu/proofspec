@@ -317,7 +317,8 @@ function mcpConfigFor(queueRoot: string): string {
   const args = isProofspecCheckout(queueRoot)
     ? ['--experimental-transform-types', join(queueRoot, ...CHECKOUT_SERVER_ENTRY_PATH)]
     : [join(queueRoot, ...INSTALLED_SERVER_ENTRY_PATH)]
-  return `${JSON.stringify({ mcpServers: { proofspec: { command: 'node', args } } }, null, 2)}\n`
+  const server = { command: 'node', args }
+  return `${JSON.stringify({ mcpServers: { proofspec: server } }, null, 2)}\n`
 }
 
 /** The files a session start hands its harness through, and their paths: the system prompt
