@@ -1,7 +1,7 @@
 // Capability: progress
 
 import { execFile, spawn } from 'node:child_process'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
@@ -54,6 +54,31 @@ async function sessionGoneWithin(task: string, ms: number): Promise<boolean> {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   return !(await hasSession(task))
+}
+
+/** Whether a process with the given pid still exists — a signal-0 probe, catching the
+ *  nothing-to-signal error as the answer. */
+function isRunning(pid: number | undefined): boolean {
+  if (pid === undefined) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Reads a file once it holds text, polling for a short while: the stand-in pass writes
+ *  its record from its own process, so the read has to wait out that write. Answers
+ *  undefined at the deadline — an assertable absence rather than a thrown race. */
+async function readWhenWritten(path: string): Promise<string | undefined> {
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    const text = await readFile(path, 'utf8').then(content => content.trim(), () => undefined)
+    if (text !== undefined && text !== '') return text
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  return undefined
 }
 
 /** Whether a worktree still stands at the TASK's conventional path. */
@@ -124,14 +149,14 @@ it('refuses to settle when PROOFSPEC_TASK is not set, writing nothing', async ()
 // WHEN the settle runs
 // THEN it refuses naming the word building, and the state still reads building, the worktree still stands, and the session is still live
 it('refuses a TASK whose state word is not mergeable, leaving everything standing', async () => {
-  const repo = await makeSettlableTask({ task: 'still-building', landed: true, word: 'building' })
+  const repo = await makeSettlableTask({ task: 'not-yet-mergeable', landed: true, word: 'building' })
 
-  const result = await runSettleTask({ queueRoot: repo.root, task: 'still-building' })
+  const result = await runSettleTask({ queueRoot: repo.root, task: 'not-yet-mergeable' })
 
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('building') })
-  expect(await stateOf(repo.root, 'still-building')).toBe('building')
-  expect(await worktreeStands(repo.root, 'still-building')).toBe(true)
-  await expect(hasSession('still-building')).resolves.toBe(true)
+  expect(await stateOf(repo.root, 'not-yet-mergeable')).toBe('building')
+  expect(await worktreeStands(repo.root, 'not-yet-mergeable')).toBe(true)
+  await expect(hasSession('not-yet-mergeable')).resolves.toBe(true)
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
@@ -321,8 +346,10 @@ it('never fires a scheduling pass on a refusal', async () => {
 // GIVEN a mergeable, landed TASK whose successful settle fires its one scheduling pass
 // WHEN the pass starts and the settle's teardown follows — the session killed by the
 //      delayed reaper, which takes the session's process group with it
-// THEN the pass is still running: it was started as the same scheduling command the
-//      merge hooks run, in a process group of its own the kill never reached
+// THEN the pass is still running: it was started, from the plan the settle hands the
+//      fire, as the same scheduling command the merge hooks run, in a process group of
+//      its own the kill never reached — and the whole plan handed to the fire is exactly
+//      the plan the settle builds for that queue root, working folder included
 // The survival claim is proven as a plan value, the way the reaper's own already is
 // (`reaperFor`/`ReaperPlan`, src/cli/session.ts): a detached spawn — a process group of
 // its own — is the one thing the reaper's group-kill cannot reach, so a pass started from
@@ -340,7 +367,7 @@ it('fires the merge hooks\' own scheduling command, detached so the teardown can
 
   expect(result).toEqual({ ok: true, task: 'hooks-command' })
   expect(fired).toEqual([schedulingPassFor(repo.root)])
-  expect(fired[0]).toEqual({ command: 'pnpm', args: ['--dir', repo.root, 'proofspec', 'schedule'], detached: true })
+  expect(fired[0]).toEqual({ command: 'pnpm', args: ['--dir', repo.root, 'proofspec', 'schedule'], cwd: repo.root, detached: true })
 })
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
@@ -368,3 +395,80 @@ it('still succeeds when its scheduling pass cannot even be started, reporting th
   // settle has answered — the kill lands only after the reaper's delay.
   await expect(hasSession('unstartable-pass')).resolves.toBe(true)
 })
+
+// Requirement: settle_task settles a TASK only after re-verifying its landing from git
+// Scenario: The plan the settle starts sets the queue root as the pass's working folder
+// GIVEN a mergeable, landed TASK whose successful settle fires its one scheduling pass,
+//      and the queue root that TASK's entry lives under
+// WHEN the settle starts the pass from its plan
+// THEN the plan carries the queue root as the pass's working folder — the same root the
+//      plan's --dir argument names
+// The working folder is a plan value, pinned the suite's way: the fire records what it
+// is handed and no pass is ever started. The second read answers "the same root the
+// --dir argument names": the tuple's second slot is the root --dir takes.
+it("carries the queue root in the plan it starts the pass from, as the pass's working folder", async () => {
+  const repo = await makeSettlableTask({ task: 'plan-cwd', landed: true, word: 'mergeable' })
+  const fired: SchedulingPassPlan[] = []
+
+  const result = await runSettleTask({ queueRoot: repo.root, task: 'plan-cwd' }, plan => {
+    fired.push(plan)
+  })
+
+  expect(result).toEqual({ ok: true, task: 'plan-cwd' })
+  expect(fired).toHaveLength(1)
+  expect(fired[0]).toMatchObject({ cwd: repo.root })
+  expect(fired[0]).toMatchObject({ cwd: fired[0]?.args[1] })
+})
+
+// Requirement: settle_task settles a TASK only after re-verifying its landing from git
+// Scenario: A settle whose own current folder is removed right after the pass starts still starts the pass with its working folder set to the queue root, and the pass survives that removal
+// GIVEN a mergeable, landed TASK, and a settle whose current folder sits inside the TASK's
+//      own worktree — the very folder the settle's teardown removes
+// WHEN the settle runs and succeeds, its teardown removing that folder right after the
+//      one scheduling pass has started
+// THEN the pass it started was started with its working folder set to the queue root —
+//      not the settle's own current folder, not any other folder — and it is still
+//      running, having survived the removal of that folder
+// This is the one proof in the suite that watches a started pass come up, because the
+// claim is exactly that: the settle's caller stands inside the TASK's own worktree, the
+// teardown deletes that worktree right after the pass starts, and the pass must not
+// notice. The started pass is a stand-in, not a real scheduling run — a detached sh that
+// records the folder it stands in and then sleeps, started from the plan's working folder
+// the way the real fire starts the pass — so where the stand-in stood, and whether it
+// outlived the teardown, are the observations. The record is written outside the
+// worktree, or the teardown under test would destroy the evidence.
+it('starts the pass with its working folder at the queue root, surviving the removal of the settle\'s own current folder', async () => {
+  const repo = await makeSettlableTask({ task: 'cwd-removed', landed: true, word: 'mergeable' })
+  const worktree = join(repo.root, '.proofspec', 'worktrees', 'cwd-removed')
+  const standingAt = join(repo.root, 'stand-in-standing-folder.txt')
+  let standIn: ReturnType<typeof spawn> | undefined
+  let startFailed: string | undefined
+  // The settle runs standing in the worktree — the arrangement the amendment names — so
+  // the stand-in's folder is whichever folder the settle's plan pins, or the settle's
+  // own when the plan pins none: exactly the difference under test.
+  const settleFrom = process.cwd()
+  process.chdir(worktree)
+  try {
+    const result = await runSettleTask({ queueRoot: repo.root, task: 'cwd-removed' }, plan => {
+      standIn = spawn('/bin/sh', ['-c', `pwd -P > ${JSON.stringify(standingAt)} && sleep 30`], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: plan.cwd,
+      })
+      standIn.once('error', error => {
+        startFailed = error.message
+      })
+      standIn.unref()
+    })
+    expect(result).toEqual({ ok: true, task: 'cwd-removed' })
+  } finally {
+    process.chdir(settleFrom)
+  }
+
+  expect(startFailed).toBeUndefined()
+  // `pwd -P` answers the physical path, and a macOS temp dir sits behind the /var →
+  // /private/var symlink, so the queue root is asked for its real path before comparing.
+  expect(await readWhenWritten(standingAt)).toBe(await realpath(repo.root))
+  expect(isRunning(standIn?.pid)).toBe(true)
+  standIn?.kill()
+}, 10000)

@@ -34,6 +34,10 @@ export type SettleResult =
 export type SchedulingPassPlan = {
   readonly command: 'pnpm'
   readonly args: readonly ['--dir', string, 'proofspec', 'schedule']
+  /** The pass's working folder: the queue root itself, the same root the `--dir` argument
+   *  names — never the settle's own current folder, which its teardown removes right after
+   *  the pass starts. */
+  readonly cwd: string
   /** The process-group escape: the pass is started detached, in a process group of its
    *  own, so the delayed reaper's group-kill — the one that takes the settle's own session
    *  — cannot reach it. The escape is the point, not spawn syntax. */
@@ -43,7 +47,7 @@ export type SchedulingPassPlan = {
 /** The pass a settle fires for `queueRoot`: the merge hooks' own scheduling command, run
  *  against that root, detached so it survives the settle's teardown. */
 export function schedulingPassFor(queueRoot: string): SchedulingPassPlan {
-  return { command: 'pnpm', args: ['--dir', queueRoot, 'proofspec', 'schedule'], detached: true }
+  return { command: 'pnpm', args: ['--dir', queueRoot, 'proofspec', 'schedule'], cwd: queueRoot, detached: true }
 }
 
 /** The action that starts the pass, handed the plan it is to run. Injectable — the house
