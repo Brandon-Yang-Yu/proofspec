@@ -132,6 +132,17 @@ it. Such a name SHALL NOT be dropped.
 persona the same tools in both harnesses, so a persona that is kept from writing code in
 one harness is kept from it in the other.
 
+<!-- scenarios: generated -->
+- "A Claude Code name reached from two pi names appears once on the tools line" → tests/mcp/persona-generation.test.ts
+- "Generation fails, naming a tool name the mapping does not carry" → tests/mcp/persona-generation.test.ts
+- "Generation keeps the body and every frontmatter line other than the tools line byte for byte" → tests/mcp/persona-generation.test.ts
+- "Generation lists the Claude Code name of every name on a tools line holding several names" → tests/mcp/persona-generation.test.ts
+- "Generation translates each pi tool name to its own Claude Code name" → tests/mcp/persona-generation.test.ts
+- "Generation writes no Claude Code persona file that drops a tool name the mapping does not carry" → tests/mcp/persona-generation.test.ts
+- "Generation writes one Claude Code persona file for each pi persona file, under the same name" → tests/mcp/persona-generation.test.ts
+- "The Claude Code persona files this product ships are what generation produces from its pi persona files" → tests/mcp/persona-generation.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A check fails when a Claude Code persona file is not what generation would produce
 
 A check SHALL compare each `.claude/agents` file with what generation would produce from
@@ -141,3 +152,10 @@ fail, naming the file, when a `.pi/agents` file has no `.claude/agents` file, an
 
 The check makes a copy that has fallen out of step fail loudly, instead of standing
 unnoticed.
+
+<!-- scenarios: generated -->
+- "The check fails, naming the file, when a Claude Code persona file differs from what generation would produce" → tests/mcp/persona-check.test.ts
+- "The check fails, naming the file, when a Claude Code persona file has no pi persona file" → tests/mcp/persona-check.test.ts
+- "The check fails, naming the file, when a pi persona file has no Claude Code persona file" → tests/mcp/persona-check.test.ts
+- "The check passes when every Claude Code persona file is what generation would produce" → tests/mcp/persona-check.test.ts
+<!-- /scenarios -->
