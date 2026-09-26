@@ -358,9 +358,17 @@ export function executorRecordPath(cwd: string, task: string): string {
   return join(cwd, ...QUEUE_DIR, task, EXECUTOR_FILE)
 }
 
+/** The two harnesses an executor session can run in. Subscription auth lives only inside
+ *  the Claude Code harness, and `pi` is the default. The choice is operational — the TASK's
+ *  own queue entry record, written when a provider-error stop moves the TASK to claude, else
+ *  `PROOFSPEC_EXECUTOR` — never something a TASK's branch gets a say in. It lives here,
+ *  beside the record it types, so `startSession` (`src/cli/session.ts`) borrows it from a
+ *  module it already imports rather than the queue importing the session. */
+export type ExecutorName = 'pi' | 'claude'
+
 /** Overwrites a TASK's executor record with the harness it is to run in from now on. No
  *  mkdir, the same as `writeState`: the record is left inside an entry that already stands. */
-export async function writeExecutor(cwd: string, task: string, executor: string): Promise<void> {
+export async function writeExecutor(cwd: string, task: string, executor: ExecutorName): Promise<void> {
   await writeFile(executorRecordPath(cwd, task), executor)
 }
 

@@ -18,22 +18,62 @@ import { join } from 'node:path'
  * catch the two drifting apart.
  *
  * `QUESTION` is written before the state word: the word is what a reader keys on, so once it
- * says `blocked-on-question` the question it points at must already stand.
+ * says `blocked-on-question` the question it points at must already stand. A pruned entry
+ * (`ENOENT`) is swallowed, as the heartbeat entry swallows it: a TASK the queue no longer
+ * holds has no one left to park it for. A fault the write treats as real (permissions, disk)
+ * still surfaces through the exit code.
  */
+
+/** The fields of the `StopFailure` payload that can carry the provider's error, best first:
+ *  `error_details` holds it exactly; the last assistant text quotes it behind a harness
+ *  prefix; `error` is only a category. A later field is read only when every earlier one is
+ *  absent, so a TASK never parks with an empty QUESTION while the hook handed any error text. */
+const ERROR_FIELDS = ['error_details', 'last_assistant_message', 'error'] as const
+
+/** What QUESTION says when the hook handed no error text at all. */
+const NO_ERROR_TEXT = 'The provider stopped this session, and its StopFailure hook handed no error text.'
+
 const queueRoot = process.env.PROOFSPEC_QUEUE_ROOT
 const task = process.env.PROOFSPEC_TASK
 if (queueRoot !== undefined && task !== undefined) {
   const entry = join(queueRoot, '.proofspec', 'dispatch', task)
-  await writeFile(join(entry, 'QUESTION'), await providerErrorFromStdin())
-  await writeFile(join(entry, 'state'), 'blocked-on-question')
+  const question = questionFrom(parseJson(await readStdin()))
+  try {
+    await writeFile(join(entry, 'QUESTION'), question)
+    await writeFile(join(entry, 'state'), 'blocked-on-question')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 }
 
-/** The provider's own error out of the `StopFailure` payload on stdin: `error_details`,
- *  exactly as the harness hands it — the `error` field is only a category, and the last
- *  assistant text quotes the error behind a harness prefix. */
-async function providerErrorFromStdin(): Promise<string> {
+type ParseResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly reason: string }
+
+async function readStdin(): Promise<string> {
   let input = ''
   for await (const chunk of process.stdin) input += chunk
-  const payload = JSON.parse(input) as { readonly error_details?: unknown }
-  return typeof payload.error_details === 'string' ? payload.error_details : ''
+  return input
+}
+
+/** `JSON.parse` at the boundary, its throw turned into a value: the harness owns the payload,
+ *  so an empty or malformed one is an expected failure, not a bug in this entry. */
+function parseJson(input: string): ParseResult {
+  try {
+    return { ok: true, value: JSON.parse(input) }
+  } catch (error) {
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/** The QUESTION a parked TASK carries: the first error field the payload holds as a string,
+ *  verbatim — else a line saying the hook handed no readable error, so the QUESTION still
+ *  tells a human why the TASK stopped. */
+function questionFrom(parsed: ParseResult): string {
+  if (!parsed.ok) return `${NO_ERROR_TEXT} Its payload could not be read: ${parsed.reason}`
+  const payload = parsed.value
+  if (typeof payload !== 'object' || payload === null) return NO_ERROR_TEXT
+  for (const field of ERROR_FIELDS) {
+    const text: unknown = Reflect.get(payload, field)
+    if (typeof text === 'string') return text
+  }
+  return NO_ERROR_TEXT
 }

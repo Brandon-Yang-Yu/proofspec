@@ -7,11 +7,13 @@ import { baseBranch } from '../base-branch.ts'
 import { queueRootDigest } from './digest.ts'
 import { runGit } from './git.ts'
 import { executorRecordPath, manifestFor } from './queue.ts'
+import type { ExecutorName } from './queue.ts'
 
 /**
  * The real `startSession` action: a headed,
  * interactive executor session in the TASK's harness — the one its queue entry's executor
- * record names, else the one `PROOFSPEC_EXECUTOR` names — started in the TASK's own worktree. `schedule`'s own core never starts one itself (see its tests) — this
+ * record names, else the one `PROOFSPEC_EXECUTOR` names — started in the TASK's own
+ * worktree. `schedule`'s own core never starts one itself (see its tests) — this
  * is the one place that actually does, using tmux as the one thing on this machine that can
  * hand a real pty to a human without taking over the terminal the scheduling pass itself is
  * running in.
@@ -122,12 +124,6 @@ const CHECKOUT_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
  *  `.ts` file under `node_modules`, so a project that installed ProofSpec has no source
  *  entry it can run. */
 const INSTALLED_SERVER_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'serve.js'] as const
-
-/** The two harnesses an executor session can run in. Subscription auth lives only inside
- *  the Claude Code harness, and `pi` is the default. The choice is operational — the TASK's
- *  own queue entry record, written when a provider-error stop moves the TASK to claude, else
- *  `PROOFSPEC_EXECUTOR` — never something a TASK's branch gets a say in. */
-type ExecutorName = 'pi' | 'claude'
 
 /** The harness a TASK's queue entry records for it, or nothing when the entry holds no
  *  record naming one. Trimmed, because a record written by hand ends in a newline; any other
@@ -563,8 +559,8 @@ function mergeHookSettings(existing: unknown, wirings: readonly HookWiring[]): R
  * Writes the hook wiring a dispatched Claude Code session runs with: `.claude/settings.json`
  * in the TASK's worktree, running the heartbeat CLI entry on every event the harness reports
  * a session's move through, and the provider-error CLI entry on `StopFailure`, so a session
- * whose provider refuses it parks its TASK for a human rather than hanging. Merged, never replaced: the worktree's settings file is the
- * project's own committed one — a project may wire its own hooks there beside whatever a
+ * whose provider refuses it parks its TASK for a human rather than hanging. Merged, never
+ * replaced: the worktree's settings file is the project's own committed one — a project may wire its own hooks there beside whatever a
  * session adds — and the executor commits the worktree's file, so a replacement would ride
  * the TASK's own merge into the project's history as an erasure of its settings. The `pi`
  * transport needs no wiring of its own — its extension subscribes the same write to its own

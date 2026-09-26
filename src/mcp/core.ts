@@ -54,7 +54,10 @@ export type ToolCore = {
  *  object carrying one — both shapes are load-bearing seams the proofs drive (`adapter.test.ts`
  * passes the core bare, `server.test.ts` wraps it as `{ core }`), so one adapter signature
  * serves both. Either way the adapter reaches every rule through the core it names. */
-export type CoreInjection = ToolCore | { readonly core?: ToolCore }
+export type CoreInjection = ToolCore | CoreOptions
+
+/** The options shape of a `CoreInjection` — the one an adapter with seams of its own widens. */
+export type CoreOptions = { readonly core?: ToolCore }
 
 /** The core an adapter answers from: the one injected, or a fresh real one. */
 export function resolveCore(injection?: CoreInjection): ToolCore {
@@ -63,7 +66,8 @@ export function resolveCore(injection?: CoreInjection): ToolCore {
   return injection.core ?? createToolCore()
 }
 
-function isToolCore(value: CoreInjection): value is ToolCore {
+/** Whether an injection is the core itself rather than an options object carrying one. */
+export function isToolCore(value: CoreInjection): value is ToolCore {
   return typeof (value as ToolCore).call === 'function'
 }
 

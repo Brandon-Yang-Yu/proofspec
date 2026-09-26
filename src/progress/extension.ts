@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 import type { AgentEndEvent, ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent'
 import { readState, writeExecutor } from '../cli/queue.ts'
 import type { FireSchedulingPass } from '../cli/settle.ts'
-import { createToolCore, piExecute, registrationsFor, resolveCore, resolveReportEnv, refreshHeartbeat } from '../mcp/core.ts'
-import type { PiToolResult, ReportEnv, ToolCore, ToolName } from '../mcp/core.ts'
+import { createToolCore, isToolCore, piExecute, registrationsFor, resolveCore, resolveReportEnv, refreshHeartbeat } from '../mcp/core.ts'
+import type { CoreOptions, PiToolResult, ReportEnv, ToolCore, ToolName } from '../mcp/core.ts'
 import { BUILDING } from '../schedule/types.ts'
 
 /**
@@ -97,9 +97,10 @@ export function executeSettleTask(
  *  refuse it, without a real session ever being started. */
 export type FireRestart = (restart: ReportEnv) => void | Promise<void>
 
-/** What the extension can be handed: the core both transports answer from (bare, or as
- *  `{ core }`), and the restart action the provider-error watch fires. */
-export type ProgressInjection = ToolCore | { readonly core?: ToolCore; readonly fireRestart?: FireRestart }
+/** What the extension can be handed: a `CoreInjection` — the core both transports answer
+ *  from, bare or as `{ core }` — whose options shape also carries the restart action the
+ *  provider-error watch fires. */
+export type ProgressInjection = ToolCore | (CoreOptions & { readonly fireRestart?: FireRestart })
 
 /** The restart's own script, run by a fresh `node`: `startSession` for the TASK against its
  *  queue root. Every value arrives through the environment, never spliced into the script,
@@ -188,7 +189,8 @@ export default function progressExtension(pi: ExtensionAPI, injection?: Progress
   // The provider-error watch: `agent_end` says how each run ended, `agent_settled` that pi
   // will not go on by itself. Only the run ending last counts — a failed run pi then retried
   // past ends again on the retry, clearing the flag before the stop.
-  const fireRestart = isToolCore(injection) ? realFireRestart : (injection?.fireRestart ?? realFireRestart)
+  const injectedRestart = injection === undefined || isToolCore(injection) ? undefined : injection.fireRestart
+  const fireRestart = injectedRestart ?? realFireRestart
   let lastRunFailed = false
   pi.on('agent_end', event => {
     lastRunFailed = endedOnProviderError(event)
@@ -202,8 +204,4 @@ export default function progressExtension(pi: ExtensionAPI, injection?: Progress
   for (const registration of registrationsFor(PROGRESS_TOOLS)) {
     pi.registerTool({ ...registration, execute: piExecute(core, registration.name) })
   }
-}
-
-function isToolCore(injection: ProgressInjection | undefined): injection is ToolCore {
-  return injection !== undefined && typeof (injection as ToolCore).call === 'function'
 }
