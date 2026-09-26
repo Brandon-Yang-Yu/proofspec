@@ -25,6 +25,9 @@ const LEASE_FILE = 'LEASE'
 const HEARTBEAT_FILE = 'heartbeat'
 const PHASE_FILE = 'phase'
 const PHASE_HISTORY_FILE = 'phase-history'
+/** Which agent harness a TASK runs in, once a provider-error stop has moved it off the
+ *  default — the one record `startSession` reads before `PROOFSPEC_EXECUTOR`. */
+const EXECUTOR_FILE = 'executor'
 
 /** The one `intentRef` value that names no file on a TASK's branch: the reserved word that
  *  points at the TASK's own intent document in its queue entry instead. A plain word, not a
@@ -347,6 +350,18 @@ export async function archiveQueueEntry(cwd: string, task: string): Promise<void
  * rule, not to this primitive. */
 export async function writeState(cwd: string, task: string, word: string): Promise<void> {
   await writeFile(join(cwd, ...QUEUE_DIR, task, STATE_FILE), word)
+}
+
+/** Where a TASK's executor record stands. A path rather than a reader: `startSession`
+ *  builds its tmux commands synchronously, so it reads the record with a sync read of its own. */
+export function executorRecordPath(cwd: string, task: string): string {
+  return join(cwd, ...QUEUE_DIR, task, EXECUTOR_FILE)
+}
+
+/** Overwrites a TASK's executor record with the harness it is to run in from now on. No
+ *  mkdir, the same as `writeState`: the record is left inside an entry that already stands. */
+export async function writeExecutor(cwd: string, task: string, executor: string): Promise<void> {
+  await writeFile(executorRecordPath(cwd, task), executor)
 }
 
 /** Overwrites a TASK's heartbeat with the instant `at` — the write side of the `HEARTBEAT_FILE`
