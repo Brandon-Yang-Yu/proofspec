@@ -186,7 +186,7 @@ on the repo's own server.
 - "The live-session bound is four by default" → tests/schedule/bound.test.ts
 <!-- /scenarios -->
 
-### Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+### Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
 
 The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its
 `branch`, ensure a worktree for that branch exists at the conventional path
@@ -198,8 +198,10 @@ stderr in its message, never a bare "could not create" summary in stderr's place
 session start that fails SHALL throw an error carrying tmux's own stderr in its
 message, never a bare exit-code summary in its place — the same standard a failed
 worktree creation keeps. Which
-agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
-variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
+agent the invocation runs SHALL be read first from the TASK's own queue entry: an
+`executor` file there holding `pi` or `claude` names the agent. When the entry holds no
+such record, the agent SHALL be named by the `PROOFSPEC_EXECUTOR` environment variable —
+`pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
 SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
 PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
 command, and SHALL be handed one initial user message as the agent's positional prompt
@@ -239,9 +241,11 @@ Deriving the name from the queue root gives each repo its own server, with no
 configuration. There is no special case for the single-repo user; everyone gets the
 derived name.
 
-The choice is one environment variable because everything else about starting a session
-is the same act either way, and the default stays `pi` so a queue that never names a
-harness runs exactly as it ran before.
+Everything else about starting a session is the same act whichever agent runs, so the
+choice is a single name. The TASK's own record comes first, so a TASK
+that has been moved to another agent stays on it through every later start, a start by
+hand included. A TASK with no record falls back to the environment variable. The
+default stays `pi`, so a queue that never names an agent runs exactly as it ran before.
 
 The session starts inside the TASK's own worktree and needs three facts — where the
 queue lives, which TASK it is, and which branch its queue measures against — which this
@@ -264,13 +268,15 @@ A session handed no first message never begins working its TASK, so the invocati
 one kickoff message.
 
 <!-- scenarios: generated -->
+- "A TASK whose queue entry's executor record holds claude starts the claude invocation, whatever PROOFSPEC_EXECUTOR names: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
+- "A TASK whose queue entry's executor record holds pi starts the pi invocation, even when PROOFSPEC_EXECUTOR names claude: --approve, --no-extensions, and both pinned extensions" → tests/schedule/session.test.ts
 - "A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
 - "A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
-- "PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
+- "An executor record naming neither pi nor claude counts as no record, and PROOFSPEC_EXECUTOR decides either way" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
 - "The default socket is derived from the queue root, so two repos never share a server" → tests/schedule/session.test.ts
@@ -280,7 +286,8 @@ one kickoff message.
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server whose name is derived from the queue root, never the user's default or any other named one" → tests/schedule/session.test.ts
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
-- "With PROOFSPEC_EXECUTOR unset, or naming pi, the started harness is pi" → tests/schedule/session.test.ts
+- "With no executor record, PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
+- "With no executor record, and PROOFSPEC_EXECUTOR unset or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->

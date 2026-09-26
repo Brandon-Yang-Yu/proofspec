@@ -45,9 +45,11 @@ Commands:
            --ruling, records a human's ruling on an already-raised relationship instead.
            The bare command line supplies real startSession, judge, and notifyHuman actions
            itself: a ready TASK starts a headed executor session in a detached tmux session
-           named for the TASK, in the agent harness PROOFSPEC_EXECUTOR names (pi by default,
-           claude otherwise); a relationship is judged by a fresh one-shot process in the
-           harness PROOFSPEC_JUDGE_BIN names (pi by default, claude headless otherwise); and
+           named for the TASK, in the TASK's agent harness: the one its queue entry's
+           executor file names (pi or claude), else the one PROOFSPEC_EXECUTOR names (pi by
+           default, claude otherwise); a relationship is judged by a fresh one-shot process
+           in the harness PROOFSPEC_JUDGE_BIN names (pi by default, claude headless
+           otherwise); and
            one it cannot resolve is reported to stderr naming both TASKs and how
            to rule on it. No session starts once the live-session bound is reached (four by
            default, PROOFSPEC_MAX_SESSIONS). An embedder passing RunOptions may still

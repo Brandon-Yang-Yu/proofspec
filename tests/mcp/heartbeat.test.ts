@@ -41,6 +41,11 @@ const SHIPPED_ENTRY_RELATIVE = relativePath(resolve(dirname(HEARTBEAT_ENTRY), '.
  *  ProofSpec, not the checkout itself. */
 const INSTALLED_ENTRY_RELATIVE = join('node_modules', 'proofspec', 'dist', 'mcp', 'heartbeat.js')
 
+/** Where an installed ProofSpec package ships the built provider-error CLI entry — the
+ *  sibling of the heartbeat's built entry, which the `StopFailure` hook group names when the
+ *  queue root is a project that installed ProofSpec. */
+const INSTALLED_PROVIDER_ERROR_ENTRY_RELATIVE = join('node_modules', 'proofspec', 'dist', 'mcp', 'provider-error.js')
+
 /** A stand-in for the built heartbeat entry an installed package ships at that path: the
  *  same write the real entry performs, as plain JavaScript a hook's `node` runs with no
  *  transform flag. The real entry's own behavior is proven by the same-write scenarios
@@ -534,21 +539,26 @@ it('runs the installed package\'s built heartbeat entry from the Claude Code hoo
 }, 20000)
 
 // Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
-// Scenario: The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing
-// GIVEN a TASK whose worktree's committed .claude/settings.json carries the project's own settings and its own hooks
+// Scenario: The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing, the provider-error group joined to StopFailure
+// GIVEN a TASK whose worktree's committed .claude/settings.json carries the project's own settings, its own hook group on one reported-move event, and its own hook group on StopFailure
 // WHEN a Claude Code executor session is started for that TASK the way this product's dispatch starts one
-// THEN the file stands with every one of the project's settings and hook groups as it was, the heartbeat's hook group joined to each reported-move event's groups
-it('joins the settings already standing in the TASK\'s worktree, erasing nothing', async () => {
+// THEN the file stands with every one of the project's settings and hook groups as it was, the heartbeat's hook group joined to each reported-move event's groups, and the provider-error entry's hook group joined to the StopFailure event's groups
+it('joins the settings already standing in the TASK\'s worktree, erasing nothing, the provider-error group joined to StopFailure', async () => {
   // The project's own committed settings — a key the wiring never touches (`permissions`),
-  // and its own hook group on one of the four events the wiring does touch — exactly the
-  // shape a real project's `.claude/settings.json` holds beside whatever a session adds.
+  // its own hook group on one of the four events the heartbeat touches, and its own hook
+  // group on `StopFailure`, the event the provider-error entry touches — exactly the shape a
+  // real project's `.claude/settings.json` holds beside whatever a session adds.
   const ownHookCommand = '"$CLAUDE_PROJECT_DIR"/scripts/enter-worktree.sh'
+  const ownStopFailureCommand = '"$CLAUDE_PROJECT_DIR"/scripts/notify-failure.sh'
   const repo = await makeGitRepo({
     'a.txt': 'a',
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
     '.claude/settings.json': `${JSON.stringify({
       permissions: { allow: ['Bash(git add:*)'] },
-      hooks: { PreToolUse: [{ hooks: [{ type: 'command', command: ownHookCommand }] }] },
+      hooks: {
+        PreToolUse: [{ hooks: [{ type: 'command', command: ownHookCommand }] }],
+        StopFailure: [{ hooks: [{ type: 'command', command: ownStopFailureCommand }] }],
+      },
     }, null, 2)}\n`,
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
@@ -564,27 +574,30 @@ it('joins the settings already standing in the TASK\'s worktree, erasing nothing
   const heartbeatCommand = `node ${join(repo.root, INSTALLED_ENTRY_RELATIVE)}`
   const heartbeatGroup = { hooks: [{ type: 'command', command: heartbeatCommand }] }
   const ownGroup = { hooks: [{ type: 'command', command: ownHookCommand }] }
+  const providerErrorGroup = { hooks: [{ type: 'command', command: `node ${join(repo.root, INSTALLED_PROVIDER_ERROR_ENTRY_RELATIVE)}` }] }
+  const ownStopFailureGroup = { hooks: [{ type: 'command', command: ownStopFailureCommand }] }
   // One whole-file equality rather than per-key sampling: the claim promises every one of the
   // project's settings and hook groups stands, and only the whole object pinned can prove
   // "every" — an implementation preserving the sampled keys but dropping another would pass
   // a sampled read.
-  expect(settings, 'the merged settings are not exactly the project\'s own settings joined by the heartbeat\'s hook').toEqual({
+  expect(settings, 'the merged settings are not exactly the project\'s own settings joined by the heartbeat\'s and the provider-error entry\'s hooks').toEqual({
     permissions: { allow: ['Bash(git add:*)'] },
     hooks: {
       PreToolUse: [ownGroup, heartbeatGroup],
       UserPromptSubmit: [heartbeatGroup],
       PostToolUse: [heartbeatGroup],
       Stop: [heartbeatGroup],
+      StopFailure: [ownStopFailureGroup, providerErrorGroup],
     },
   })
 })
 
 // Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
-// Scenario: A dispatch into a worktree already wired adds no second copy of the heartbeat hook
-// GIVEN a TASK whose worktree's settings already carry the heartbeat's hook wiring
+// Scenario: A dispatch into a worktree already wired adds no second copy of the heartbeat's or the provider-error entry's hook group
+// GIVEN a TASK whose worktree's settings already carry the heartbeat's and the provider-error entry's hook wiring
 // WHEN a second session start runs for that TASK the way this product's dispatch starts one
-// THEN each reported-move event's hook groups stand as they were — no second copy of the heartbeat's hook
-it('adds no second copy of the heartbeat hook when a re-dispatch finds the wiring already standing', async () => {
+// THEN each reported-move event's hook groups and the StopFailure event's hook groups stand as they were — no second copy of either group
+it('adds no second copy of the heartbeat\'s or the provider-error entry\'s hook group when a re-dispatch finds the wiring already standing', async () => {
   const repo = await makeGitRepo({
     'a.txt': 'a',
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
@@ -612,4 +625,9 @@ it('adds no second copy of the heartbeat hook when a re-dispatch finds the wirin
       `the ${event} hooks did not stand as they were after the re-dispatch`,
     ).toEqual([heartbeatCommand])
   }
+  const providerErrorCommand = `node ${join(repo.root, INSTALLED_PROVIDER_ERROR_ENTRY_RELATIVE)}`
+  expect(
+    hookCommands(settings, 'StopFailure'),
+    'the StopFailure hooks did not stand as they were after the re-dispatch',
+  ).toEqual([providerErrorCommand])
 })

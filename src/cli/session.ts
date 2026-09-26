@@ -6,12 +6,14 @@ import { join } from 'node:path'
 import { baseBranch } from '../base-branch.ts'
 import { queueRootDigest } from './digest.ts'
 import { runGit } from './git.ts'
-import { manifestFor } from './queue.ts'
+import { executorRecordPath, manifestFor } from './queue.ts'
+import type { ExecutorName } from './queue.ts'
 
 /**
  * The real `startSession` action: a headed,
- * interactive executor session in the harness `PROOFSPEC_EXECUTOR` names, started in the
- * TASK's own worktree. `schedule`'s own core never starts one itself (see its tests) — this
+ * interactive executor session in the TASK's harness — the one its queue entry's executor
+ * record names, else the one `PROOFSPEC_EXECUTOR` names — started in the TASK's own
+ * worktree. `schedule`'s own core never starts one itself (see its tests) — this
  * is the one place that actually does, using tmux as the one thing on this machine that can
  * hand a real pty to a human without taking over the terminal the scheduling pass itself is
  * running in.
@@ -123,14 +125,29 @@ const CHECKOUT_SERVER_ENTRY_PATH = ['src', 'mcp', 'serve.ts'] as const
  *  entry it can run. */
 const INSTALLED_SERVER_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'serve.js'] as const
 
-/** The two harnesses an executor session can run in. Subscription auth lives only inside
- *  the Claude Code harness, and `pi` is the default — the choice is operational
- *  (`PROOFSPEC_EXECUTOR`), never something a TASK or its branch gets a say in. */
-type ExecutorName = 'pi' | 'claude'
+/** The harness a TASK's queue entry records for it, or nothing when the entry holds no
+ *  record naming one. Trimmed, because a record written by hand ends in a newline; any other
+ *  word counts as no record, so a typo falls back to the operator's choice rather than
+ *  starting nothing. */
+function recordedExecutor(queueRoot: string, task: string): ExecutorName | undefined {
+  let record: string
+  try {
+    record = readFileSync(executorRecordPath(queueRoot, task), 'utf8').trim()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+  if (record === 'pi' || record === 'claude') return record
+  return undefined
+}
 
-/** Which harness a dispatched executor session runs in. Anything but `claude` names `pi` —
- *  an unrecognized value must not silently start nothing. */
-function executorName(): ExecutorName {
+/** Which harness a TASK's executor session runs in: the TASK's own record first — a TASK
+ *  moved to claude stays there through every later start, a start by hand included — then
+ *  `PROOFSPEC_EXECUTOR`, where anything but `claude` names `pi`, since an unrecognized value
+ *  must not silently start nothing. */
+function executorFor(queueRoot: string, task: string): ExecutorName {
+  const recorded = recordedExecutor(queueRoot, task)
+  if (recorded !== undefined) return recorded
   return process.env.PROOFSPEC_EXECUTOR === 'claude' ? 'claude' : 'pi'
 }
 
@@ -347,8 +364,8 @@ function writeSessionHandoff(executor: ExecutorName, start: SessionStart): Sessi
 }
 
 /**
- * The tmux commands that (re)start a TASK's executor session in the harness
- * `PROOFSPEC_EXECUTOR` names: killing whatever tmux session already carries the TASK's name
+ * The tmux commands that (re)start a TASK's executor session in the TASK's harness
+ * (`executorFor`): killing whatever tmux session already carries the TASK's name
  * before creating a fresh one, so retrying a TASK whose LEASE went stale (schedule's own
  * reclaim requirement) replaces a dead session rather than colliding with its name. The
  * kill is expected to fail the ordinary way — no such session — which is why it is a
@@ -369,8 +386,19 @@ function writeSessionHandoff(executor: ExecutorName, start: SessionStart): Sessi
  * one argument each, same bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
+  return sessionCommandsFor(task, { start, executor: executorFor(start.queueRoot, task) })
+}
+
+/** `tmuxSessionCommands` with the harness already resolved, so `tmuxStartSession` builds the
+ *  commands and decides the hook wiring from one read of the TASK's record, never two that
+ *  could disagree. */
+function sessionCommandsFor(
+  task: string,
+  session: { readonly start: SessionStart; readonly executor: ExecutorName },
+): readonly [kill: TmuxCommand, start: TmuxCommand] {
+  const { start, executor } = session
   const socket = tmuxSocket(start.queueRoot)
-  const handoff = writeSessionHandoff(executorName(), start)
+  const handoff = writeSessionHandoff(executor, start)
   // Which harness env the session carries follows the handoff's own shape — the harness it
   // was built for is the discriminator, not a field's presence.
   const harnessEnv = handoff.executor === 'claude'
@@ -418,8 +446,8 @@ export function sessionStartFor(cwd: string, worktree: string, systemPrompt: str
 }
 
 /**
- * The real `startSession`: resolves the TASK's own worktree, then starts the harness
- * `PROOFSPEC_EXECUTOR` names there in a detached tmux session named for the TASK, seeded with
+ * The real `startSession`: resolves the TASK's own worktree, then starts the TASK's harness
+ * (`executorFor`) there in a detached tmux session named for the TASK, seeded with
  * the executor's own system prompt. A Claude Code session is additionally handed its hook
  * wiring: the harness reports that session's moves through hooks, and the heartbeat those
  * hooks refresh is the Claude Code transport's own limb of the one write (`specs/mcp.md`).
@@ -427,8 +455,9 @@ export function sessionStartFor(cwd: string, worktree: string, systemPrompt: str
 export async function tmuxStartSession(cwd: string, task: string): Promise<void> {
   const worktree = await resolveSessionWorktree(cwd, task)
   const systemPrompt = await executorSystemPrompt(cwd)
-  const [kill, start] = tmuxSessionCommands(task, sessionStartFor(cwd, worktree, systemPrompt))
-  if (executorName() === 'claude') await writeClaudeHookSettings(worktree, cwd)
+  const executor = executorFor(cwd, task)
+  const [kill, start] = sessionCommandsFor(task, { start: sessionStartFor(cwd, worktree, systemPrompt), executor })
+  if (executor === 'claude') await writeClaudeHookSettings(worktree, cwd)
   await runIgnoringFailure(kill)
   await runOrThrow(start)
 }
@@ -443,15 +472,23 @@ const CHECKOUT_HEARTBEAT_ENTRY_PATH = ['src', 'mcp', 'heartbeat.ts'] as const
  *  entry it can run. */
 const INSTALLED_HEARTBEAT_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'heartbeat.js'] as const
 
-/** The command line every Claude Code hook runs: the heartbeat CLI entry the queue root
- *  holds — that checkout's own TypeScript entry when the root is ProofSpec's own checkout,
- *  the installed package's built entry otherwise — the same two-kind rule and freshness
- *  rule the MCP config carries: run from the queue root, never the TASK's own branch's
- *  possibly stale copy. */
-function heartbeatHookCommand(queueRoot: string): string {
+/** The provider-error CLI entry's two homes, the heartbeat's siblings under the same
+ *  two-kind rule. */
+const CHECKOUT_PROVIDER_ERROR_ENTRY_PATH = ['src', 'mcp', 'provider-error.ts'] as const
+const INSTALLED_PROVIDER_ERROR_ENTRY_PATH = ['node_modules', 'proofspec', 'dist', 'mcp', 'provider-error.js'] as const
+
+/** The command line a Claude Code hook runs for one CLI entry the queue root holds — that
+ *  checkout's own TypeScript entry when the root is ProofSpec's own checkout, the installed
+ *  package's built entry otherwise — the same two-kind rule and freshness rule the MCP
+ *  config carries: run from the queue root, never the TASK's own branch's possibly stale
+ *  copy. */
+function hookCommandFor(
+  queueRoot: string,
+  entry: { readonly checkout: readonly string[]; readonly installed: readonly string[] },
+): string {
   const args = isProofspecCheckout(queueRoot)
-    ? ['--experimental-transform-types', join(queueRoot, ...CHECKOUT_HEARTBEAT_ENTRY_PATH)]
-    : [join(queueRoot, ...INSTALLED_HEARTBEAT_ENTRY_PATH)]
+    ? ['--experimental-transform-types', join(queueRoot, ...entry.checkout)]
+    : [join(queueRoot, ...entry.installed)]
   return `node ${args.join(' ')}`
 }
 
@@ -484,7 +521,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 /** Whether any group under one event already carries a command hook running `command` —
  *  the shape a dispatch checks before appending its own group, so a re-dispatch of a TASK
- *  whose worktree is reused adds no second copy of the heartbeat hook. */
+ *  whose worktree is reused adds no second copy of any hook it wires. */
 function carriesCommandHook(groups: readonly unknown[], command: string): boolean {
   return groups.some(group => {
     if (!isJsonObject(group) || !Array.isArray(group.hooks)) return false
@@ -492,20 +529,28 @@ function carriesCommandHook(groups: readonly unknown[], command: string): boolea
   })
 }
 
+/** The event Claude Code fires when a turn ends on an API error — the provider-error
+ *  entry's one event. */
+const PROVIDER_ERROR_EVENT = 'StopFailure'
+
+/** One command hook a dispatch wires, and the events it joins. */
+type HookWiring = { readonly events: readonly string[]; readonly command: string }
+
 /** The hook wiring merged into the settings already standing: every key outside `hooks`
- *  and every event's existing groups stand as they were, and the heartbeat's own group
- *  joins each reported-move event — appended when the event does not already run the
- *  heartbeat's command, left alone when it does. */
-function mergeHeartbeatHookSettings(
-  existing: unknown,
-  hook: { readonly type: 'command'; readonly command: string },
-): Record<string, unknown> {
+ *  and every event's existing groups stand as they were, and each wiring's own group joins
+ *  each of its events — appended when the event does not already run that command, left
+ *  alone when it does. */
+function mergeHookSettings(existing: unknown, wirings: readonly HookWiring[]): Record<string, unknown> {
   const base = isJsonObject(existing) ? existing : {}
   const hooks = isJsonObject(base.hooks) ? base.hooks : {}
   const mergedHooks: Record<string, unknown> = { ...hooks }
-  for (const event of REPORTED_MOVE_EVENTS) {
-    const groups = Array.isArray(hooks[event]) ? hooks[event] : []
-    mergedHooks[event] = carriesCommandHook(groups, hook.command) ? groups : [...groups, { hooks: [hook] }]
+  for (const wiring of wirings) {
+    const group = { hooks: [{ type: 'command', command: wiring.command }] }
+    for (const event of wiring.events) {
+      const standing = mergedHooks[event]
+      const groups = Array.isArray(standing) ? standing : []
+      mergedHooks[event] = carriesCommandHook(groups, wiring.command) ? groups : [...groups, group]
+    }
   }
   return { ...base, hooks: mergedHooks }
 }
@@ -513,16 +558,21 @@ function mergeHeartbeatHookSettings(
 /**
  * Writes the hook wiring a dispatched Claude Code session runs with: `.claude/settings.json`
  * in the TASK's worktree, running the heartbeat CLI entry on every event the harness reports
- * a session's move through. Merged, never replaced: the worktree's settings file is the
- * project's own committed one — a project may wire its own hooks there beside whatever a
+ * a session's move through, and the provider-error CLI entry on `StopFailure`, so a session
+ * whose provider refuses it parks its TASK for a human rather than hanging. Merged, never
+ * replaced: the worktree's settings file is the project's own committed one — a project may wire its own hooks there beside whatever a
  * session adds — and the executor commits the worktree's file, so a replacement would ride
  * the TASK's own merge into the project's history as an erasure of its settings. The `pi`
  * transport needs no wiring of its own — its extension subscribes the same write to its own
  * events — so this file is written only for `claude`.
  */
 async function writeClaudeHookSettings(worktree: string, queueRoot: string): Promise<void> {
-  const hook = { type: 'command', command: heartbeatHookCommand(queueRoot) } as const
-  const settings = mergeHeartbeatHookSettings(await readClaudeSettings(worktree), hook)
+  const heartbeat = hookCommandFor(queueRoot, { checkout: CHECKOUT_HEARTBEAT_ENTRY_PATH, installed: INSTALLED_HEARTBEAT_ENTRY_PATH })
+  const providerError = hookCommandFor(queueRoot, { checkout: CHECKOUT_PROVIDER_ERROR_ENTRY_PATH, installed: INSTALLED_PROVIDER_ERROR_ENTRY_PATH })
+  const settings = mergeHookSettings(await readClaudeSettings(worktree), [
+    { events: REPORTED_MOVE_EVENTS, command: heartbeat },
+    { events: [PROVIDER_ERROR_EVENT], command: providerError },
+  ])
   await mkdir(join(worktree, '.claude'), { recursive: true })
   await writeFile(join(worktree, ...CLAUDE_SETTINGS_PATH), `${JSON.stringify(settings, null, 2)}\n`)
 }
