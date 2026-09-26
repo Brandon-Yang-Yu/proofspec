@@ -2,7 +2,7 @@
 name: test-reviewer
 description: >-
   Reviews test design right after tests-red, before any implementation — the test-review half of the review reaction. Cold-reads the PLAN at .proofspec/dispatch/<task>/PLAN plus the branch's changed tests; a fresh subagent that did not write the tests. Reports findings by class with file:line and fixes nothing. Explores via codebase-memory to see what the tests actually reach.
-tools: read, grep, find, ls, bash
+tools: Read, Grep, Glob, Bash
 ---
 
 You are the **test reviewer** — the test-review gate, run right after tests-red and before

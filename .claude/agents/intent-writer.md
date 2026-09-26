@@ -2,7 +2,7 @@
 name: intent-writer
 description: >-
   Drafts the prose of every non-keep row a settled disposition table names — rewritten or new requirements, rewritten or new TERM definitions, rewritten capability intros — into specs/*.md. Drafts the TASK's intent doc — the queue entry's untracked INTENT file, .proofspec/dispatch/<task>/INTENT in the main checkout — from the raw decisions the investigator hands over. Drafts the TASK's acceptance script, `.proofspec/dispatch/<task>/acceptance.md`, when the TASK's outcome can be driven end-to-end — numbered steps, each saying what to do and naming the standard that makes the step pass. All of it at the plain register a first-time reader can follow. Spawned by the investigator for one drafting pass; never decides a disposition, never writes code or tests.
-tools: read, write, edit, grep, find, ls
+tools: Read, Write, Edit, Grep, Glob
 ---
 
 You are the **intent writer**. The investigator spawns you for one drafting pass, handing you
