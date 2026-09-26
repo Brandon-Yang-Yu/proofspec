@@ -107,6 +107,15 @@ error there is handed to a human. Parking writes the error where a human reads i
 state word then shows the TASK as waiting on a human, instead of leaving it stuck at
 `building` with nothing moving.
 
+<!-- scenarios: generated -->
+- "A TASK moved to claude by its executor record gets the StopFailure hook on every start" → tests/mcp/provider-error.test.ts
+- "The QUESTION file is written before the state word" → tests/mcp/provider-error.test.ts
+- "The provider-error entry writes nothing when either PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK is unset" → tests/mcp/provider-error.test.ts
+- "The provider-error entry writes the provider error verbatim into the TASK's QUESTION file and parks the TASK at blocked-on-question" → tests/mcp/provider-error.test.ts
+- "When the queue root is ProofSpec's own checkout, the StopFailure hook runs that checkout's own provider-error source and parks the TASK" → tests/mcp/provider-error.test.ts
+- "When the queue root is a project that installed ProofSpec, the StopFailure hook runs the installed package's built provider-error entry and parks the TASK" → tests/mcp/provider-error.test.ts
+<!-- /scenarios -->
+
 ### Requirement: The Claude Code hook wiring merges into the settings the worktree already carries
 
 The hook wiring a dispatched Claude Code session runs with SHALL be merged into the
@@ -124,6 +133,6 @@ commits the worktree's file, so the erasure would ride the TASK's own merge into
 project's history.
 
 <!-- scenarios: generated -->
-- "A dispatch into a worktree already wired adds no second copy of the heartbeat hook" → tests/mcp/heartbeat.test.ts
-- "The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing" → tests/mcp/heartbeat.test.ts
+- "A dispatch into a worktree already wired adds no second copy of the heartbeat's or the provider-error entry's hook group" → tests/mcp/heartbeat.test.ts
+- "The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing, the provider-error group joined to StopFailure" → tests/mcp/heartbeat.test.ts
 <!-- /scenarios -->

@@ -303,3 +303,14 @@ than `building` SHALL trigger nothing.
 
 The queue runs no timer, so the session itself is the one party that sees the failure at
 the moment it happens.
+
+<!-- scenarios: generated -->
+- "A pi session that stops for good on a provider error while its TASK is building records claude as the TASK's executor and starts the TASK again in the claude harness, in the same worktree" → tests/progress/extension.test.ts
+- "A provider error the session still goes on from by itself triggers nothing" → tests/progress/extension.test.ts
+- "A provider-error stop while the TASK is in any state other than building triggers nothing" → tests/progress/extension.test.ts
+- "A provider-error stop with PROOFSPEC_QUEUE_ROOT or PROOFSPEC_TASK unset triggers nothing" → tests/progress/extension.test.ts
+- "A stop whose last reply did not end on a provider error triggers nothing" → tests/progress/extension.test.ts
+- "The executor record is written before the restart starts" → tests/progress/extension.test.ts
+- "The restart runs in a process of its own and finishes even though the pi session is killed" → tests/progress/extension.test.ts
+- "The watch reads the TASK's entry under PROOFSPEC_QUEUE_ROOT even when the session's own directory is a different one" → tests/progress/extension.test.ts
+<!-- /scenarios -->
