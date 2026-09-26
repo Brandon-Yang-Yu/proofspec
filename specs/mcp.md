@@ -136,3 +136,57 @@ project's history.
 - "A dispatch into a worktree already wired adds no second copy of the heartbeat's or the provider-error entry's hook group" → tests/mcp/heartbeat.test.ts
 - "The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing, the provider-error group joined to StopFailure" → tests/mcp/heartbeat.test.ts
 <!-- /scenarios -->
+
+### Requirement: Each Claude Code persona file is generated from its pi persona file, with the tools line translated
+
+Each `.claude/agents/<name>.md` SHALL be generated from `.pi/agents/<name>.md`. The
+generated file SHALL keep the body byte for byte. It SHALL keep every frontmatter line
+other than `tools:` byte for byte. The `tools:` line SHALL list the Claude Code name for
+each name the source lists, by this mapping:
+
+- `read` becomes `Read`.
+- `write` becomes `Write`.
+- `edit` becomes `Edit`.
+- `grep` becomes `Grep`.
+- `find` becomes `Glob`.
+- `ls` becomes `Glob`.
+- `bash` becomes `Bash`.
+- `subagent` becomes `Agent`.
+- `enqueue_task` becomes `mcp__proofspec__enqueue_task`.
+- `census_in_flight` becomes `mcp__proofspec__census_in_flight`.
+
+When two source names map to the same Claude Code name, that name SHALL appear once.
+When the source lists a name the mapping does not carry, generation SHALL fail and name
+it. Such a name SHALL NOT be dropped.
+
+`.pi/agents` is the one source for every persona. The translated tools line gives each
+persona the same tools in both harnesses, so a persona that is kept from writing code in
+one harness is kept from it in the other.
+
+<!-- scenarios: generated -->
+- "A Claude Code name reached from two pi names appears once on the tools line" → tests/mcp/persona-generation.test.ts
+- "Generation fails, naming a tool name the mapping does not carry" → tests/mcp/persona-generation.test.ts
+- "Generation keeps the body and every frontmatter line other than the tools line byte for byte" → tests/mcp/persona-generation.test.ts
+- "Generation lists the Claude Code name of every name on a tools line holding several names" → tests/mcp/persona-generation.test.ts
+- "Generation translates each pi tool name to its own Claude Code name" → tests/mcp/persona-generation.test.ts
+- "Generation writes no Claude Code persona file that drops a tool name the mapping does not carry" → tests/mcp/persona-generation.test.ts
+- "Generation writes one Claude Code persona file for each pi persona file, under the same name" → tests/mcp/persona-generation.test.ts
+- "The Claude Code persona files this product ships are what generation produces from its pi persona files" → tests/mcp/persona-generation.test.ts
+<!-- /scenarios -->
+
+### Requirement: A check fails when a Claude Code persona file is not what generation would produce
+
+A check SHALL compare each `.claude/agents` file with what generation would produce from
+`.pi/agents`. The check SHALL fail, naming the file, when the two differ. It SHALL also
+fail, naming the file, when a `.pi/agents` file has no `.claude/agents` file, and when a
+`.claude/agents` file has no `.pi/agents` file.
+
+The check makes a copy that has fallen out of step fail loudly, instead of standing
+unnoticed.
+
+<!-- scenarios: generated -->
+- "The check fails, naming the file, when a Claude Code persona file differs from what generation would produce" → tests/mcp/persona-check.test.ts
+- "The check fails, naming the file, when a Claude Code persona file has no pi persona file" → tests/mcp/persona-check.test.ts
+- "The check fails, naming the file, when a pi persona file has no Claude Code persona file" → tests/mcp/persona-check.test.ts
+- "The check passes when every Claude Code persona file is what generation would produce" → tests/mcp/persona-check.test.ts
+<!-- /scenarios -->

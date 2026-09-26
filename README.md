@@ -103,7 +103,10 @@ written against its own conventions (pnpm scripts, a codebase-memory index, its 
 rules); your copies in `.pi/agents/` are yours to edit. The `.claude/agents/` copies
 are the same personas for Claude Code executor sessions (`PROOFSPEC_EXECUTOR=claude`):
 Claude Code reads its subagents from `.claude/agents/` the way `pi` reads them from
-`.pi/agents/` — edit both, or whichever harness you run.
+`.pi/agents/`. `.claude/agents/` is generated — do not edit it by hand. Edit only
+`.pi/agents/`, then run `pnpm personas:write` to regenerate `.claude/agents/`, which
+translates each persona's `tools:` line to Claude Code's tool names;
+`pnpm personas:check` fails, naming the file, when a copy is out of step.
 
 **3. Queue the retrofit TASK.** One ask is enough — there is no spec prose yet, so
 nothing needs a disposition review. First create the empty spec directory: the queue
