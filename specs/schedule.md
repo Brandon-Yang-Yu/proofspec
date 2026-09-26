@@ -186,7 +186,7 @@ on the repo's own server.
 - "The live-session bound is four by default" → tests/schedule/bound.test.ts
 <!-- /scenarios -->
 
-### Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the harness `PROOFSPEC_EXECUTOR` names there, headed
+### Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
 
 The bare CLI's `startSession` action SHALL read the ready TASK's own MANIFEST for its
 `branch`, ensure a worktree for that branch exists at the conventional path
@@ -198,8 +198,10 @@ stderr in its message, never a bare "could not create" summary in stderr's place
 session start that fails SHALL throw an error carrying tmux's own stderr in its
 message, never a bare exit-code summary in its place — the same standard a failed
 worktree creation keeps. Which
-agent the invocation runs SHALL be named by the `PROOFSPEC_EXECUTOR` environment
-variable — `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
+agent the invocation runs SHALL be read first from the TASK's own queue entry: an
+`executor` file there holding `pi` or `claude` names the agent. When the entry holds no
+such record, the agent SHALL be named by the `PROOFSPEC_EXECUTOR` environment variable —
+`pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
 SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
 PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
 command, and SHALL be handed one initial user message as the agent's positional prompt
@@ -239,9 +241,11 @@ Deriving the name from the queue root gives each repo its own server, with no
 configuration. There is no special case for the single-repo user; everyone gets the
 derived name.
 
-The choice is one environment variable because everything else about starting a session
-is the same act either way, and the default stays `pi` so a queue that never names a
-harness runs exactly as it ran before.
+Everything else about starting a session is the same act whichever agent runs, so the
+choice is a single name. The TASK's own record comes first, so a TASK
+that has been moved to another agent stays on it through every later start, a start by
+hand included. A TASK with no record falls back to the environment variable. The
+default stays `pi`, so a queue that never names an agent runs exactly as it ran before.
 
 The session starts inside the TASK's own worktree and needs three facts — where the
 queue lives, which TASK it is, and which branch its queue measures against — which this

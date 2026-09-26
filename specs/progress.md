@@ -39,6 +39,11 @@ session leaves behind, and what anything makes of them belongs to whoever reads 
 settle is the one act among the four, and every question it answers it answers from git,
 never from its caller's word.
 
+One more act sits outside that shared contract, in the `pi` transport alone. When a `pi`
+executor session stops on an error from the model provider while its TASK is `building`,
+the transport restarts the TASK in the Claude Code harness, in the same worktree. It is
+not a tool a session calls. The transport reacts to the session's own stop.
+
 ### Requirement: report_task_state accepts only a closed set of state words
 
 `report_task_state` (`src/progress/extension.ts`) SHALL accept only `building`, `mergeable`,
@@ -281,3 +286,20 @@ by standing, and the docket answers them from this one (`specs/docket.md`).
 - "The history is appended to, never overwritten — a word that returns stands as its own entry" → tests/progress/extension.test.ts
 - "The registered phase tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
 <!-- /scenarios -->
+
+### Requirement: A pi executor session that stops on a provider error while its TASK is building restarts the TASK in the claude harness
+
+The `pi` transport SHALL watch for the moment the session stops and will not go on by
+itself. At that moment, when the session's last reply ended on an error from the model
+provider, the transport SHALL read the TASK's state word. It SHALL resolve the TASK's
+queue entry the same way `report_task_state` does, from `PROOFSPEC_QUEUE_ROOT` and
+`PROOFSPEC_TASK`, and SHALL do nothing when either is unset. When the state word is
+`building`, it SHALL first write `claude` into the entry's `executor` file. It SHALL then
+start the TASK's session again with `startSession`, in the TASK's same worktree. The restart SHALL run in a process of its own, detached from the `pi`
+session. Starting the new session kills the tmux session the `pi` session runs in, and
+the detached process lets the restart finish anyway. A stop whose last reply did not end
+on a provider error SHALL trigger nothing. A stop while the state word is anything other
+than `building` SHALL trigger nothing.
+
+The queue runs no timer, so the session itself is the one party that sees the failure at
+the moment it happens.
