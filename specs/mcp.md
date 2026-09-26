@@ -105,3 +105,39 @@ project's history.
 - "A dispatch into a worktree already wired adds no second copy of the heartbeat hook" → tests/mcp/heartbeat.test.ts
 - "The hook wiring joins the settings already standing in the TASK's worktree, erasing nothing" → tests/mcp/heartbeat.test.ts
 <!-- /scenarios -->
+
+### Requirement: Each Claude Code persona file is generated from its pi persona file, with the tools line translated
+
+Each `.claude/agents/<name>.md` SHALL be generated from `.pi/agents/<name>.md`. The
+generated file SHALL keep the body byte for byte. It SHALL keep every frontmatter line
+other than `tools:` byte for byte. The `tools:` line SHALL list the Claude Code name for
+each name the source lists, by this mapping:
+
+- `read` becomes `Read`.
+- `write` becomes `Write`.
+- `edit` becomes `Edit`.
+- `grep` becomes `Grep`.
+- `find` becomes `Glob`.
+- `ls` becomes `Glob`.
+- `bash` becomes `Bash`.
+- `subagent` becomes `Agent`.
+- `enqueue_task` becomes `mcp__proofspec__enqueue_task`.
+- `census_in_flight` becomes `mcp__proofspec__census_in_flight`.
+
+When two source names map to the same Claude Code name, that name SHALL appear once.
+When the source lists a name the mapping does not carry, generation SHALL fail and name
+it. Such a name SHALL NOT be dropped.
+
+`.pi/agents` is the one source for every persona. The translated tools line gives each
+persona the same tools in both harnesses, so a persona that is kept from writing code in
+one harness is kept from it in the other.
+
+### Requirement: A check fails when a Claude Code persona file is not what generation would produce
+
+A check SHALL compare each `.claude/agents` file with what generation would produce from
+`.pi/agents`. The check SHALL fail, naming the file, when the two differ. It SHALL also
+fail, naming the file, when a `.pi/agents` file has no `.claude/agents` file, and when a
+`.claude/agents` file has no `.pi/agents` file.
+
+The check makes a copy that has fallen out of step fail loudly, instead of standing
+unnoticed.
