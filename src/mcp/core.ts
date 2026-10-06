@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
-import { mainCheckoutOf } from '../cli/git.ts'
+import { readCommandSettings } from '../cli/command-settings.ts'
 import { piJudge } from '../cli/judge.ts'
 import { stderrNotifyHuman } from '../cli/notify.ts'
 import { appendPhaseHistory, enqueue, readPhase, writeHeartbeat, writePhase, writeState } from '../cli/queue.ts'
@@ -336,7 +336,7 @@ export async function runEnqueueTask(cwd: string, input: EnqueueTaskInput, sched
  * checkout of the repository `cwd` stands in — never a worktree's own copy either way.
  */
 export async function runCensusInFlight(cwd: string, settingsRoot?: string): Promise<CensusRead> {
-  const settings = readSettings(settingsRoot ?? (await mainCheckoutOf(cwd)))
+  const settings = settingsRoot === undefined ? await readCommandSettings(cwd) : readSettings(settingsRoot)
   if (!settings.ok) return settings
   return readCensus(cwd, settings.settings.baseBranch)
 }

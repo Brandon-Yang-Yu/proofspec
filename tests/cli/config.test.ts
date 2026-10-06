@@ -370,15 +370,10 @@ const JUDGE_INPUT: RelationshipJudgeInput = {
  *  window in tests/schedule/judge-cli.test.ts, so no constant wait passes both. */
 const FILE_TIMEOUT_MS = 2500
 
-/** Reads the settings at a queue root through the one module that holds the reading. */
-async function readSettingsAt(queueRoot: string) {
-  return readSettings(queueRoot)
-}
-
 /** A queue root holding exactly the given settings file, read through the real reading. */
-async function settingsFrom(contents: Readonly<Record<string, unknown>>) {
+async function settingsReadFrom(contents: Readonly<Record<string, unknown>>) {
   const repo = await makeRepo({ '.proofspec/config.json': JSON.stringify(contents) })
-  return readSettingsAt(repo.root)
+  return readSettings(repo.root)
 }
 
 /** Proves every one of a file's five settings on a real surface: the session start command
@@ -424,7 +419,7 @@ it('answers every setting from a file holding all five keys', async () => {
   await expectEverySettingFromFile()
 
   const fileSettings = { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 }
-  expect(await settingsFrom(fileSettings)).toEqual({ ok: true, settings: fileSettings })
+  expect(await settingsReadFrom(fileSettings)).toEqual({ ok: true, settings: fileSettings })
 }, 30_000)
 
 // Requirement: Project settings are read from one file at the queue root
@@ -438,7 +433,7 @@ it('answers the default for every key when no settings file stands at the queue 
   expect(DEFAULT_MAX_SESSIONS).toBe(4)
   const repo = await makeRepo({})
 
-  expect(await readSettingsAt(repo.root)).toEqual({
+  expect(readSettings(repo.root)).toEqual({
     ok: true,
     settings: {
       executor: 'pi',
@@ -457,7 +452,7 @@ it('answers the default for every key when no settings file stands at the queue 
 // THEN the base branch is main — the missing key's default — and the four named keys keep
 //      the file's values
 it('answers the missing key\'s default while the named keys keep the file\'s values', async () => {
-  expect(await settingsFrom({ executor: 'claude', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
+  expect(await settingsReadFrom({ executor: 'claude', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
     ok: true,
     settings: { executor: 'claude', baseBranch: 'main', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 },
   })
@@ -493,7 +488,7 @@ it('answers a key\'s default when its value is unusable, keeping the file\'s oth
   ]
 
   for (const [key, value] of unusable) {
-    expect(await settingsFrom({ ...usable, [key]: value }), `${key} holding ${JSON.stringify(value)}`).toEqual({
+    expect(await settingsReadFrom({ ...usable, [key]: value }), `${key} holding ${JSON.stringify(value)}`).toEqual({
       ok: true,
       settings: { ...usable, [key]: defaults[key] },
     })

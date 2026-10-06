@@ -1283,8 +1283,9 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const started: string[] = []
   const blocked: string[] = []
   const deferred: string[] = []
-  // The bound comes from the settings this pass already read; the count it is compared against below is asked of the
-  // server fresh at every dispatch decision, never kept from one decision to the next.
+  // The bound comes from the settings this pass already read; the count it is compared
+  // against below is asked of the server fresh at every dispatch decision, never kept from
+  // one decision to the next.
   const bound = maxSessionsFrom(settings)
   for (const task of ready) {
     // Unreachable: the guard above already returned when a ready TASK existed without both

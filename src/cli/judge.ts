@@ -1,22 +1,24 @@
 import { execFile } from 'node:child_process'
 import { judgeWith } from '../schedule/index.ts'
 import type { JudgeAgent, JudgeOutcome, JudgeProcess, ScheduleActions } from '../schedule/index.ts'
-import { settingsOf, settingsOrThrow } from '../settings.ts'
+import { settingsOf } from '../settings.ts'
 import type { SettingsSource } from '../settings.ts'
-import { mainCheckoutOf } from './git.ts'
+import { readCommandSettings } from './command-settings.ts'
 
 // A reasoning reply is short; this only avoids ever truncating a real one.
 const MAX_JUDGE_OUTPUT = 1024 * 1024
 
-// The live vendor/model choice, an operational knob owned here beside the settings file's `judgeBin` —
-// `schedule/judge.ts` stays domain rules only, with no default agent of its own.
+// The live vendor/model choice, an operational knob owned here beside the settings
+// file's `judgeBin` — `schedule/judge.ts` stays domain rules only, with no default agent
+// of its own.
 const DEFAULT_JUDGE_AGENT: JudgeAgent = { model: 'zai/glm-5.3:low' }
 
 /**
  * The real one-shot agent run: a fresh process per relationship — `pi` by default,
- * `claude` headless when the settings file's `judgeBin` names it — saving no session. The pure rules of
- * asking and reading live in `schedule/judge.ts`; this is the one thing that actually
- * spawns a process, the same boundary `graph.ts` keeps for the codebase-memory CLI.
+ * `claude` headless when the settings file's `judgeBin` names it — saving no session.
+ * The pure rules of asking and reading live in `schedule/judge.ts`; this is the one thing
+ * that actually spawns a process, the same boundary `graph.ts` keeps for the
+ * codebase-memory CLI.
  */
 export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<ScheduleActions['judge']> {
   return judgeWith(runJudgeProcess, agent)
@@ -38,12 +40,15 @@ export function judgeTimeoutMs(source: SettingsSource): number {
 /**
  * The judge runs inside the bare CLI's scheduling pass, which stands in the queue's checkout,
  * so its settings are the ones a command a person runs reads there. A settings file that
- * cannot be read throws naming the file — the judge's caller has no value to carry it in, and
- * running the default program instead would be the quiet run on defaults the file forbids.
+ * cannot be read throws naming the file rather than answering `cannot-run`: `verdictFrom`
+ * turns `cannot-run` into an unresolved verdict, so a broken settings file would surface as
+ * one more ordinary unresolved relationship instead of a loud failure — and running the
+ * default program instead would be the quiet run on defaults the file forbids.
  */
 async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome> {
-  const settingsRoot = await mainCheckoutOf(process.cwd())
-  const settings = settingsOrThrow(settingsRoot)
+  const read = await readCommandSettings(process.cwd())
+  if (!read.ok) throw new Error(read.reason)
+  const settings = read.settings
   const binary = settings.judgeBin
   const timeoutMs = judgeTimeoutMs(settings)
   try {
