@@ -206,6 +206,9 @@ it(
     // machine, so +700ms leaves room for that — yet stays under twice the configured value, so a
     // mutation that silently doubles or triples it still fails here.
     expect(elapsedMs).toBeLessThan(SHORT_TIMEOUT_MS + 700)
+    // Nor killed early: a wait shorter than the configured one, or one fixed regardless of it,
+    // fails here or in tests/cli/config.test.ts, whose window shares no number with this one.
+    expect(elapsedMs).toBeGreaterThanOrEqual(SHORT_TIMEOUT_MS - 50)
   },
   10_000,
 )

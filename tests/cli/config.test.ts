@@ -20,6 +20,7 @@ import { DEFAULT_JUDGE_TIMEOUT_MS, piJudge } from '../../src/cli/judge.ts'
 import { tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
 import type { TmuxCommand } from '../../src/cli/session.ts'
 import { createToolCore } from '../../src/mcp/core.ts'
+import { readSettings } from '../../src/settings.ts'
 import { DEFAULT_MAX_SESSIONS } from '../../src/schedule/index.ts'
 import type { JudgeVerdict, RelationshipJudgeInput } from '../../src/schedule/index.ts'
 import { CAPABILITY, cleanupRepos, enterTask, makeGitRepo, makeRepo, specFile, testFile, TEST_PATH } from './support.ts'
@@ -365,20 +366,13 @@ const JUDGE_INPUT: RelationshipJudgeInput = {
 
 /** A judge timeout short enough to wait out in a test and far from both the default 60000 and
  *  any value an old variable is set to below, so the wait the judge kept is read off the
- *  clock: a stand-in that never answers is killed at this bound, not before and not long after. */
-const FILE_TIMEOUT_MS = 1500
+ *  clock: a stand-in that never answers is killed at this bound, not before and not long after.
+ *  Its window (this value to a second past it) shares no number with the judge proof's own
+ *  window in tests/schedule/judge-cli.test.ts, so no constant wait passes both. */
+const FILE_TIMEOUT_MS = 2500
 
-/** Reads the settings at a queue root through the one module that will hold the reading.
- *  Imported at call time, not at the file's top, so the scenarios that drive real commands
- *  fail on their own assertions while this one is still unimplemented, rather than the whole
- *  file dying on one missing import. The specifier rides a constant because `src/settings.ts`
- *  does not exist yet at tests-red time: a literal would fail `pnpm typecheck` before any
- *  behavior exists to check, while the runtime failure of this import — the reading is not
- *  implemented — is exactly this scenario's red reason. */
-const SETTINGS_MODULE = '../../src/settings.ts'
-
+/** Reads the settings at a queue root through the one module that holds the reading. */
 async function readSettingsAt(queueRoot: string) {
-  const { readSettings } = await import(/* @vite-ignore */ SETTINGS_MODULE)
   return readSettings(queueRoot)
 }
 
