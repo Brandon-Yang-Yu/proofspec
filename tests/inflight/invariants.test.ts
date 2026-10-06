@@ -5,26 +5,49 @@ import { computeGraph } from '../../src/inflight/index.ts'
 
 // Requirement: The graph only reports
 // Scenario: The answer carries no order, no hold, no rank, and no recommendation
-// GIVEN two in-flight TASK sharing a CAPABILITY_FILE
-// WHEN the graph is computed
-// THEN the shared CAPABILITY_FILE is reported as their relationship, and neither a TASK nor a
-//      relationship carries any field naming an order, a hold, a rank, or a recommendation
-it('carries no field naming an order, a hold, a rank, or a recommendation', () => {
-  const graph = computeGraph({
-    changes: [
-      { task: 'a', editedCapabilities: ['cli'], changedTerms: [], blockedBy: undefined },
-      { task: 'b', editedCapabilities: ['cli'], changedTerms: [], blockedBy: undefined },
-    ],
-    failures: [],
-    vocabulary: { terms: [], capabilities: [] },
-    queue: ['a', 'b'],
-  })
+// GIVEN four in-flight TASK sharing three CAPABILITY_FILE — two of them shared by three TASK,
+//       one by two — arriving in one order and then in the reverse order
+// WHEN the graph is computed for each arrival
+// THEN each shared CAPABILITY_FILE is reported as their relationship, neither a TASK nor a
+//      relationship carries any field naming an order, a hold, a rank, or a recommendation,
+//      and both arrivals answer the same TASK and relationships in the same order — an order
+//      that follows neither the order the TASK arrived in nor how many TASK a relationship holds
+it('carries no order, no hold, no rank, and no recommendation', () => {
+  // alpha is shared by three TASK, beta by two, gamma by three: whichever way a ranking by
+  // size ran, it would put beta first or last, never between the other two.
+  const changes = [
+    { task: 'c', editedCapabilities: ['gamma', 'alpha'], changedTerms: [], blockedBy: undefined },
+    { task: 'a', editedCapabilities: ['alpha', 'gamma'], changedTerms: [], blockedBy: undefined },
+    { task: 'd', editedCapabilities: ['beta', 'gamma'], changedTerms: [], blockedBy: undefined },
+    { task: 'b', editedCapabilities: ['alpha', 'beta'], changedTerms: [], blockedBy: undefined },
+  ]
+  const queue = changes.map(change => change.task)
+  const graphFrom = (arrival: typeof changes, standing: readonly string[]) =>
+    computeGraph({ changes: arrival, failures: [], vocabulary: { terms: [], capabilities: [] }, queue: standing })
 
-  expect(Object.keys(graph).sort()).toEqual(['relationships', 'tasks'])
-  expect(graph.tasks).toHaveLength(2)
-  expect(graph.relationships).toEqual([{ node: { kind: 'capability', name: 'cli' }, tasks: ['a', 'b'] }])
-  for (const task of graph.tasks) expect(Object.keys(task).sort()).toEqual(['blockedBy', 'problem', 'reopened', 'task', 'writes'])
-  for (const relationship of graph.relationships) expect(Object.keys(relationship).sort()).toEqual(['node', 'tasks'])
+  const first = graphFrom(changes, queue)
+  const reversed = graphFrom([...changes].reverse(), [...queue].reverse())
+
+  // The order the answer stands in is the same whichever order the TASK arrived in, so no
+  // TASK's position — in the queue or in the reading — ranks it over another.
+  expect(reversed).toEqual(first)
+  expect(new Set(first.tasks.map(one => one.task))).toEqual(new Set(['a', 'b', 'c', 'd']))
+  expect(first.tasks).toHaveLength(4)
+  const sharedBy = Object.fromEntries(first.relationships.map(one => [one.node.name, one.tasks]))
+  expect(first.relationships.every(one => one.node.kind === 'capability')).toBe(true)
+  expect(first.relationships).toHaveLength(3)
+  expect(new Set(sharedBy.alpha)).toEqual(new Set(['a', 'b', 'c']))
+  expect(new Set(sharedBy.beta)).toEqual(new Set(['b', 'd']))
+  expect(new Set(sharedBy.gamma)).toEqual(new Set(['a', 'c', 'd']))
+  // The relationship two TASK share stands between the two that three share: the answer's
+  // order follows no relationship's size, either way round.
+  expect(first.relationships.map(one => one.tasks.length)).toEqual([3, 2, 3])
+
+  for (const graph of [first, reversed]) {
+    expect(Object.keys(graph).sort()).toEqual(['relationships', 'tasks'])
+    for (const task of graph.tasks) expect(Object.keys(task).sort()).toEqual(['blockedBy', 'problem', 'reopened', 'task', 'writes'])
+    for (const relationship of graph.relationships) expect(Object.keys(relationship).sort()).toEqual(['node', 'tasks'])
+  }
 })
 
 // Requirement: A TASK that cannot be read carries a problem, and the rest of the graph still answers

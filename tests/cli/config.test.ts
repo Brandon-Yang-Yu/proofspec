@@ -17,7 +17,7 @@ import { afterEach, expect, it } from 'vitest'
 import { touched, schedule } from '../../src/cli/index.ts'
 import type { Outcome, TouchedSummary } from '../../src/cli/index.ts'
 import { DEFAULT_JUDGE_TIMEOUT_MS, piJudge } from '../../src/cli/judge.ts'
-import { tmuxSessionCommands } from '../../src/cli/session.ts'
+import { tmuxSessionCommands, tmuxStartSession } from '../../src/cli/session.ts'
 import type { TmuxCommand } from '../../src/cli/session.ts'
 import { createToolCore } from '../../src/mcp/core.ts'
 import { DEFAULT_MAX_SESSIONS } from '../../src/schedule/index.ts'
@@ -115,13 +115,18 @@ function summaryOf(outcome: Outcome): TouchedSummary {
   return outcome.report
 }
 
-/** Settings as a test writes them: a whole file's contents, or no file at all. */
-type SettingsFile = Readonly<Record<string, unknown>> | 'no file'
+/** Settings as a test writes them: a whole file's contents, no file at all, or a file standing
+ *  there that is not valid JSON. */
+type SettingsFile = Readonly<Record<string, unknown>> | 'no file' | 'not valid JSON'
+
+/** The bytes a settings file that is not valid JSON holds. */
+const NOT_JSON = '{ not valid JSON'
 
 async function writeSettingsInto(root: string, settings: SettingsFile): Promise<void> {
   if (settings === 'no file') return
   await mkdir(join(root, '.proofspec'), { recursive: true })
-  await writeFile(join(root, '.proofspec', 'config.json'), JSON.stringify(settings))
+  const bytes = settings === 'not valid JSON' ? NOT_JSON : JSON.stringify(settings)
+  await writeFile(join(root, '.proofspec', 'config.json'), bytes)
 }
 
 /** The start command's own command words are `sh <runner script path>` — the harness's whole
@@ -264,12 +269,13 @@ async function settingsFrom(contents: Readonly<Record<string, unknown>>) {
 
 /** Proves every one of a file's five settings on a real surface: the session start command
  *  runs its executor (claude), touched measures from its baseBranch (bDev), the judge runs its
- *  judgeBin and waits its judgeTimeoutMs, and a pass starts at most its maxSessions (seven, so
- *  all five ready TASKs start — the default four, or any lower bound, would defer one). */
+ *  judgeBin and waits its judgeTimeoutMs, and a pass starts at most its maxSessions — two, below the five ready TASKs
+ *  and below the default four, so exactly two start and three are deferred: a pass that
+ *  ignored the bound would start all five, and one on the default would start four. */
 async function expectEverySettingFromFile(): Promise<void> {
   const dir = await standInDir()
   const fileBin = await standIn(dir, 'file-bin', 'exec sleep 5')
-  const settings = { executor: 'claude', baseBranch: 'bDev', judgeBin: fileBin, judgeTimeoutMs: FILE_TIMEOUT_MS, maxSessions: 7 }
+  const settings = { executor: 'claude', baseBranch: 'bDev', judgeBin: fileBin, judgeTimeoutMs: FILE_TIMEOUT_MS, maxSessions: 2 }
 
   expect(await executorStartedUnder(settings)).toBe('claude')
   expect(await branchTouchedMeasuredFrom(settings)).toBe('bDev')
@@ -287,7 +293,7 @@ async function expectEverySettingFromFile(): Promise<void> {
   expect(judged.elapsedMs).toBeGreaterThanOrEqual(FILE_TIMEOUT_MS - 50)
   expect(judged.elapsedMs).toBeLessThan(FILE_TIMEOUT_MS + 500)
 
-  expect(await sessionsAPassStartsUnder(settings)).toEqual({ started: ['a', 'b', 'c', 'd', 'e'], deferred: [] })
+  expect(await sessionsAPassStartsUnder(settings)).toEqual({ started: ['a', 'b'], deferred: ['c', 'd', 'e'] })
 }
 
 // Requirement: Project settings are read from one file at the queue root
@@ -343,32 +349,39 @@ it('answers the missing key\'s default while the named keys keep the file\'s val
 
 // Requirement: Project settings are read from one file at the queue root
 // Scenario: A key holding a value it cannot use takes its default, the other keys keep their values
-// GIVEN a settings file whose executor names an agent that is neither pi nor claude, and, one
-//      at a time, a settings file whose baseBranch is the empty string, one whose maxSessions
-//      is not a positive number, and one whose judgeTimeoutMs is not a positive number
+// GIVEN a settings file whose executor is neither pi nor claude, and, one at a time, a settings
+//      file whose baseBranch is not a non-empty string, one whose maxSessions is not a positive
+//      number, and one whose judgeTimeoutMs is not a positive number
 // WHEN the tools read their settings
 // THEN in each case that one key takes its default and the file's other keys keep their values
 it('answers a key\'s default when its value is unusable, keeping the file\'s other values', async () => {
-  // An executor naming an agent that is neither pi nor claude.
-  expect(await settingsFrom({ executor: 'codex', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
-    ok: true,
-    settings: { executor: 'pi', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 },
-  })
-  // A baseBranch that is the empty string.
-  expect(await settingsFrom({ executor: 'claude', baseBranch: '', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
-    ok: true,
-    settings: { executor: 'claude', baseBranch: 'main', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 },
-  })
-  // A maxSessions that is not a positive number.
-  expect(await settingsFrom({ executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 0 })).toEqual({
-    ok: true,
-    settings: { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: DEFAULT_MAX_SESSIONS },
-  })
-  // A judgeTimeoutMs that is not a positive number.
-  expect(await settingsFrom({ executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 0, maxSessions: 7 })).toEqual({
-    ok: true,
-    settings: { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: DEFAULT_JUDGE_TIMEOUT_MS, maxSessions: 7 },
-  })
+  // Every key named with a usable value no default shares, so a key that fell back is told
+  // apart from one that kept the file's value — and one unusable value per file.
+  const usable = { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 } as const
+  const defaults = { executor: 'pi', baseBranch: 'main', judgeBin: 'pi', judgeTimeoutMs: DEFAULT_JUDGE_TIMEOUT_MS, maxSessions: DEFAULT_MAX_SESSIONS } as const
+  const unusable: ReadonlyArray<readonly [keyof typeof usable, unknown]> = [
+    // An executor naming an agent that is neither pi nor claude, and one that is no name at all.
+    ['executor', 'codex'],
+    ['executor', 7],
+    // A baseBranch that is the empty string, and one that is not a string.
+    ['baseBranch', ''],
+    ['baseBranch', 42],
+    // A maxSessions that is zero, negative, or not a number.
+    ['maxSessions', 0],
+    ['maxSessions', -3],
+    ['maxSessions', 'four'],
+    // A judgeTimeoutMs that is zero, negative, or not a number.
+    ['judgeTimeoutMs', 0],
+    ['judgeTimeoutMs', -500],
+    ['judgeTimeoutMs', 'soon'],
+  ]
+
+  for (const [key, value] of unusable) {
+    expect(await settingsFrom({ ...usable, [key]: value }), `${key} holding ${JSON.stringify(value)}`).toEqual({
+      ok: true,
+      settings: { ...usable, [key]: defaults[key] },
+    })
+  }
 })
 
 // Requirement: Project settings are read from one file at the queue root
@@ -412,7 +425,53 @@ it('refuses, naming the settings file, when it is not valid JSON', async () => {
   if (pass.kind !== 'cannot-run') throw new Error(`expected schedule to refuse naming the settings file, got ${pass.kind}`)
   expect(pass.reason).toContain('.proofspec/config.json')
   expect(started).toEqual([])
-})
+
+  // The session start, the bare CLI's own startSession: it refuses before any session starts,
+  // rather than starting the default executor. tmux is a stand-in that logs every call it is
+  // given and starts nothing, so a start that went ahead is read off its log, and no real
+  // harness can ever be started here.
+  const dispatched = await makeGitRepo({ 'a.txt': 'a', '.pi/agents/executor.md': 'You are the executor.\n' })
+  await enterTask(dispatched, 'a', { edit: 'a.txt' })
+  await writeSettingsInto(dispatched.root, 'not valid JSON')
+  const fakeTmuxDir = await standInDir()
+  const tmuxLog = join(fakeTmuxDir, 'tmux.log')
+  await writeFile(tmuxLog, '')
+  await standIn(fakeTmuxDir, 'tmux', `echo "$*" >> ${JSON.stringify(tmuxLog)}\nexit 0`)
+  process.env.PATH = `${fakeTmuxDir}:${ORIGINAL_PATH}`
+  try {
+    await expect(tmuxStartSession(dispatched.root, 'a')).rejects.toThrow(/\.proofspec\/config\.json/)
+  } finally {
+    process.env.PATH = ORIGINAL_PATH
+  }
+  expect(await readFile(tmuxLog, 'utf8')).not.toContain('new-session')
+
+  // The judge, run the way the bare CLI runs it from a main checkout: it fails naming the file
+  // rather than running the default program. The PATH reaches only a stand-in pi that would
+  // answer at once if run, and a guard claude.
+  const judgeGuards = await standInDir()
+  await standIn(judgeGuards, 'pi', 'echo RESOLVED')
+  await standIn(judgeGuards, 'claude', 'exit 1')
+  await expect(judgedFromMainCheckout('not valid JSON', guardedPath(judgeGuards))).rejects.toThrow(/\.proofspec\/config\.json/)
+  expect(existsSync(join(judgeGuards, 'pi.started'))).toBe(false)
+  expect(existsSync(join(judgeGuards, 'claude.started'))).toBe(false)
+
+  // settle_task, from a session handed a queue root whose file is broken: a mergeable TASK
+  // whose branch landed in main — the default base — is refused naming the file, its state
+  // word left as it stood, rather than settled against the default.
+  const settling = await makeGitRepo({ 'a.txt': 'a' })
+  await enterTask(settling, 'a', { edit: 'a.txt' })
+  await settling.git(['merge', 'work/a'])
+  await settling.write('.proofspec/dispatch/a/state', 'mergeable')
+  await writeSettingsInto(settling.root, 'not valid JSON')
+  process.env.PROOFSPEC_QUEUE_ROOT = settling.root
+  process.env.PROOFSPEC_TASK = 'a'
+  const core = createToolCore({ fireSchedulingPass: async () => {} })
+
+  const settle = await core.call('settle_task', {}, settling.root)
+
+  expect(settle).toEqual({ ok: false, reason: expect.stringContaining('.proofspec/config.json') })
+  await expect(readFile(join(settling.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
+}, 30_000)
 
 // Requirement: Project settings are read from one file at the queue root
 // Scenario: A command run in a worktree reads the main checkout's settings file, never the worktree's copy
@@ -462,65 +521,90 @@ it('measures against the branch the main checkout\'s settings file names, never 
 // THEN they read the file at the queue root they were handed, measuring against the branch
 //      it names, never the copy standing in the worktree they are in
 it('reads the settings at the queue root a session is handed, never the copy in its worktree', async () => {
-  const repo = await makeGitRepo({
+  // Three settings files, each naming a different base branch, so the branch an answer was
+  // measured against names the file that decided it:
+  // - the handed queue root's own file (repo A's main checkout) names bDev;
+  // - the session stands in a worktree of a different repository, B — a clone of A — whose
+  //   own main checkout's file names bOther, so a reading that asked git for the main checkout
+  //   of wherever the session stands would measure against bOther;
+  // - the worktree's own branch carries a copy naming main.
+  // Measured against bDev the census answers only the second requirement and the settle is
+  // performed; against bOther or main the census answers both and the settle is refused,
+  // since the settled branch landed in bDev alone.
+  const handed = await makeGitRepo({
     'specs/cli.md': twoRequirementSpec('The first original description.', 'The second original description.'),
   })
   const development = 'bDev'
-  await repo.git(['checkout', '-b', development])
-  await repo.write('specs/cli.md', twoRequirementSpec('The first description as the development branch rewrote it.', 'The second original description.'))
-  await repo.git(['add', '-A'])
-  await repo.git(['commit', '-m', 'development branch rewrites the first'])
-  // The censused TASK: built on the named branch, carrying its own settings copy naming main,
-  // never merged anywhere. Its worktree is where the session stands.
-  await repo.git(['checkout', '-b', 'work/censused'])
-  await repo.write('specs/cli.md', twoRequirementSpec('The first description as the development branch rewrote it.', 'The second description as the TASK rewrote it.'))
-  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main' }))
-  await repo.git(['add', '-A'])
-  await repo.git(['commit', '-m', 'the TASK rewrites the second and carries its own copy'])
-  // The settled TASK: built on the named branch, carrying its own copy naming main, and landed
-  // in that branch — an ancestor of it and not of main.
-  await repo.git(['checkout', development])
-  await repo.git(['checkout', '-b', 'work/settled-by-session'])
-  await repo.write('specs/cli.md', twoRequirementSpec('The first description as the settled TASK rewrote it.', 'The second original description.'))
-  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main' }))
-  await repo.git(['add', '-A'])
-  await repo.git(['commit', '-m', 'the settled TASK rewrites the first and carries its own copy'])
-  await repo.git(['checkout', development])
-  await repo.git(['merge', 'work/settled-by-session'])
-  await repo.git(['checkout', 'main'])
-  await queueTask(repo.root, 'censused', 'mergeable')
-  await queueTask(repo.root, 'settled-by-session', 'mergeable')
-  // The queue root's own file names the development branch; written after the last checkout,
-  // it stands only in the main checkout.
-  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: development }))
-  const standing = join(repo.root, '.proofspec', 'worktrees', 'censused')
-  await repo.git(['worktree', 'add', standing, 'work/censused'])
-  await repo.git(['worktree', 'add', join(repo.root, '.proofspec', 'worktrees', 'settled-by-session'), 'work/settled-by-session'])
+  await handed.git(['checkout', '-b', development])
+  await handed.write('specs/cli.md', twoRequirementSpec('The first description as the development branch rewrote it.', 'The second original description.'))
+  await handed.git(['add', '-A'])
+  await handed.git(['commit', '-m', 'development branch rewrites the first'])
+  // Another branch off main, the one the standing repository's main checkout will name.
+  await handed.git(['checkout', 'main'])
+  await handed.git(['checkout', '-b', 'bOther'])
+  await handed.write('docs/other.md', 'another line of work\n')
+  await handed.git(['add', '-A'])
+  await handed.git(['commit', '-m', 'another branch moves past main'])
+  // The censused TASK: built on bDev, carrying its own settings copy naming main, never
+  // merged anywhere. Its worktree is where the session stands.
+  await handed.git(['checkout', development])
+  await handed.git(['checkout', '-b', 'work/censused'])
+  await handed.write('specs/cli.md', twoRequirementSpec('The first description as the development branch rewrote it.', 'The second description as the TASK rewrote it.'))
+  await handed.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main' }))
+  await handed.git(['add', '-A'])
+  await handed.git(['commit', '-m', 'the TASK rewrites the second and carries its own copy'])
+  // The settled TASK: built on bDev, carrying its own copy naming main, and landed in bDev —
+  // an ancestor of it and of neither bOther nor main.
+  await handed.git(['checkout', development])
+  await handed.git(['checkout', '-b', 'work/settled-by-session'])
+  await handed.write('specs/cli.md', twoRequirementSpec('The first description as the settled TASK rewrote it.', 'The second original description.'))
+  await handed.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main' }))
+  await handed.git(['add', '-A'])
+  await handed.git(['commit', '-m', 'the settled TASK rewrites the first and carries its own copy'])
+  await handed.git(['checkout', development])
+  await handed.git(['merge', 'work/settled-by-session'])
+  await handed.git(['checkout', 'main'])
+  await queueTask(handed.root, 'censused', 'mergeable')
+  await queueTask(handed.root, 'settled-by-session', 'mergeable')
+  // The handed queue root's own file names bDev; written after the last checkout, it stands
+  // only in A's main checkout.
+  await handed.write('.proofspec/config.json', JSON.stringify({ baseBranch: development }))
+  await handed.git(['worktree', 'add', join(handed.root, '.proofspec', 'worktrees', 'settled-by-session'), 'work/settled-by-session'])
+
+  // B: a clone of A carrying every one of A's branches, so whichever repository a census
+  // asks git in, the same branches answer — only the settings file read decides the answer.
+  const other = await makeRepo({})
+  await execFileAsync('git', ['clone', '-q', handed.root, other.root])
+  for (const branch of [development, 'bOther', 'work/censused', 'work/settled-by-session']) {
+    await execFileAsync('git', ['branch', branch, `origin/${branch}`], { cwd: other.root })
+  }
+  await writeSettingsInto(other.root, { baseBranch: 'bOther' })
+  const standing = join(other.root, '.proofspec', 'worktrees', 'censused')
+  await execFileAsync('git', ['worktree', 'add', standing, 'work/censused'], { cwd: other.root })
   // census_in_flight reads the queue directory of the repo it is called in; the in-flight
-  // entry is mirrored where the session stands, so the census finds its TASK there whichever
-  // directory it takes the queue from — what this scenario holds it to is only which settings
-  // file it measures by.
+  // entry is mirrored in B's main checkout and where the session stands, as it stands in A, so
+  // the census finds its TASK whichever directory it takes the queue from — what this scenario
+  // holds it to is only which settings file it measures by.
+  await queueTask(other.root, 'censused', 'mergeable')
   await queueTask(standing, 'censused', 'mergeable')
   // The session's hand-off, exactly as the start command hands it: the queue root and the TASK
   // in the environment, the session's own cwd the worktree it stands in.
-  process.env.PROOFSPEC_QUEUE_ROOT = repo.root
+  process.env.PROOFSPEC_QUEUE_ROOT = handed.root
   process.env.PROOFSPEC_TASK = 'settled-by-session'
   process.chdir(standing)
   // The settle's own scheduling pass is a no-op here: this scenario is about the settle's
   // reading, and a real pass would reach for tmux and a judge.
   const core = createToolCore({ fireSchedulingPass: async () => {} })
 
-  // Settling a TASK: measured against the branch the queue root's file names, the settle is
-  // performed; measured against main — the copy where the session stands — it would refuse,
-  // since the branch never landed there.
+  // Settling a TASK: measured against bDev, the branch the handed queue root's file names, the
+  // settle is performed; measured against bOther or main it would refuse.
   const settled = await core.call('settle_task', {}, standing)
   expect(settled).toEqual({ ok: true, task: 'settled-by-session' })
-  await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'settled-by-session', 'state'), 'utf8')).resolves.toBe('merged')
-  await expect(stat(join(repo.root, '.proofspec', 'worktrees', 'settled-by-session'))).rejects.toThrow()
+  await expect(readFile(join(handed.root, '.proofspec', 'dispatch', 'settled-by-session', 'state'), 'utf8')).resolves.toBe('merged')
+  await expect(stat(join(handed.root, '.proofspec', 'worktrees', 'settled-by-session'))).rejects.toThrow()
 
-  // Censusing the queue: the one in-flight TASK's rewrite is measured against the named
-  // branch, which answers only the second requirement — measured against main it would
-  // answer both.
+  // Censusing the queue: the one in-flight TASK's rewrite is measured against bDev, which
+  // answers only the second requirement — measured against bOther or main it would answer both.
   const census = await core.call('census_in_flight', {}, standing)
   expect(census).toEqual({
     ok: true,
@@ -566,12 +650,12 @@ it('answers the file\'s settings — or the defaults — never the old environme
 
   // With a file naming all five keys, every variable set to a value the file contradicts —
   // pi against the file's claude, trunk against bDev, a 100ms wait against the file's 1000,
-  // and a bound of two against seven.
+  // and a bound of three against two.
   process.env.PROOFSPEC_EXECUTOR = 'pi'
   process.env.PROOFSPEC_BASE_BRANCH = 'trunk'
   process.env.PROOFSPEC_JUDGE_BIN = envBin
   process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = '100'
-  process.env.PROOFSPEC_MAX_SESSIONS = '2'
+  process.env.PROOFSPEC_MAX_SESSIONS = '3'
   await expectEverySettingFromFile()
   expect(existsSync(`${envBin}.started`)).toBe(false)
 

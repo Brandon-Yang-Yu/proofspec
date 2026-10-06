@@ -14,12 +14,11 @@ import { cleanupRepos, enterTask, makeGitRepo, makeRepo } from '../cli/support.t
 afterEach(cleanupRepos)
 // Unconditional, not a manual delete at the end of the test body it belongs to — the same
 // leaked-ambient-state guard `tests/progress/extension.test.ts` and `tests/schedule/`
-// already keep. `PROOFSPEC_EXECUTOR` is the new variable this capability introduces, cleaned
-// up the way the session tests clean their own overrides.
+// already keep. A Claude Code session is chosen here by the TASK's executor record in its
+// queue entry, never by the environment, so nothing else needs clearing.
 afterEach(() => {
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
-  delete process.env.PROOFSPEC_EXECUTOR
 })
 
 // --- driving the heartbeat CLI entry --------------------------------------------------
@@ -462,7 +461,8 @@ it('wires the checkout\'s own src/mcp/heartbeat.ts entry when the queue root is 
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
 
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
 
@@ -499,7 +499,8 @@ it('runs the installed package\'s built heartbeat entry from the Claude Code hoo
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
 
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
 
@@ -562,7 +563,8 @@ it('joins the settings already standing in the TASK\'s worktree, erasing nothing
     }, null, 2)}\n`,
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
 
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
 
@@ -603,7 +605,8 @@ it('adds no second copy of the heartbeat\'s or the provider-error entry\'s hook 
     '.pi/agents/executor.md': '---\nname: executor\ntools: []\n---\nYou are the executor persona.\n',
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
 
   // Two starts for one TASK — the shape a retry after a dead first session takes, with the
   // worktree (and its settings file) reused rather than recreated.
