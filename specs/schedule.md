@@ -153,8 +153,8 @@ A scheduling pass SHALL count the executor sessions live on the dedicated tmux s
 same server `startSession` starts them on, reached through `PROOFSPEC_TMUX_SOCKET` — fresh
 at each dispatch decision, from the server itself and never from bookkeeping of its own,
 and SHALL start no executor session once that count has reached the bound. The bound SHALL
-be four by default, overridable through the `PROOFSPEC_MAX_SESSIONS` environment variable,
-with a malformed override falling back to four rather than silently disabling the bound. A
+be four by default. The `maxSessions` key of the settings file at the queue root SHALL set
+it. A malformed value SHALL fall back to four, so a bad setting never disables the bound. A
 TASK the bound leaves undispatched SHALL keep its state word `queued` exactly as it stands;
 a later pass dispatches it once a session has gone.
 
@@ -169,9 +169,9 @@ capacity freeing is no state of the TASK's own: a freed slot is there for the ne
 see, with no producer of its own to build. The bound is what a single pass can see: two
 passes triggered at the same instant can each see three live sessions and each start one —
 five, briefly — and closing that window would take a lock over the whole queue, which this
-design declines to build. The `PROOFSPEC_MAX_SESSIONS` override lets a test exercising the
-bound point at a throwaway socket and a bound of one, rather than start four real sessions
-on the repo's own server.
+design declines to build. A test exercising the bound writes a settings file with a bound
+of one into its own throwaway queue root and points at a throwaway socket. It never starts
+four real sessions on the repo's own server.
 
 <!-- scenarios: generated -->
 - "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
@@ -200,11 +200,11 @@ message, never a bare exit-code summary in its place — the same standard a fai
 worktree creation keeps. Which
 agent the invocation runs SHALL be read first from the TASK's own queue entry: an
 `executor` file there holding `pi` or `claude` names the agent. When the entry holds no
-such record, the agent SHALL be named by the `PROOFSPEC_EXECUTOR` environment variable —
-`pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
-SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>`, `-e PROOFSPEC_TASK=<task>`, and `-e
-PROOFSPEC_BASE_BRANCH=<base>` as environment variables on the tmux `new-session`
-command, and SHALL be handed one initial user message as the agent's positional prompt
+such record, the agent SHALL be named by the `executor` key of the settings file at the
+queue root, `pi` or `claude`, defaulting to `pi`. Whatever the choice, the invocation
+SHALL carry `-e PROOFSPEC_QUEUE_ROOT=<cwd>` and `-e PROOFSPEC_TASK=<task>` as
+environment variables on the tmux `new-session` command. It SHALL NOT carry
+`PROOFSPEC_BASE_BRANCH`. It SHALL be handed one initial user message as the agent's positional prompt
 argument — a message telling the session to begin working its TASK, whose exact words
 are the implementation's to choose. The `pi` invocation SHALL be run with `--approve`,
 `--no-extensions`, `--extension <cwd>/.pi/extensions/progress.ts`, and `--extension
@@ -244,13 +244,14 @@ derived name.
 Everything else about starting a session is the same act whichever agent runs, so the
 choice is a single name. The TASK's own record comes first, so a TASK
 that has been moved to another agent stays on it through every later start, a start by
-hand included. A TASK with no record falls back to the environment variable. The
-default stays `pi`, so a queue that never names an agent runs exactly as it ran before.
+hand included. A TASK with no record falls back to the settings file. The default stays
+`pi`, so a queue that never names an agent runs exactly as it ran before.
 
-The session starts inside the TASK's own worktree and needs three facts — where the
-queue lives, which TASK it is, and which branch its queue measures against — which this
-action already holds at the moment it starts the session, so it hands them down as the
-three environment variables. The tool that reports
+The session starts inside the TASK's own worktree and needs two facts: where the queue
+lives, and which TASK it is. This action already holds both when it starts the session,
+so it hands them down as the two environment variables. The session reads every other
+setting, the base branch included, from the settings file at the queue root it was
+handed. The tool that reports
 state must load in a freshly created worktree, and the copy it loads must be the current
 one. On the `pi` side, `--approve` is what lets the tool load there, the pinned
 `progress.ts` points at this tool's own checkout rather than whatever the TASK's branch
@@ -317,8 +318,11 @@ The bare CLI's `judge` action SHALL run a fresh, one-shot process for every rela
 it is handed — never a saved session, never reused across relationships — closing that
 process's stdin the instant it starts, and SHALL bound its wait for an answer with a
 timeout, so that one relationship's process can never hang the scheduling pass that
-awaits it. The process's binary SHALL be named by the `PROOFSPEC_JUDGE_BIN` environment
-variable, defaulting to `pi`, and the argv SHALL be built for the binary it names:
+awaits it. The process's binary SHALL be named by the `judgeBin` key of the settings file
+at the queue root, defaulting to `pi`. The timeout's length SHALL be set by the
+`judgeTimeoutMs` key of the same file, and a malformed value SHALL fall back to the
+default, so a bad setting never disables the timeout. The argv SHALL be built for the
+binary `judgeBin` names:
 `claude` runs as one headless one-shot process, `pi` as the one-shot process the
 requirements above pin. Which binary runs changes nothing about what is asked or how the
 answer is read.
@@ -329,8 +333,8 @@ and this one is about the choice of process. The process's stdin is closed the i
 starts, so it cannot hang waiting for input that will never arrive. The timeout exists
 because nothing else stops one bad run from hanging everything behind it: `judge` is
 awaited one relationship at a time, so one hang would hang the whole pass. The binary is
-an environment variable's choice because which process asks is an operational fact, not a
-rule: the question and the reading stay the one shared thing.
+a setting's choice because which process asks is an operational fact, not a rule. The
+question and the reading stay the one shared thing.
 
 <!-- scenarios: generated -->
 - "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
