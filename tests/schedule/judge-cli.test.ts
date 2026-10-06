@@ -32,11 +32,11 @@ it('falls back to the default timeout on a malformed value', async () => {
   // The default must come from reading the file and refusing its value, never from not
   // reading it at all: a well-formed value at a sibling queue root is answered as written.
   const wellFormed = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: 45_000 }) })
-  expect(await judgeTimeoutMs(wellFormed.root)).toBe(45_000)
+  expect(judgeTimeoutMs(wellFormed.root)).toBe(45_000)
 
-  expect(await judgeTimeoutMs(zero.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(await judgeTimeoutMs(negative.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(await judgeTimeoutMs(word.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(judgeTimeoutMs(zero.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(judgeTimeoutMs(negative.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(judgeTimeoutMs(word.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
 })
 
 // Generous, not tight: this bounds a process that finishes in milliseconds, so it only needs

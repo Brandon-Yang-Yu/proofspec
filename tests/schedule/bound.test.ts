@@ -20,10 +20,10 @@ it('answers a default bound of four when nothing overrides it', async () => {
   // Four must come from reading the queue root and finding no bound named, never from not
   // reading it at all: a sibling queue root naming one is answered as named.
   const named = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
-  expect(await maxSessionsFrom(named.root)).toBe(9)
+  expect(maxSessionsFrom(named.root)).toBe(9)
 
-  expect(await maxSessionsFrom(noFile.root)).toBe(DEFAULT_MAX_SESSIONS)
-  expect(await maxSessionsFrom(noKey.root)).toBe(DEFAULT_MAX_SESSIONS)
+  expect(maxSessionsFrom(noFile.root)).toBe(DEFAULT_MAX_SESSIONS)
+  expect(maxSessionsFrom(noKey.root)).toBe(DEFAULT_MAX_SESSIONS)
   expect(DEFAULT_MAX_SESSIONS).toBe(4)
 })
 
@@ -36,8 +36,8 @@ it('takes a well-formed maxSessions value in place of the default four', async (
   const one = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 1 }) })
   const nine = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
 
-  expect(await maxSessionsFrom(one.root)).toBe(1)
-  expect(await maxSessionsFrom(nine.root)).toBe(9)
+  expect(maxSessionsFrom(one.root)).toBe(1)
+  expect(maxSessionsFrom(nine.root)).toBe(9)
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
@@ -55,9 +55,9 @@ it('falls back to four on a malformed maxSessions value, rather than silently di
   // Four must come from reading the file and refusing its value, never from not reading it at
   // all: a well-formed value at a sibling queue root is answered as written.
   const wellFormed = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
-  expect(await maxSessionsFrom(wellFormed.root)).toBe(9)
+  expect(maxSessionsFrom(wellFormed.root)).toBe(9)
 
-  expect(await maxSessionsFrom(zero.root)).toBe(4)
-  expect(await maxSessionsFrom(negative.root)).toBe(4)
-  expect(await maxSessionsFrom(word.root)).toBe(4)
+  expect(maxSessionsFrom(zero.root)).toBe(4)
+  expect(maxSessionsFrom(negative.root)).toBe(4)
+  expect(maxSessionsFrom(word.root)).toBe(4)
 })
