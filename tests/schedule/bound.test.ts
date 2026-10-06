@@ -1,7 +1,8 @@
 // Capability: schedule
 
 import { afterEach, expect, it } from 'vitest'
-import { DEFAULT_MAX_SESSIONS, maxSessionsFrom } from '../../src/schedule/index.ts'
+import { maxSessionsFrom } from '../../src/cli/bound.ts'
+import { DEFAULT_MAX_SESSIONS } from '../../src/settings.ts'
 import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)

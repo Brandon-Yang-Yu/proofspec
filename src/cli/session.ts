@@ -4,10 +4,10 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { settingsOrThrow } from '../settings.ts'
+import type { ExecutorName } from '../settings.ts'
 import { queueRootDigest } from './digest.ts'
 import { runGit } from './git.ts'
 import { executorRecordPath, manifestFor } from './queue.ts'
-import type { ExecutorName } from './queue.ts'
 
 /**
  * The real `startSession` action: a headed,
@@ -380,9 +380,10 @@ function writeSessionHandoff(executor: ExecutorName, start: SessionStart): Sessi
  * flags set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
  * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
  * worktree, `specs/progress.md` — and the queue root is where the session's tools find the
- * project's settings file, so no setting rides the environment), and the runner script assembles the harness's argv from them, reading the system prompt
- * from its file — so the harness is handed the persona and the kickoff exactly as passed,
- * one argument each, same bytes.
+ * project's settings file, so no setting rides the environment), and the runner script
+ * assembles the harness's argv from them, reading the system prompt from its file — so the
+ * harness is handed the persona and the kickoff exactly as passed, one argument each, same
+ * bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   return sessionCommandsFor(task, { start, executor: executorFor(start.queueRoot, task) })

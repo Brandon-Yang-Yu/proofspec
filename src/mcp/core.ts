@@ -92,6 +92,13 @@ type ReportEnvResult = { readonly ok: true; readonly env: ReportEnv } | { readon
 /** What a tool refuses with — the failure limb every rule here answers as a value. */
 export type Refusal = { readonly ok: false; readonly reason: string }
 
+/** The queue root a census reads its settings at, when the call is made from inside an
+ *  executor session. Unlike `resolveReportEnv`, an absent variable is no refusal: a census
+ *  also runs outside any session, and then reads the settings in the main checkout instead. */
+function optionalQueueRootFrom(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  return env.PROOFSPEC_QUEUE_ROOT
+}
+
 /** Resolves the queue root and TASK name a report is for, refusing outright — never falling
  *  back to a working directory or guessing — when either is missing from the environment. */
 export function resolveReportEnv(env: Readonly<Record<string, string | undefined>>): ReportEnvResult {
@@ -536,7 +543,7 @@ export function piExecute(core: ToolCore, tool: ToolName) {
 export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions; readonly fireSchedulingPass?: FireSchedulingPass }): ToolCore {
   const core: ToolCore = {
     enqueue_task: async ({ args, cwd }) => runEnqueueTask(cwd, args as unknown as EnqueueTaskInput, options?.scheduleActions),
-    census_in_flight: async ({ cwd }) => runCensusInFlight(cwd, process.env.PROOFSPEC_QUEUE_ROOT),
+    census_in_flight: async ({ cwd }) => runCensusInFlight(cwd, optionalQueueRootFrom(process.env)),
     report_task_state: async ({ args }) => {
       const envResult = resolveReportEnv(process.env)
       if (!envResult.ok) return envResult

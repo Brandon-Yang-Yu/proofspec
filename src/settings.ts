@@ -1,7 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { mainCheckoutOf } from './cli/git.ts'
-import type { ExecutorName } from './cli/queue.ts'
 
 /**
  * Requirement: Project settings are read from one file at the queue root (specs/cli.md)
@@ -13,6 +11,13 @@ import type { ExecutorName } from './cli/queue.ts'
  * loud failure, never a quiet run on the defaults: a committed file silently ignored would
  * let a project believe it runs on settings it does not.
  */
+
+/** The two harnesses an executor session can run in. Subscription auth lives only inside
+ *  the Claude Code harness, and `pi` is the default. The choice is operational — the TASK's
+ *  own queue entry record, written when a provider-error stop moves the TASK to claude, else
+ *  the settings file's `executor` — never something a TASK's branch gets a say in. It lives
+ *  here, beside the setting it types, so this file reads no module of the CLI's own. */
+export type ExecutorName = 'pi' | 'claude'
 
 export const DEFAULT_EXECUTOR: ExecutorName = 'pi'
 export const DEFAULT_BASE_BRANCH = 'main'
@@ -58,16 +63,6 @@ export function readSettings(queueRoot: string): SettingsRead {
 }
 
 /**
- * The settings a command a person runs reads: the file in the main checkout of the repository
- * `cwd` stands in, whether `cwd` is that checkout or one of its TASKs' worktrees — a
- * worktree's own branch may carry a stale copy, and reading it would let two places hold two
- * different settings.
- */
-export async function readCommandSettings(cwd: string): Promise<SettingsRead> {
-  return readSettings(await mainCheckoutOf(cwd))
-}
-
-/**
  * The settings for a caller whose contract is to throw on a failure it cannot answer as a
  * value — a session start, a judge run — carrying the reason, which names the file.
  */
@@ -75,6 +70,17 @@ export function settingsOrThrow(queueRoot: string): Settings {
   const read = readSettings(queueRoot)
   if (!read.ok) throw new Error(read.reason)
   return read.settings
+}
+
+/** A queue root whose settings file is still to be read, or the settings a caller already
+ *  read — so a caller that needs several values reads the file once and hands the result to
+ *  each reader, while a reader asked about a queue root alone reads it itself. */
+export type SettingsSource = string | Settings
+
+/** The settings `source` stands for, reading the file only when it is a queue root; a file
+ *  that cannot be read throws, as `settingsOrThrow` does. */
+export function settingsOf(source: SettingsSource): Settings {
+  return typeof source === 'string' ? settingsOrThrow(source) : source
 }
 
 function settingsFrom(file: Readonly<Record<string, unknown>>): Settings {

@@ -1,4 +1,3 @@
-import { DEFAULT_BASE_BRANCH } from '../settings.ts'
 import type { Manifest, TaskState } from './types.ts'
 
 /** One TASK with its MANIFEST already standing and its state already read. */
@@ -28,9 +27,9 @@ export type TaskBasis = {
  * surfaces as that TASK's problem when the graph is drawn.
  *
  * `baseBranch` is the name the project's settings file gives the BASE_BRANCH, read by the
- * caller where the settings live; a caller naming none measures against the default.
+ * caller where the settings live.
  */
-export function basesFor(tasks: readonly TaskRecord[], baseBranch: string = DEFAULT_BASE_BRANCH): readonly TaskBasis[] {
+export function basesFor(tasks: readonly TaskRecord[], baseBranch: string): readonly TaskBasis[] {
   return tasks
     .filter(one => one.state === 'in-flight')
     .map(one => ({ task: one.task, manifest: one.manifest, against: baseBranch }))

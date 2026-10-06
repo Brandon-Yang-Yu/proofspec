@@ -19,7 +19,7 @@ function record(task: string, options: Partial<TaskRecord> = {}): TaskRecord {
 // WHEN the graph decides what to measure it against
 // THEN it is measured from the merge-base of its branch with the BASE_BRANCH
 it('reads a TASK carrying no blocked from its merge-base with the BASE_BRANCH', () => {
-  const bases = basesFor([record('a')])
+  const bases = basesFor([record('a')], 'main')
 
   expect(bases).toEqual([
     { task: 'a', manifest: record('a').manifest, against: 'main' },
@@ -38,7 +38,7 @@ it('reads a TASK whose blocked names a merged TASK from the BASE_BRANCH', () => 
     manifest: { intentRef: 'docs/y.md', branch: 'work/b', blocked: { task: 'a', reason: "needs a's parser" } },
   })
 
-  const bases = basesFor([target, dependent])
+  const bases = basesFor([target, dependent], 'main')
 
   expect(bases.find(one => one.task === 'b')).toEqual({
     task: 'b',
@@ -59,7 +59,7 @@ it('carries a named problem naming the TASK when blocked names a TASK not presen
     manifest: { intentRef: 'docs/y.md', branch: 'work/b', blocked: { task: 'ghost', reason: 'needs it' } },
   })
 
-  const bases = basesFor([dependent])
+  const bases = basesFor([dependent], 'main')
   expect(bases).toEqual([
     { task: 'b', manifest: dependent.manifest, against: 'main' },
   ])
@@ -79,7 +79,7 @@ it('carries a named problem naming the TASK when blocked names a TASK not presen
 // WHEN the graph decides what to measure
 // THEN that TASK is absent from what is measured
 it('does not read a merged TASK into the graph at all', () => {
-  const bases = basesFor([record('a', { state: 'merged' }), record('b')])
+  const bases = basesFor([record('a', { state: 'merged' }), record('b')], 'main')
 
   expect(bases.map(one => one.task)).toEqual(['b'])
 })

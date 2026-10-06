@@ -1,11 +1,10 @@
 import { execFile } from 'node:child_process'
 import { judgeWith } from '../schedule/index.ts'
 import type { JudgeAgent, JudgeOutcome, JudgeProcess, ScheduleActions } from '../schedule/index.ts'
-import { DEFAULT_JUDGE_TIMEOUT_MS, settingsOrThrow } from '../settings.ts'
+import { settingsOf, settingsOrThrow } from '../settings.ts'
+import type { SettingsSource } from '../settings.ts'
 import { mainCheckoutOf } from './git.ts'
 
-// Exported so a test can assert a fallback against this value instead of a duplicated literal.
-export { DEFAULT_JUDGE_TIMEOUT_MS }
 // A reasoning reply is short; this only avoids ever truncating a real one.
 const MAX_JUDGE_OUTPUT = 1024 * 1024
 
@@ -25,14 +24,15 @@ export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<Sc
 
 /**
  * A hung agent must not hang a whole scheduling pass, which awaits one judge call at a time —
- * the timeout is the settings file's `judgeTimeoutMs` at `queueRoot`, read fresh on every
- * call, since a module-level constant would freeze whatever the file held at first import.
+ * the timeout is the settings file's `judgeTimeoutMs`, read fresh on every call given a queue
+ * root, since a module-level constant would freeze whatever the file held at first import;
+ * the judge's own run hands the settings it already read, so a run reads the file once.
  * Anything short of a positive number falls back to the default rather than silently
  * disabling the timeout (`src/settings.ts`): `execFile`'s own `timeout` option only arms when
  * it is greater than zero.
  */
-export async function judgeTimeoutMs(queueRoot: string): Promise<number> {
-  return settingsOrThrow(queueRoot).judgeTimeoutMs
+export function judgeTimeoutMs(source: SettingsSource): number {
+  return settingsOf(source).judgeTimeoutMs
 }
 
 /**
@@ -43,8 +43,9 @@ export async function judgeTimeoutMs(queueRoot: string): Promise<number> {
  */
 async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome> {
   const settingsRoot = await mainCheckoutOf(process.cwd())
-  const binary = settingsOrThrow(settingsRoot).judgeBin
-  const timeoutMs = await judgeTimeoutMs(settingsRoot)
+  const settings = settingsOrThrow(settingsRoot)
+  const binary = settings.judgeBin
+  const timeoutMs = judgeTimeoutMs(settings)
   try {
     const stdout = await execFileWithClosedStdin(binary, judgeArgsFor(binary, judgeProcess.args), timeoutMs)
     return { kind: 'ran', code: 0, stdout }

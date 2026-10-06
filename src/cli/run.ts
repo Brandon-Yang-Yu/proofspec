@@ -30,10 +30,11 @@ import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.t
 import type { Graph, Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, Vocabulary } from '../inflight/index.ts'
 import { docketView } from '../docket/index.ts'
 import type { QueueEntryRead, TaskPhase, TaskTimes } from '../docket/index.ts'
-import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, maxSessionsFrom, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
+import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
-import { readCommandSettings, readSettings } from '../settings.ts'
-import { changedSpecPaths, isAncestor, mainCheckoutOf, readChangedFiles, readFileAt } from './git.ts'
+import { maxSessionsFrom } from './bound.ts'
+import { readCommandSettings } from './command-settings.ts'
+import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
 import type { ChangedFile } from './git.ts'
 import { readTestRuns } from './coverage.ts'
 import { readCallGraph } from './graph.ts'
@@ -1228,8 +1229,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   // before it settles, prunes, or starts anything under defaults the project never chose.
   // A pass is a command a person runs, so its settings are the main checkout's file even when
   // it is run from inside a TASK's worktree.
-  const settingsRoot = await mainCheckoutOf(options.cwd)
-  const read = readSettings(settingsRoot)
+  const read = await readCommandSettings(options.cwd)
   if (!read.ok) return { kind: 'cannot-run', reason: read.reason }
   const settings = read.settings
 
@@ -1283,9 +1283,9 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const started: string[] = []
   const blocked: string[] = []
   const deferred: string[] = []
-  // The bound is read once per pass; the count it is compared against below is asked of the
+  // The bound comes from the settings this pass already read; the count it is compared against below is asked of the
   // server fresh at every dispatch decision, never kept from one decision to the next.
-  const bound = await maxSessionsFrom(settingsRoot)
+  const bound = maxSessionsFrom(settings)
   for (const task of ready) {
     // Unreachable: the guard above already returned when a ready TASK existed without both
     // actions in hand, so `ready` is only ever non-empty here with both.
