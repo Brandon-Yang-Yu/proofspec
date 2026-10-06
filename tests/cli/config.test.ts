@@ -194,6 +194,122 @@ async function sessionsAPassStartsUnder(settings: SettingsFile): Promise<{ start
   return { started: pass.report.started, deferred: pass.report.deferred }
 }
 
+/** A capability file holding three named requirements, each with its own description. */
+function threeRequirementSpec(first: string, second: string, third: string): string {
+  return [
+    '# cli',
+    '',
+    '### Requirement: A first requirement',
+    '',
+    first,
+    '',
+    '### Requirement: A second requirement',
+    '',
+    second,
+    '',
+    '### Requirement: A third requirement',
+    '',
+    third,
+    '',
+  ].join('\n')
+}
+
+/** The three branches a base can name in `branchesTheSessionToolsAndAPassMeasureBy`. */
+type MeasuredBranch = 'main' | 'bDev' | 'trunk'
+
+/** A repo whose main checkout holds these settings, built so the census, settle_task, and a
+ *  scheduling pass each answer differently against main, bDev, and trunk:
+ *  - bDev is cut from main and rewrites the first requirement; trunk is cut from bDev and
+ *    rewrites the second; the in-flight TASK `censused` is cut from trunk and rewrites the
+ *    third — so measured against trunk the census answers the third requirement alone,
+ *    against bDev the second and third, and against main all three;
+ *  - three mergeable TASKs each landed in exactly one of the three branches, and in neither
+ *    other — so the one TASK a settle accepts names the branch it measured by. */
+async function measuringRepo(settings: SettingsFile) {
+  const repo = await makeGitRepo({ 'specs/cli.md': threeRequirementSpec('First, original.', 'Second, original.', 'Third, original.') })
+  await repo.git(['checkout', '-b', 'bDev'])
+  await repo.write('specs/cli.md', threeRequirementSpec('First, as bDev rewrote it.', 'Second, original.', 'Third, original.'))
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'bDev rewrites the first'])
+  await repo.git(['checkout', '-b', 'trunk'])
+  await repo.write('specs/cli.md', threeRequirementSpec('First, as bDev rewrote it.', 'Second, as trunk rewrote it.', 'Third, original.'))
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'trunk rewrites the second'])
+  await repo.git(['checkout', '-b', 'work/censused'])
+  await repo.write('specs/cli.md', threeRequirementSpec('First, as bDev rewrote it.', 'Second, as trunk rewrote it.', 'Third, as the TASK rewrote it.'))
+  await repo.git(['add', '-A'])
+  await repo.git(['commit', '-m', 'the TASK rewrites the third'])
+  // Each landing TASK is cut from its branch and merged back into it after every other
+  // branch was cut, so it is an ancestor of that branch alone.
+  for (const branch of ['main', 'bDev', 'trunk'] as const) {
+    const task = `landed-in-${branch}`
+    await repo.git(['checkout', branch])
+    await repo.git(['checkout', '-b', `work/${task}`])
+    await repo.write(`${task}.txt`, `landed in ${branch}\n`)
+    await repo.git(['add', `${task}.txt`])
+    await repo.git(['commit', '-m', `${task} edits`])
+    await repo.git(['checkout', branch])
+    await repo.git(['merge', `work/${task}`])
+  }
+  await repo.git(['checkout', 'main'])
+  // The queue entries and the settings file are written after the last checkout, so they
+  // stand only in the main checkout, untracked by any branch.
+  await queueTask(repo.root, 'censused', 'mergeable')
+  for (const branch of ['main', 'bDev', 'trunk'] as const) await queueTask(repo.root, `landed-in-${branch}`, 'mergeable')
+  await writeSettingsInto(repo.root, settings)
+  return repo
+}
+
+/** The branch each of the three remaining places measured against, under a repo's main
+ *  checkout holding these settings: the census and settle_task as a session calls them,
+ *  handed the queue root in PROOFSPEC_QUEUE_ROOT, and a scheduling pass run in the main
+ *  checkout — read off which requirements the census answers, and which landed TASK the
+ *  settle and the pass each settle. */
+async function branchesTheSessionToolsAndAPassMeasureBy(settings: SettingsFile): Promise<{ census: string; settleTask: string; pass: string }> {
+  const answeredBy: Readonly<Record<string, MeasuredBranch>> = {
+    'A third requirement': 'trunk',
+    'A second requirement,A third requirement': 'bDev',
+    'A first requirement,A second requirement,A third requirement': 'main',
+  }
+  const toolsRepo = await measuringRepo(settings)
+  process.env.PROOFSPEC_QUEUE_ROOT = toolsRepo.root
+  const core = createToolCore({ fireSchedulingPass: async () => {} })
+  try {
+    const census = await core.call('census_in_flight', {}, toolsRepo.root) as { ok: boolean; census?: { tasks: { task: string; capabilities: { requirements: { requirement: string }[] }[] }[] } }
+    const censused = census.census?.tasks.find(one => one.task === 'censused')
+    const answered = (censused?.capabilities ?? []).flatMap(one => one.requirements.map(requirement => requirement.requirement)).sort().join(',')
+
+    const settledByTool: string[] = []
+    for (const branch of ['main', 'bDev', 'trunk'] as const) {
+      process.env.PROOFSPEC_TASK = `landed-in-${branch}`
+      const settle = await core.call('settle_task', {}, toolsRepo.root) as { ok: boolean }
+      if (settle.ok) settledByTool.push(branch)
+    }
+
+    const passRepo = await measuringRepo(settings)
+    const pass = await schedule({
+      cwd: passRepo.root,
+      schedule: {
+        startSession: async () => {},
+        countSessions: async () => 0,
+        judge: async () => ({ kind: 'resolved' }),
+        notifyHuman: async () => {},
+      },
+    })
+    if (pass.kind !== 'scheduled') throw new Error(`expected a scheduled report, got ${pass.kind}`)
+    const mergedByPass = pass.report.merged.map(task => task.replace(/^landed-in-/, ''))
+
+    return {
+      census: answeredBy[answered] ?? `an unnamed answer: ${answered}`,
+      settleTask: settledByTool.join(',') || 'no landed TASK settled',
+      pass: mergedByPass.join(',') || 'no landed TASK settled',
+    }
+  } finally {
+    delete process.env.PROOFSPEC_QUEUE_ROOT
+    delete process.env.PROOFSPEC_TASK
+  }
+}
+
 /** A stand-in program on disk: it leaves `<path>.started` the moment it runs, then runs
  *  `rest` — so which program the judge ran is read off the disk, never by spawning a real
  *  harness to find out. */
@@ -658,6 +774,14 @@ it('answers the file\'s settings — or the defaults — never the old environme
   process.env.PROOFSPEC_MAX_SESSIONS = '3'
   await expectEverySettingFromFile()
   expect(existsSync(`${envBin}.started`)).toBe(false)
+  // The base branch at every other place that asks git about it: the census and settle_task
+  // as a session calls them, and a scheduling pass's landed check, each measuring by the
+  // file's bDev, never the variable's trunk.
+  expect(await branchesTheSessionToolsAndAPassMeasureBy({ executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: FILE_TIMEOUT_MS, maxSessions: 2 })).toEqual({
+    census: 'bDev',
+    settleTask: 'bDev',
+    pass: 'bDev',
+  })
 
   // With no file at all, every variable set to a value that is not the default — claude,
   // bDev, the variable's own program, a 300ms wait, and a bound of seven — and still every
@@ -670,6 +794,7 @@ it('answers the file\'s settings — or the defaults — never the old environme
 
   expect(await executorStartedUnder('no file')).toBe('pi')
   expect(await branchTouchedMeasuredFrom('no file')).toBe('main')
+  expect(await branchesTheSessionToolsAndAPassMeasureBy('no file')).toEqual({ census: 'main', settleTask: 'main', pass: 'main' })
 
   // The judge: the default program is pi, reached on PATH — here a stand-in pi that takes a
   // second to answer, so the variable's 300ms wait would kill it before it ever finished,

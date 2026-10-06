@@ -28,7 +28,7 @@ it('answers a default bound of four when nothing overrides it', async () => {
 
 // Requirement: No executor session starts once the live-session bound is reached
 // Scenario: A well-formed maxSessions value replaces the default bound
-// GIVEN a settings file at the queue root whose maxSessions names a positive whole number
+// GIVEN a settings file at the queue root whose maxSessions names a positive number
 // WHEN the bound is read
 // THEN that number is the bound, in place of the default four
 it('takes a well-formed maxSessions value in place of the default four', async () => {
@@ -41,7 +41,7 @@ it('takes a well-formed maxSessions value in place of the default four', async (
 
 // Requirement: No executor session starts once the live-session bound is reached
 // Scenario: A malformed maxSessions value falls back to four rather than silently disabling the bound
-// GIVEN a settings file at the queue root whose maxSessions is not a positive whole number —
+// GIVEN a settings file at the queue root whose maxSessions is not a positive number —
 //       zero, a negative number, or a value that is not a number
 // WHEN the bound is read
 // THEN the bound is four, never the malformed value and never a reading that would

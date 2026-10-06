@@ -882,8 +882,7 @@ async function isGone(pid: number): Promise<boolean> {
  *  path, the executor persona startSession reads, and a fake `claude` first on PATH that
  *  records the arguments it was handed and the folder it was started in, and then parks —
  *  never the real claude: an unattended start in a test has no business running it. Hands
- *  back what a proof reads, and a restore that puts PATH and PROOFSPEC_EXECUTOR back as they
- *  were. */
+ *  back what a proof reads, and a restore that puts PATH back as it was. */
 async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
   readonly repo: GitRepo
   readonly worktree: string
@@ -918,10 +917,10 @@ async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
   const worktree = join(repo.root, '.proofspec', 'worktrees', task)
   await repo.git(['worktree', 'add', worktree, `work/${task}`])
 
-  // The restart must reach claude through the TASK's own record, never through a variable
-  // this process happens to carry, so the variable is taken away for the proof's length.
-  const previousExecutor = process.env.PROOFSPEC_EXECUTOR
-  delete process.env.PROOFSPEC_EXECUTOR
+  // The restart must reach claude only through the executor record it writes for the TASK:
+  // the queue root holds no settings file, so its executor is the default pi, and a start
+  // that ran claude anyway can only have read the record.
+  expect(existsSync(join(repo.root, '.proofspec', 'config.json'))).toBe(false)
   const previousPath = process.env.PATH
   process.env.PATH = `${bin}:${previousPath ?? ''}`
   // A server started earlier would answer with its older PATH, which holds no fake claude.
@@ -931,8 +930,6 @@ async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
     await execFileAsync('tmux', ['-L', RESTART_SOCKET, 'kill-server']).catch(() => {})
     if (previousPath === undefined) delete process.env.PATH
     else process.env.PATH = previousPath
-    if (previousExecutor === undefined) delete process.env.PROOFSPEC_EXECUTOR
-    else process.env.PROOFSPEC_EXECUTOR = previousExecutor
     await rm(bin, { recursive: true, force: true })
   }
   return { repo, worktree, claudeRanIn, claudeArgv, bin, restore }

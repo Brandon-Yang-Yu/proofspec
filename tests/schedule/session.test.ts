@@ -354,6 +354,10 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
  *  the generated MCP config the claude build writes, whether named bare or as a `NAME=path`
  *  environment entry — plus every file those contents name in turn. A value handed down
  *  anywhere in that set reaches the session; a value in none of it does not. */
+/** A base branch name only a settings file in these proofs ever names — distinctive enough
+ *  that no temp path, socket name, TASK name, or prompt text can contain it by accident. */
+const FILE_ONLY_BRANCH = 'settings-file-only-base-q7z'
+
 async function everythingHandedDown(commands: readonly TmuxCommand[]): Promise<readonly string[]> {
   const texts: string[] = []
   const readFilesNamedIn = async (text: string): Promise<string[]> => {
@@ -423,8 +427,10 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
   // absence: the branch is named somewhere the session can read it, and the start command
   // still hands down none of it, because the session reads the name from the settings
   // file at the queue root it is handed.
+  // The branch name is one no path, socket, or task name here can hold, so finding it anywhere
+  // in what is handed down can only mean the name itself was handed down.
   const queue = await makeRepo({})
-  await writeSettings(queue.root, { baseBranch: 'bDev' })
+  await writeSettings(queue.root, { baseBranch: FILE_ONLY_BRANCH })
   const commands = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
   const [, start] = commands
 
@@ -445,6 +451,8 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
   // one place the name is read from.
   expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
   expect((await everythingHandedDown(commands)).filter(text => text.includes('PROOFSPEC_BASE_BRANCH'))).toEqual([])
+  // Nor under another name: the branch the file names appears nowhere in what is handed down.
+  expect((await everythingHandedDown(commands)).filter(text => text.includes(FILE_ONLY_BRANCH))).toEqual([])
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
@@ -836,7 +844,9 @@ it('carries the same environment variables and the same positional kickoff messa
   // A real queue root whose settings file names claude — the harness this build runs rides
   // the file, never an environment variable.
   const queue = await makeRepo({ '.proofspec/dispatch/dispatch-me/state': 'building' })
-  await writeSettings(queue.root, { executor: 'claude' })
+  // It names a base branch too, one no path or name here can hold, so the claude build is held
+  // to handing the branch down under no name at all.
+  await writeSettings(queue.root, { executor: 'claude', baseBranch: FILE_ONLY_BRANCH })
   const build = () => tmuxSessionCommands('dispatch-me', { worktree: `${queue.root}/.proofspec/worktrees/dispatch-me`, queueRoot: queue.root, systemPrompt: 'you are the executor' })
 
   const commands = build()
@@ -858,6 +868,7 @@ it('carries the same environment variables and the same positional kickoff messa
   // root it was handed, whichever harness it runs.
   expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
   expect((await everythingHandedDown(commands)).filter(text => text.includes('PROOFSPEC_BASE_BRANCH'))).toEqual([])
+  expect((await everythingHandedDown(commands)).filter(text => text.includes(FILE_ONLY_BRANCH))).toEqual([])
   // The kickoff rides the same environment entry the pi runner reads, and the claude runner
   // hands it to claude as the one positional prompt argument, leading every flag. An
   // unattended session handed no first message never begins working its TASK. The same
