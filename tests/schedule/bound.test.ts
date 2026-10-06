@@ -1,39 +1,52 @@
 // Capability: schedule
 
-import { expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { DEFAULT_MAX_SESSIONS, maxSessionsFrom } from '../../src/schedule/index.ts'
+import { cleanupRepos, makeRepo } from '../cli/support.ts'
+
+afterEach(cleanupRepos)
 
 // Requirement: No executor session starts once the live-session bound is reached
 // Scenario: The live-session bound is four by default
-// GIVEN no PROOFSPEC_MAX_SESSIONS value at all
+// GIVEN no settings file at the queue root naming a bound — no file at all, and then a
+//       file holding no maxSessions
 // WHEN the bound is read
-// THEN it is four — the default this capability ships with
-it('answers a default bound of four when nothing overrides it', () => {
-  expect(maxSessionsFrom(undefined)).toBe(DEFAULT_MAX_SESSIONS)
+// THEN it is four both times — the default this capability ships with
+it('answers a default bound of four when nothing overrides it', async () => {
+  const noFile = await makeRepo({})
+  const noKey = await makeRepo({ '.proofspec/config.json': '{}' })
+
+  expect(await maxSessionsFrom(noFile.root)).toBe(DEFAULT_MAX_SESSIONS)
+  expect(await maxSessionsFrom(noKey.root)).toBe(DEFAULT_MAX_SESSIONS)
   expect(DEFAULT_MAX_SESSIONS).toBe(4)
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
-// Scenario: A well-formed PROOFSPEC_MAX_SESSIONS override replaces the default bound
-// GIVEN a PROOFSPEC_MAX_SESSIONS value naming a positive whole number
+// Scenario: A well-formed maxSessions value replaces the default bound
+// GIVEN a settings file at the queue root whose maxSessions names a positive whole number
 // WHEN the bound is read
 // THEN that number is the bound, in place of the default four
-it('takes a well-formed override in place of the default four', () => {
-  expect(maxSessionsFrom('1')).toBe(1)
-  expect(maxSessionsFrom('9')).toBe(9)
+it('takes a well-formed maxSessions value in place of the default four', async () => {
+  const one = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 1 }) })
+  const nine = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
+
+  expect(await maxSessionsFrom(one.root)).toBe(1)
+  expect(await maxSessionsFrom(nine.root)).toBe(9)
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
-// Scenario: A malformed PROOFSPEC_MAX_SESSIONS override falls back to four rather than silently disabling the bound
-// GIVEN a PROOFSPEC_MAX_SESSIONS value that is not a positive whole number — unparsable text,
-//       an empty string, zero, or a negative number
+// Scenario: A malformed maxSessions value falls back to four rather than silently disabling the bound
+// GIVEN a settings file at the queue root whose maxSessions is not a positive whole number —
+//       zero, a negative number, or a value that is not a number
 // WHEN the bound is read
-// THEN the bound is four, never the malformed value and never a reading (like NaN) whose
-//      comparison against a live count is always false — the one that would silently disable
-//      the bound entirely
-it('falls back to four on a malformed override, rather than silently disabling the bound', () => {
-  expect(maxSessionsFrom('not-a-number')).toBe(4)
-  expect(maxSessionsFrom('')).toBe(4)
-  expect(maxSessionsFrom('0')).toBe(4)
-  expect(maxSessionsFrom('-2')).toBe(4)
+// THEN the bound is four, never the malformed value and never a reading that would
+//      silently disable the bound entirely
+it('falls back to four on a malformed maxSessions value, rather than silently disabling the bound', async () => {
+  const zero = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 0 }) })
+  const negative = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: -2 }) })
+  const word = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 'many' }) })
+
+  expect(await maxSessionsFrom(zero.root)).toBe(4)
+  expect(await maxSessionsFrom(negative.root)).toBe(4)
+  expect(await maxSessionsFrom(word.root)).toBe(4)
 })

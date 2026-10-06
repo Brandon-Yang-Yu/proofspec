@@ -22,8 +22,6 @@ afterEach(cleanupRepos)
 // against. The same pattern `judge-cli.test.ts` already uses for its own env overrides.
 afterEach(() => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
-  delete process.env.PROOFSPEC_EXECUTOR
-  delete process.env.PROOFSPEC_BASE_BRANCH
 })
 
 /** The default socket name the STANDARD derives from a queue root's absolute path —
@@ -32,6 +30,13 @@ afterEach(() => {
  *  implementation's spelling of it. */
 function derivedSocketFor(queueRoot: string): string {
   return `proofspec-${createHash('sha256').update(queueRoot).digest('hex').slice(0, 8)}`
+}
+
+/** Writes the project's settings file — `.proofspec/config.json` under a queue root — the
+ *  one committed file every per-project setting in the scenarios below is read from. */
+async function writeSettings(queueRoot: string, settings: Readonly<Record<string, unknown>>): Promise<void> {
+  await mkdir(join(queueRoot, '.proofspec'), { recursive: true })
+  await writeFile(join(queueRoot, '.proofspec', 'config.json'), `${JSON.stringify(settings, null, 2)}\n`)
 }
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
@@ -380,17 +385,22 @@ it('kills a stale tmux session by the TASK\'s name before starting a fresh one r
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against
-// GIVEN a ready TASK whose queue measures against a BASE_BRANCH other than main
+// Scenario: The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, and carries no PROOFSPEC_BASE_BRANCH
+// GIVEN a ready TASK
 // WHEN the tmux start command is built
-// THEN it hands the session the queue's checkout, the TASK's name, and that branch as
-//      environment variables, so a session that settles measures against the same branch
-//      its queue was built on
-it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables on the start command', () => {
-  process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
-  const [, start] = tmuxSessionCommands('a', { worktree: '/repo/.proofspec/worktrees/a', queueRoot: '/repo', systemPrompt: '' })
+// THEN it hands the session the queue's checkout and the TASK's name as environment
+//      variables, and carries no `PROOFSPEC_BASE_BRANCH` — the session reads the base branch
+//      from the settings file at the queue root it was handed
+it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on the start command, and carries no PROOFSPEC_BASE_BRANCH', async () => {
+  // A queue root whose settings file names a base branch — the strongest form of the
+  // absence: the branch is named somewhere the session can read it, and the start command
+  // still hands down none of it, because the session reads the name from the settings
+  // file at the queue root it is handed.
+  const queue = await makeRepo({})
+  await writeSettings(queue.root, { baseBranch: 'bDev' })
+  const [, start] = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
 
-  // Pairwise scans, not a positional slice — the STANDARD and the CLAIM name three
+  // Pairwise scans, not a positional slice — the STANDARD and the CLAIM name the
   // variables without ordering them, and a flag appended after another -e (KICKOFF,
   // say) still satisfies them. Each scan proves some -e immediately precedes the value
   // it names.
@@ -400,9 +410,11 @@ it('carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as e
     }
     return false
   }
-  expect(carries('PROOFSPEC_QUEUE_ROOT=/repo')).toBe(true)
+  expect(carries(`PROOFSPEC_QUEUE_ROOT=${queue.root}`)).toBe(true)
   expect(carries('PROOFSPEC_TASK=a')).toBe(true)
-  expect(carries('PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
+  // The base branch rides no environment entry at all — the settings file at the queue
+  // root the session was handed is the one place the name is read from.
+  expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
@@ -517,46 +529,49 @@ writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2))
 }, 15000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: With no executor record, and PROOFSPEC_EXECUTOR unset or naming pi, the started harness is pi
-// GIVEN a TASK whose queue entry holds no executor record, and PROOFSPEC_EXECUTOR unset, and then set to name pi
+// Scenario: With no executor record, and the settings file naming no executor or naming pi, the started harness is pi
+// GIVEN a TASK whose queue entry holds no executor record, and a settings file at the
+//       queue root holding no executor key, and then one naming pi
 // WHEN the tmux commands to start the TASK's session are built
 // THEN each time the start command's agent is the pi invocation — and naming pi builds the
-//      same invocation the unset choice builds
-it('starts the pi invocation for a TASK with no executor record whenever PROOFSPEC_EXECUTOR is unset, and when it names pi', async () => {
+//      same invocation the absent key builds
+it('starts the pi invocation for a TASK with no executor record when the settings file names no executor, and when it names pi', async () => {
   // A real queue entry standing for the TASK, holding everything but an executor record —
-  // so the variable decides because the entry is silent, not because no entry exists.
+  // so the settings file decides because the entry is silent, not because no entry exists.
   const queue = await makeRepo({ '.proofspec/dispatch/a/state': 'building' })
   const build = () => tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
 
-  // Each GIVEN case built and read on its own — the default must survive the harness choice
-  // being added, not silently drift the moment the variable starts being read. Naming pi
+  // Each GIVEN case built and read on its own — the default must survive the harness
+  // choice being named, not silently drift the moment the key starts being read. Naming pi
   // must reach the same invocation, not a pi-shaped shortcut: the pi-named build's runner
-  // script is the unset build's own script, byte for byte — pins included, since the
-  // scenarios above prove what the unset build's script carries.
-  delete process.env.PROOFSPEC_EXECUTOR
-  const unsetScript = await runnerScriptFrom(build()[1])
-  await expect(unsetScript).toMatch(/^exec pi\b/)
+  // script is the absent-key build's own script, byte for byte — pins included, since the
+  // scenarios above prove what the absent-key build's script carries.
+  await writeSettings(queue.root, {})
+  const absentKeyScript = await runnerScriptFrom(build()[1])
+  await expect(absentKeyScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
 
-  process.env.PROOFSPEC_EXECUTOR = 'pi'
+  await writeSettings(queue.root, { executor: 'pi' })
   const namedPiScript = await runnerScriptFrom(build()[1])
   await expect(namedPiScript).toMatch(/^exec pi\b/)
   expect(build()[1].args.join('\n')).not.toContain('PROOFSPEC_MCP_CONFIG')
-  expect(namedPiScript, 'naming pi must carry the unset build\'s own pinned runner script').toBe(unsetScript)
+  expect(namedPiScript, 'naming pi must carry the absent-key build\'s own pinned runner script').toBe(absentKeyScript)
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: With no executor record, PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server
-// GIVEN a TASK whose queue entry holds no executor record, PROOFSPEC_EXECUTOR naming claude, the TASK's worktree, and the queue root
+// Scenario: With no executor record, the settings file's executor naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server
+// GIVEN a TASK whose queue entry holds no executor record, a settings file at the queue
+//       root whose executor names claude, the TASK's worktree, and the queue root
 // WHEN the tmux start command is built
 // THEN the agent it starts is claude, run with `--append-system-prompt` carrying the
 //      executor's own system prompt, with `--dangerously-skip-permissions`, and with a
 //      generated MCP config naming the queue root's own MCP server
-it('starts the claude invocation for a TASK with no executor record when PROOFSPEC_EXECUTOR names claude', async () => {
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
-  // A real queue entry standing for the TASK, holding everything but an executor record.
+it('starts the claude invocation for a TASK with no executor record when the settings file names claude', async () => {
+  // A real queue entry standing for the TASK, holding everything but an executor record —
+  // the settings file names the harness because the entry is silent.
   const queue = await makeRepo({ '.proofspec/dispatch/a/state': 'building' })
   const queueRoot = queue.root
+  await writeSettings(queueRoot, { executor: 'claude' })
 
   const [, start] = tmuxSessionCommands('a', { worktree: `${queueRoot}/.proofspec/worktrees/a`, queueRoot, systemPrompt: 'you are the executor' })
 
@@ -711,106 +726,112 @@ function expectPiInvocation(run: AgentRun, queueRoot: string): void {
 }
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: A TASK whose queue entry's executor record holds claude starts the claude invocation, whatever PROOFSPEC_EXECUTOR names: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server
-// GIVEN a ready TASK whose queue entry holds an executor record naming claude, and PROOFSPEC_EXECUTOR unset, and then set to name pi
+// Scenario: A TASK whose queue entry's executor record holds claude starts the claude invocation, whatever the settings file names: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server
+// GIVEN a ready TASK whose queue entry holds an executor record naming claude, and a
+//       settings file at the queue root whose executor names pi, and then one holding no
+//       executor key
 // WHEN the TASK's session is started through the bare CLI's startSession
 // THEN each time the agent started in the TASK's worktree is claude, never pi, run with
 //      `--append-system-prompt` carrying the executor's own system prompt, with
 //      `--dangerously-skip-permissions`, and with a generated MCP config naming the queue
 //      root's own MCP server
-it('starts the claude invocation for a TASK whose executor record holds claude, whatever PROOFSPEC_EXECUTOR names', async () => {
+it('starts the claude invocation for a TASK whose executor record holds claude, whatever the settings file names', async () => {
   const repo = await readyTask('claude')
 
   // Started in the TASK's worktree, not the queue root: both sides compared as real paths,
   // since the scratch repo sits under a symlinked temp dir on macOS.
   const worktree = (): string => realpathSync(join(repo.root, '.proofspec', 'worktrees', 'a'))
 
-  // Each GIVEN case started on its own: the variable's default and its explicit pi both
-  // lose to the record — a TASK moved to claude stays on it through every later start.
-  delete process.env.PROOFSPEC_EXECUTOR
-  const unset = await startAndObserve(repo, 'a')
-  await expectClaudeInvocation(unset, repo.root)
-  expect(realpathSync(unset.cwd), 'claude was not started in the TASK\'s worktree').toBe(worktree())
-
-  process.env.PROOFSPEC_EXECUTOR = 'pi'
+  // Each GIVEN case started on its own: the settings file's named pi and its absent key
+  // both lose to the record — a TASK moved to claude stays on it through every later start.
+  await writeSettings(repo.root, { executor: 'pi' })
   const namedPi = await startAndObserve(repo, 'a')
   await expectClaudeInvocation(namedPi, repo.root)
   expect(realpathSync(namedPi.cwd), 'claude was not started in the TASK\'s worktree').toBe(worktree())
+
+  await writeSettings(repo.root, {})
+  const absentKey = await startAndObserve(repo, 'a')
+  await expectClaudeInvocation(absentKey, repo.root)
+  expect(realpathSync(absentKey.cwd), 'claude was not started in the TASK\'s worktree').toBe(worktree())
 }, 30000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: A TASK whose queue entry's executor record holds pi starts the pi invocation, even when PROOFSPEC_EXECUTOR names claude: --approve, --no-extensions, and both pinned extensions
-// GIVEN a ready TASK whose queue entry holds an executor record naming pi, and PROOFSPEC_EXECUTOR naming claude
+// Scenario: A TASK whose queue entry's executor record holds pi starts the pi invocation, even when the settings file names claude: --approve, --no-extensions, and both pinned extensions
+// GIVEN a ready TASK whose queue entry holds an executor record naming pi, and a settings
+//       file at the queue root whose executor names claude
 // WHEN the TASK's session is started through the bare CLI's startSession
 // THEN the agent started is pi, never claude, run with `--approve`, `--no-extensions`,
-//      `--extension <cwd>/.pi/extensions/progress.ts`, and `--extension
-//      <cwd>/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts`
-it('starts the pi invocation for a TASK whose executor record holds pi, even when PROOFSPEC_EXECUTOR names claude', async () => {
+//      and both pinned extensions
+it('starts the pi invocation for a TASK whose executor record holds pi, even when the settings file names claude', async () => {
   const repo = await readyTask('pi')
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  await writeSettings(repo.root, { executor: 'claude' })
 
   expectPiInvocation(await startAndObserve(repo, 'a'), repo.root)
 }, 15000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: An executor record naming neither pi nor claude counts as no record, and PROOFSPEC_EXECUTOR decides either way
+// Scenario: An executor record naming neither pi nor claude counts as no record, and the settings file's executor decides either way
 // GIVEN a ready TASK whose queue entry holds an executor file naming neither pi nor claude
-//       (for example codex), and PROOFSPEC_EXECUTOR naming claude, and then naming pi
+//       (for example codex), and a settings file at the queue root whose executor names
+//       claude, and then names pi
 // WHEN the TASK's session is started through the bare CLI's startSession, once under each
-//      value of PROOFSPEC_EXECUTOR
-// THEN each time the agent started is the one PROOFSPEC_EXECUTOR names, run as the invocation
-//      a TASK with no record gets under that same value: with claude, claude with the
-//      executor's own system prompt appended, permissions skipped, and a generated MCP config
-//      naming the queue root's own MCP server; with pi, pi with `--approve`,
-//      `--no-extensions`, and both pinned extensions
-it('lets PROOFSPEC_EXECUTOR decide either way when the executor record names neither pi nor claude', async () => {
+//       value the settings file names
+// THEN each time the agent started is the one the settings file names, run as the invocation
+//       a TASK with no record gets under that same value: with claude, claude with the
+//       executor's own system prompt appended, permissions skipped, and a generated MCP config
+//       naming the queue root's own MCP server; with pi, pi with `--approve`,
+//       `--no-extensions`, and both pinned extensions
+it('lets the settings file decide either way when the executor record names neither pi nor claude', async () => {
   const repo = await readyTask('codex')
 
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  await writeSettings(repo.root, { executor: 'claude' })
   await expectClaudeInvocation(await startAndObserve(repo, 'a'), repo.root)
 
-  // The variable decides, not the record's mere presence: with the same unknown record and
-  // the variable naming pi, the start is the full pi invocation. Without this, a build that
+  // The settings file decides, not the record's mere presence: with the same unknown record
+  // and the file naming pi, the start is the full pi invocation. Without this, a build that
   // reads any record other than pi as claude would pass the case above.
-  process.env.PROOFSPEC_EXECUTOR = 'pi'
+  await writeSettings(repo.root, { executor: 'pi' })
   expectPiInvocation(await startAndObserve(repo, 'a'), repo.root)
 }, 30000)
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
 // Scenario: The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries
-// GIVEN PROOFSPEC_EXECUTOR naming claude
+// GIVEN the settings file at the queue root naming claude as its executor
 // WHEN the tmux start command is built
-// THEN it carries `PROOFSPEC_QUEUE_ROOT`, `PROOFSPEC_TASK`, and `PROOFSPEC_BASE_BRANCH` as
-//      environment variables naming the main checkout, the TASK, and the base branch its
-//      queue measures against, and hands claude one positional kickoff message telling the
-//      session to begin working its TASK
+// THEN it carries `PROOFSPEC_QUEUE_ROOT` and `PROOFSPEC_TASK` as environment variables
+//      naming the main checkout and the TASK, carries no `PROOFSPEC_BASE_BRANCH`, and hands
+//      claude one positional kickoff message telling the session to begin working its TASK —
+//      the same message the pi invocation carries
 it('carries the same environment variables and the same positional kickoff message on the claude invocation', async () => {
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
-  process.env.PROOFSPEC_BASE_BRANCH = 'bDev'
+  // A real queue root whose settings file names claude — the harness this build runs rides
+  // the file, never an environment variable.
+  const queue = await makeRepo({ '.proofspec/dispatch/dispatch-me/state': 'building' })
+  await writeSettings(queue.root, { executor: 'claude' })
+  const build = () => tmuxSessionCommands('dispatch-me', { worktree: `${queue.root}/.proofspec/worktrees/dispatch-me`, queueRoot: queue.root, systemPrompt: 'you are the executor' })
 
-  const [, start] = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })
+  const [, start] = build()
 
   // The same pairwise scans the pi scenario carries — each -e immediately precedes the value
   // it names, on the same tmux new-session command either harness runs, with no ordering
-  // assumed between the entries. The base branch is named the way the pi proof names it, so
-  // its -e pair is expected beside the other two.
+  // assumed between the entries.
   const carries = (value: string): boolean => {
     for (let i = 0; i + 1 < start.args.length; i++) {
       if (start.args[i] === '-e' && start.args[i + 1] === value) return true
     }
     return false
   }
-  expect(carries('PROOFSPEC_QUEUE_ROOT=/repo')).toBe(true)
+  expect(carries(`PROOFSPEC_QUEUE_ROOT=${queue.root}`)).toBe(true)
   expect(carries('PROOFSPEC_TASK=dispatch-me')).toBe(true)
-  expect(carries('PROOFSPEC_BASE_BRANCH=bDev')).toBe(true)
+  // The base branch rides no environment entry here either — the session reads it from
+  // the settings file at the queue root it was handed, whichever harness it runs.
+  expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
   // The kickoff rides the same environment entry the pi runner reads, and the claude runner
   // hands it to claude as the one positional prompt argument, leading every flag. An
   // unattended session handed no first message never begins working its TASK. The same
   // message, read literally: the claude build's kickoff is the pi build's kickoff, byte
   // for byte.
-  delete process.env.PROOFSPEC_EXECUTOR
-  const piKickoff = tmuxSessionCommands('dispatch-me', { worktree: '/repo/.proofspec/worktrees/dispatch-me', queueRoot: '/repo', systemPrompt: 'you are the executor' })[1].args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  await writeSettings(queue.root, { executor: 'pi' })
+  const piKickoff = build()[1].args.find(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
   const kickoffEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_KICKOFF='))
   expect(kickoffEnvIndex).toBeGreaterThan(-1)
   expect(start.args[kickoffEnvIndex - 1]).toBe('-e')

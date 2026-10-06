@@ -12,36 +12,40 @@ import { afterEach, expect, it } from 'vitest'
 import { DEFAULT_JUDGE_TIMEOUT_MS, judgeTimeoutMs, piJudge } from '../../src/cli/judge.ts'
 import { judgeProcessFor } from '../../src/schedule/index.ts'
 import type { JudgeAgent, JudgeVerdict, RelationshipJudgeInput } from '../../src/schedule/index.ts'
+import { cleanupRepos, makeRepo } from '../cli/support.ts'
 
 // Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
-// Scenario: A malformed timeout override falls back to the default, rather than silently disabling the timeout
-// GIVEN a PROOFSPEC_JUDGE_TIMEOUT_MS value that is not a positive number
-// WHEN judgeTimeoutMs reads it
-// THEN it answers the default timeout, not the malformed value or NaN
-it('falls back to the default timeout on a malformed override, not NaN', () => {
-  expect(judgeTimeoutMs('not-a-number')).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(judgeTimeoutMs('0')).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(judgeTimeoutMs('-500')).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(judgeTimeoutMs(undefined)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
-  expect(judgeTimeoutMs('500')).toBe(500)
+// Scenario: A malformed timeout value falls back to the default, rather than silently disabling the timeout
+// GIVEN a settings file at the queue root whose judgeTimeoutMs is not a positive number
+// WHEN the judge's timeout is read
+// THEN it answers the default timeout, not the malformed value
+it('falls back to the default timeout on a malformed value', async () => {
+  const zero = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: 0 }) })
+  const negative = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: -500 }) })
+  const word = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: 'many' }) })
+
+  expect(await judgeTimeoutMs(zero.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(await judgeTimeoutMs(negative.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(await judgeTimeoutMs(word.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
 })
 
 // Generous, not tight: this bounds a process that finishes in milliseconds, so it only needs
 // enough headroom that a real spawn under load never brushes it — unlike the other test below,
 // which deliberately wants a short bound its stand-in process will actually hit.
-const AMPLE_TIMEOUT_MS = '5000'
-const SHORT_TIMEOUT_MS = '300'
+const AMPLE_TIMEOUT_MS = 5000
+const SHORT_TIMEOUT_MS = 300
 
 let standInDirs: string[] = []
 // PATH is only ever prepended to and restored whole — a stand-in dir left at its front
 // would shadow the real `pi`/`claude` for every test that runs after one of these.
 let originalPath: string | undefined
 
+afterEach(cleanupRepos)
 afterEach(async () => {
   await Promise.all(standInDirs.map(dir => rm(dir, { recursive: true, force: true })))
   standInDirs = []
-  delete process.env.PROOFSPEC_JUDGE_BIN
-  delete process.env.PROOFSPEC_JUDGE_TIMEOUT_MS
+  // A leaked queue root would point every later test's settings read at a deleted directory.
+  delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_JUDGE_REPLY
   delete process.env.PROOFSPEC_JUDGE_RECORD_DIR
   if (originalPath !== undefined) {
@@ -70,10 +74,10 @@ const RECORD_AND_REPLY = [
   `printf '%s\\n' "$PROOFSPEC_JUDGE_REPLY"`,
 ].join('\n')
 
-/** Runs the real judge once, `PROOFSPEC_JUDGE_BIN` held exactly as asked (absent means the
- *  default), against a stand-in of the named binary placed first on PATH, and hands back what
- *  that stand-in saw — the binary the judge named, then the argv it handed it — together with
- *  the verdict the reply read to. */
+/** Runs the real judge once, a settings file at a throwaway queue root holding `judgeBin`
+ *  exactly as asked (absent means the default), against a stand-in of the named binary placed
+ *  first on PATH, and hands back what that stand-in saw — the binary the judge named, then the
+ *  argv it handed it — together with the verdict the reply read to. */
 async function judgedInvocation(
   standInName: 'pi' | 'claude',
   judgeBin: string | undefined,
@@ -82,12 +86,16 @@ async function judgedInvocation(
   const binary = await standInBinary(RECORD_AND_REPLY, standInName)
   const recordDir = await mkdtemp(join(tmpdir(), 'proofspec-judge-'))
   standInDirs.push(recordDir)
+  // One fresh queue root per build: the settings file is the variable under test, so no build
+  // ever reads an earlier build's file.
+  const queueRoot = await makeRepo({
+    '.proofspec/config.json': judgeBin === undefined ? '{}' : JSON.stringify({ judgeBin }),
+  })
+  process.env.PROOFSPEC_QUEUE_ROOT = queueRoot.root
   process.env.PROOFSPEC_JUDGE_RECORD_DIR = recordDir
   process.env.PROOFSPEC_JUDGE_REPLY = reply
   if (originalPath === undefined) originalPath = process.env.PATH
   process.env.PATH = `${dirname(binary)}:${process.env.PATH}`
-  if (judgeBin === undefined) delete process.env.PROOFSPEC_JUDGE_BIN
-  else process.env.PROOFSPEC_JUDGE_BIN = judgeBin
 
   const verdict = await piJudge(TEST_AGENT)(INPUT)
 
@@ -111,13 +119,16 @@ const TEST_AGENT: JudgeAgent = { model: 'zai/glm-5.3:low' }
 // WHEN judge runs it, bounded by an ample configured timeout
 // THEN it answers RESOLVED well inside that timeout, because judge closed stdin itself
 it('closes stdin so a process reading it to EOF does not hang', async () => {
-  process.env.PROOFSPEC_JUDGE_BIN = await standInBinary('cat >/dev/null; echo RESOLVED')
-  process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = AMPLE_TIMEOUT_MS
+  const standIn = await standInBinary('cat >/dev/null; echo RESOLVED')
+  const queueRoot = await makeRepo({
+    '.proofspec/config.json': JSON.stringify({ judgeBin: standIn, judgeTimeoutMs: AMPLE_TIMEOUT_MS }),
+  })
+  process.env.PROOFSPEC_QUEUE_ROOT = queueRoot.root
 
   const verdict = await piJudge()(INPUT)
 
   expect(verdict).toEqual({ kind: 'resolved' })
-})
+}, 10_000)
 
 // Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
 // Scenario: A process that never answers is not waited on past the configured timeout
@@ -127,8 +138,11 @@ it('closes stdin so a process reading it to EOF does not hang', async () => {
 it(
   'does not wait past the configured timeout for a process that never answers',
   async () => {
-    process.env.PROOFSPEC_JUDGE_BIN = await standInBinary('sleep 100')
-    process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = SHORT_TIMEOUT_MS
+    const standIn = await standInBinary('sleep 100')
+    const queueRoot = await makeRepo({
+      '.proofspec/config.json': JSON.stringify({ judgeBin: standIn, judgeTimeoutMs: SHORT_TIMEOUT_MS }),
+    })
+    process.env.PROOFSPEC_QUEUE_ROOT = queueRoot.root
     const startedAt = Date.now()
 
     const verdict = await piJudge()(INPUT)
@@ -138,26 +152,26 @@ it(
     // +300ms leaves ~20x margin for that — but stays tight enough to catch a mutation that
     // silently doubles or triples the configured value, which a looser multiplicative bound
     // (e.g. 5x the configured value) would let slip through undetected.
-    expect(Date.now() - startedAt).toBeLessThan(Number(SHORT_TIMEOUT_MS) + 300)
+    expect(Date.now() - startedAt).toBeLessThan(SHORT_TIMEOUT_MS + 300)
   },
   10_000,
 )
 
 // Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
-// Scenario: With PROOFSPEC_JUDGE_BIN unset, or naming pi, the judge process is the pinned one-shot pi process
-// GIVEN PROOFSPEC_JUDGE_BIN unset, and then set to name pi
+// Scenario: With the settings file naming no judgeBin, or naming pi, the judge process is the pinned one-shot pi process
+// GIVEN a settings file at the queue root holding no judgeBin key, and then one naming pi
 // WHEN the judge process for a relationship is built
 // THEN each time the process it names is pi, run as the one-shot, tool-less,
 //      session-less process the judge requirements pin
-it('runs the pinned one-shot pi process whenever PROOFSPEC_JUDGE_BIN is unset, and when it names pi', async () => {
+it('runs the pinned one-shot pi process when the settings file names no judgeBin, and when it names pi', async () => {
   // The default must survive the argv becoming per-binary, not silently drift the moment the
   // binary name starts being read — the same guard the unset executor case carries. The pin
   // is read against the pure builder's own assembly of it, byte for byte, both times.
   const pinned = judgeProcessFor(INPUT, TEST_AGENT).args
 
-  const unset = await judgedInvocation('pi', undefined, 'RESOLVED')
-  expect(unset.name).toBe('pi')
-  expect(unset.args).toEqual(pinned)
+  const absentKey = await judgedInvocation('pi', undefined, 'RESOLVED')
+  expect(absentKey.name).toBe('pi')
+  expect(absentKey.args).toEqual(pinned)
 
   const named = await judgedInvocation('pi', 'pi', 'RESOLVED')
   expect(named.name).toBe('pi')
@@ -165,11 +179,11 @@ it('runs the pinned one-shot pi process whenever PROOFSPEC_JUDGE_BIN is unset, a
 })
 
 // Requirement: The bare CLI's judge asks a fresh one-shot process per relationship, its stdin closed so it cannot hang
-// Scenario: PROOFSPEC_JUDGE_BIN naming claude runs one headless one-shot claude process
-// GIVEN PROOFSPEC_JUDGE_BIN naming claude
+// Scenario: The settings file's judgeBin naming claude runs one headless one-shot claude process
+// GIVEN a settings file at the queue root whose judgeBin names claude
 // WHEN the judge process for a relationship is built
 // THEN the process it names is claude, run as one headless one-shot process
-it('runs one headless one-shot claude process when PROOFSPEC_JUDGE_BIN names claude', async () => {
+it('runs one headless one-shot claude process when the settings file names claude as its judgeBin', async () => {
   const invocation = await judgedInvocation('claude', 'claude', 'the shared file is touched for unrelated reasons\nRESOLVED')
 
   // The binary that ran is claude itself, in its headless one-shot mode — claude's own print
