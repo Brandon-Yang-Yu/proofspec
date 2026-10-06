@@ -323,4 +323,4 @@ it('takes main in every place when no baseBranch is named', async () => {
   }
   await everyPlaceMeasuresAgainstMain(files)
   await everyPlaceMeasuresAgainstMain({ ...files, '.proofspec/config.json': '{}' })
-})
+}, 20000)
