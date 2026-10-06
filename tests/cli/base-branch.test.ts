@@ -270,8 +270,13 @@ async function everyPlaceMeasuresAgainstMain(files: Readonly<Record<string, stri
   await repo.git(['checkout', 'main'])
   expect(summary.requirements.map(one => one.scenarios)).toEqual([1])
 
-  // The census: the TASK's own spec rewrite is answered, measured against main.
+  // Each place below runs standing on a branch whose answer differs from main's, so a default
+  // of whatever is checked out — rather than main — fails it.
+  // The census: the TASK's own spec rewrite is answered, measured against main — standing on
+  // the TASK's own branch, where measuring from HEAD would find nothing rewritten.
+  await repo.git(['checkout', '-b', 'standing-census', 'work/diffed'])
   const census = await runCensusInFlight(repo.root)
+  await repo.git(['checkout', 'main'])
   expect(census).toEqual({
     ok: true,
     census: {
@@ -299,13 +304,20 @@ async function everyPlaceMeasuresAgainstMain(files: Readonly<Record<string, stri
     },
   })
 
-  // settle_task: a mergeable TASK whose branch landed in main is settled.
+  // settle_task: a mergeable TASK whose branch landed in main is settled — standing on main as
+  // it was before the landing, where the branch has not landed.
+  const beforeSettleLanded = (await repo.git(['rev-parse', 'main'])).trim()
   await repo.git(['merge', 'work/settled-by-tool'])
+  await repo.git(['checkout', '-b', 'standing-settle', beforeSettleLanded])
   await expect(runSettleTask({ queueRoot: repo.root, task: 'settled-by-tool' })).resolves.toEqual({ ok: true, task: 'settled-by-tool' })
+  await repo.git(['checkout', 'main'])
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'settled-by-tool', 'state'), 'utf8')).resolves.toBe('merged')
 
-  // The scheduling pass: it settles the mergeable TASK whose branch landed in main.
+  // The scheduling pass: it settles the mergeable TASK whose branch landed in main — standing
+  // on main as it was before the landing.
+  const beforePassLanded = (await repo.git(['rev-parse', 'main'])).trim()
   await repo.git(['merge', 'work/diffed'])
+  await repo.git(['checkout', '-b', 'standing-pass', beforePassLanded])
   const outcome = await schedule({ cwd: repo.root })
   expect(planOf(outcome).merged).toEqual(['diffed'])
 }
