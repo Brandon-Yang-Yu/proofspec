@@ -1327,7 +1327,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const raised = await raiseRelationships(options, graph.relationships, gathered.records)
   if (!raised.ok) return { kind: 'cannot-run', reason: raised.reason }
 
-  const plan: SchedulePlan = { merged, pruned, started, blocked, deferred, raised: raised.raised }
+  const plan: SchedulePlan = { baseBranch: settings.baseBranch, merged, pruned, started, blocked, deferred, raised: raised.raised }
   return { kind: 'scheduled', report: plan }
 }
 

@@ -73,6 +73,8 @@ export type ScheduleActions = {
 
 /** What one scheduling pass did. */
 export type SchedulePlan = {
+  /** The branch this pass measured `merged` against — the one the settings file names. */
+  readonly baseBranch: string
   readonly merged: readonly string[]
   readonly pruned: readonly string[]
   readonly started: readonly string[]
