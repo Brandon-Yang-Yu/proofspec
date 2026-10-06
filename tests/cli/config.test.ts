@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { touched } from '../../src/cli/index.ts'
+import { touched, schedule } from '../../src/cli/index.ts'
 import type { Outcome, TouchedSummary } from '../../src/cli/index.ts'
 import { DEFAULT_JUDGE_TIMEOUT_MS, judgeTimeoutMs, piJudge } from '../../src/cli/judge.ts'
 import { tmuxSessionCommands } from '../../src/cli/session.ts'
@@ -23,7 +23,7 @@ import { runCensusInFlight } from '../../src/handoff/extension.ts'
 import { runSettleTask } from '../../src/progress/extension.ts'
 import { DEFAULT_MAX_SESSIONS, maxSessionsFrom } from '../../src/schedule/index.ts'
 import type { RelationshipJudgeInput } from '../../src/schedule/index.ts'
-import { CAPABILITY, cleanupRepos, makeGitRepo, makeRepo, specFile, testFile, TEST_PATH } from './support.ts'
+import { CAPABILITY, cleanupRepos, enterTask, makeGitRepo, makeRepo, specFile, testFile, TEST_PATH } from './support.ts'
 import type { GitRepo } from './support.ts'
 
 const execFileAsync = promisify(execFile)
@@ -387,22 +387,26 @@ it('answers the file\'s settings — or the defaults — never the old environme
   const standIns = await mkdtemp(join(tmpdir(), 'proofspec-config-env-'))
   try {
     // A stand-in binary per side of the judge's contradiction: each records that it ran, so
-    // which side won is read off the disk — never a real harness spawned to find out.
-    const standIn = async (name: string): Promise<string> => {
+    // which side won is read off the disk — never a real harness spawned to find out. The
+    // file's own bin sleeps before touching its marker, so the marker also proves the wait:
+    // it appears only if the judge's timeout outlasted the sleep.
+    const standIn = async (name: string, sleepMs = 0): Promise<string> => {
       const path = join(standIns, name)
-      await writeFile(path, `#!/bin/sh\ntouch ${JSON.stringify(`${path}.ran`)}\necho RESOLVED\n`)
+      await writeFile(path, `#!/bin/sh\nsleep ${sleepMs / 1000}\ntouch ${JSON.stringify(`${path}.ran`)}\necho RESOLVED\n`)
       await chmod(path, 0o755)
       return path
     }
-    const fileBin = await standIn('file-bin')
+    const fileBin = await standIn('file-bin', 400)
     const envBin = await standIn('env-bin')
     const fileSettings = { executor: 'claude', baseBranch: 'bDev', judgeBin: fileBin, judgeTimeoutMs: 45_000, maxSessions: 7 }
 
-    // Every old variable set, each naming a value the file contradicts.
+    // Every old variable set, each naming a value the file contradicts — the timeout's 100
+    // falls far short of the file bin's 400ms sleep, and the sleep sits well inside the
+    // file's 45000, so which wait the judge keeps decides whether the marker ever appears.
     process.env.PROOFSPEC_EXECUTOR = 'pi'
     process.env.PROOFSPEC_BASE_BRANCH = 'trunk'
     process.env.PROOFSPEC_JUDGE_BIN = envBin
-    process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = '30000'
+    process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = '100'
     process.env.PROOFSPEC_MAX_SESSIONS = '2'
 
     // The session start command: the file's executor runs, not the variable's pi.
@@ -432,15 +436,38 @@ it('answers the file\'s settings — or the defaults — never the old environme
     const leftBDev = await repo.git(['rev-parse', 'bDev'])
     expect(summaryOf(await touched({ cwd: repo.root })).base).toBe(leftBDev)
 
-    // The judge: the file's judgeBin runs and the file's judgeTimeoutMs is the wait.
+    // The judge: the file's judgeBin runs and the file's judgeTimeoutMs is the wait — the
+    // bin sleeps its 400ms before touching the marker, so a wait that followed the
+    // variable's 100 would kill the process first and leave no marker to find.
     process.env.PROOFSPEC_QUEUE_ROOT = queue.root
     await piJudge()(JUDGE_INPUT)
     expect(existsSync(`${fileBin}.ran`)).toBe(true)
     expect(existsSync(`${envBin}.ran`)).toBe(false)
     expect(await judgeTimeoutMs(queue.root)).toBe(45_000)
 
-    // The bound: the file's maxSessions, never the variable's 2.
+    // The bound: the file's maxSessions, never the variable's 2 — proven on the pass itself,
+    // not just the reader. Five ready TASKs, the live count grown by each session the pass
+    // has itself started: following the file's 7 dispatches all five, while following the
+    // variable's 2 — or the default 4 — stops earlier and names the rest deferred.
     expect(await maxSessionsFrom(queue.root)).toBe(7)
+    const passRepo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+    for (const task of ['a', 'b', 'c', 'd', 'e']) await enterTask(passRepo, task, { edit: 'specs/cli.md' })
+    await passRepo.write('.proofspec/config.json', JSON.stringify(fileSettings))
+    const startedSessions: string[] = []
+    const pass = await schedule({
+      cwd: passRepo.root,
+      schedule: {
+        startSession: async task => {
+          startedSessions.push(task)
+        },
+        countSessions: async () => startedSessions.length,
+        judge: async () => ({ kind: 'resolved' }),
+        notifyHuman: async () => {},
+      },
+    })
+    if (pass.kind !== 'scheduled') throw new Error(`expected a scheduled report, got ${pass.kind}`)
+    expect(pass.report.started).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(pass.report.deferred).toEqual([])
 
     // The reading every tool shares: the file's five keys — and with no file at all, still
     // the defaults, no setting following any variable.
