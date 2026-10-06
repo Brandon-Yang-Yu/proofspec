@@ -366,7 +366,7 @@ const JUDGE_INPUT: RelationshipJudgeInput = {
 /** A judge timeout short enough to wait out in a test and far from both the default 60000 and
  *  any value an old variable is set to below, so the wait the judge kept is read off the
  *  clock: a stand-in that never answers is killed at this bound, not before and not long after. */
-const FILE_TIMEOUT_MS = 1000
+const FILE_TIMEOUT_MS = 1500
 
 /** Reads the settings at a queue root through the one module that will hold the reading.
  *  Imported at call time, not at the file's top, so the scenarios that drive real commands
@@ -412,7 +412,9 @@ async function expectEverySettingFromFile(): Promise<void> {
   expect(existsSync(join(guards, 'pi.started'))).toBe(false)
   expect(judged.verdict).toEqual({ kind: 'unresolved' })
   expect(judged.elapsedMs).toBeGreaterThanOrEqual(FILE_TIMEOUT_MS - 50)
-  expect(judged.elapsedMs).toBeLessThan(FILE_TIMEOUT_MS + 500)
+  // The window also holds the judge's git lookup and its spawn and kill, a few hundred ms under
+  // load; the bound still sits below twice the file's value.
+  expect(judged.elapsedMs).toBeLessThan(FILE_TIMEOUT_MS + 1000)
 
   expect(await sessionsAPassStartsUnder(settings)).toEqual({ started: ['a', 'b'], deferred: ['c', 'd', 'e'] })
 }

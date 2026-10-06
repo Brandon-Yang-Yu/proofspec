@@ -40,20 +40,20 @@ Commands:
   inflight Read the conventional queue directory and answer how the in-flight TASK found there
            relate to one another. Reports only, and always exits ok.
   schedule Run one scheduling pass over the queue: settle a mergeable TASK whose branch has landed
-           in main, prune a merged TASK nothing still names, dispatch every ready TASK, and raise an
+           in the base branch, prune a merged TASK nothing still names, dispatch every ready TASK, and raise an
            unresolved relationship at most once. Given
            --ruling, records a human's ruling on an already-raised relationship instead.
            The bare command line supplies real startSession, judge, and notifyHuman actions
            itself: a ready TASK starts a headed executor session in a detached tmux session
            named for the TASK, in the TASK's agent harness: the one its queue entry's
-           executor file names (pi or claude), else the one PROOFSPEC_EXECUTOR names (pi by
-           default, claude otherwise); a relationship is judged by a fresh one-shot process
-           in the harness PROOFSPEC_JUDGE_BIN names (pi by default, claude headless
-           otherwise); and
+           executor file names (pi or claude), else the settings file's executor (pi by
+           default); a relationship is judged by a fresh one-shot process running the
+           settings file's judgeBin (pi by default, claude headless), waiting at most its
+           judgeTimeoutMs (60000 by default); and
            one it cannot resolve is reported to stderr naming both TASKs and how
-           to rule on it. No session starts once the live-session bound is reached (four by
-           default, PROOFSPEC_MAX_SESSIONS). An embedder passing RunOptions may still
-           override any of the actions.
+           to rule on it. No session starts once the live-session bound is reached (the
+           settings file's maxSessions, four by default). An embedder passing RunOptions may
+           still override any of the actions.
   docket   One glance at the queue: a row per TASK in the conventional queue directory — its own
            state word, how long it has stood there, when its session last moved, and whether
            that session is still there to attach to — plus every relationship raised but not
@@ -62,6 +62,17 @@ Commands:
            With --serve it answers the same docket as a page over HTTP: the page at /, the
            JSON the page reads at /docket, on the loopback at a port derived from the queue
            root (--host and --port to override), refreshing itself, until stopped.
+
+Settings:
+  The project's settings live in one committed file, .proofspec/config.json, read from the
+  main checkout even when a command runs inside a TASK's worktree. Every key is optional; a
+  key missing, or holding a value that cannot be used, takes its default. A file that is not
+  valid JSON fails the command, naming the file.
+  executor        The harness an executor session runs: pi or claude (default: pi)
+  baseBranch      The branch the queue measures against (default: main)
+  judgeBin        The program the judge runs (default: pi)
+  judgeTimeoutMs  How long the judge waits for an answer (default: 60000)
+  maxSessions     How many executor sessions may run at once (default: 4)
 
 Options:
   --specs <dir>   Where the capability files live (default: specs)

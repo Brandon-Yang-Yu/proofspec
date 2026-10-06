@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
+import { mainCheckoutOf } from '../cli/git.ts'
 import { piJudge } from '../cli/judge.ts'
 import { stderrNotifyHuman } from '../cli/notify.ts'
 import { appendPhaseHistory, enqueue, readPhase, writeHeartbeat, writePhase, writeState } from '../cli/queue.ts'
@@ -12,6 +13,7 @@ import type { Outcome } from '../cli/types.ts'
 import type { Manifest } from '../inflight/index.ts'
 import { BUILDING } from '../schedule/types.ts'
 import type { ScheduleActions } from '../schedule/index.ts'
+import { readSettings } from '../settings.ts'
 
 /**
  * The one core both transports — the `pi` extensions (`src/progress/extension.ts`,
@@ -192,8 +194,12 @@ export async function runReportTaskPhase(env: ReportEnv, phase: string, round?: 
  * `PROOFSPEC_QUEUE_ROOT`/`PROOFSPEC_TASK` the same way `report_task_state` does, refusing
  * rather than guessing when either is missing — is the rule's, here in the core.
  */
-export function runSettleTask(env: ReportEnv, fireSchedulingPass?: FireSchedulingPass): Promise<SettleResult> {
-  return settleTask({ queueRoot: env.queueRoot, task: env.task, fireSchedulingPass })
+export async function runSettleTask(env: ReportEnv, fireSchedulingPass?: FireSchedulingPass): Promise<SettleResult> {
+  // The session stands in its TASK's worktree, whose branch may carry its own stale copy of
+  // the settings file: the base it settles against is the one the handed queue root names.
+  const settings = readSettings(env.queueRoot)
+  if (!settings.ok) return { ok: false, reason: `TASK ${env.task} cannot be settled: ${settings.reason}` }
+  return settleTask({ queueRoot: env.queueRoot, task: env.task, baseBranch: settings.settings.baseBranch, fireSchedulingPass })
 }
 
 /**
@@ -317,9 +323,15 @@ export async function runEnqueueTask(cwd: string, input: EnqueueTaskInput, sched
  * answer the census `inflight` computes. This is the one hop in front of a read the
  * investigation agent cannot make by walking every in-flight TASK's own worktree itself, the
  * same way `enqueue_task` is the one hop in front of a write it cannot make by hand.
+ *
+ * The queue is read where the call is made; the settings are read at `settingsRoot` when the
+ * caller was handed a queue root (a session in its TASK's worktree), else in the main
+ * checkout of the repository `cwd` stands in — never a worktree's own copy either way.
  */
-export async function runCensusInFlight(cwd: string): Promise<CensusRead> {
-  return readCensus(cwd)
+export async function runCensusInFlight(cwd: string, settingsRoot?: string): Promise<CensusRead> {
+  const settings = readSettings(settingsRoot ?? (await mainCheckoutOf(cwd)))
+  if (!settings.ok) return settings
+  return readCensus(cwd, settings.settings.baseBranch)
 }
 
 // --- the tool surface both transports register ----------------------------------------
@@ -524,7 +536,7 @@ export function piExecute(core: ToolCore, tool: ToolName) {
 export function createToolCore(options?: { readonly scheduleActions?: ScheduleActions; readonly fireSchedulingPass?: FireSchedulingPass }): ToolCore {
   const core: ToolCore = {
     enqueue_task: async ({ args, cwd }) => runEnqueueTask(cwd, args as unknown as EnqueueTaskInput, options?.scheduleActions),
-    census_in_flight: async ({ cwd }) => runCensusInFlight(cwd),
+    census_in_flight: async ({ cwd }) => runCensusInFlight(cwd, process.env.PROOFSPEC_QUEUE_ROOT),
     report_task_state: async ({ args }) => {
       const envResult = resolveReportEnv(process.env)
       if (!envResult.ok) return envResult

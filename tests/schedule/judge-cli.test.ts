@@ -42,7 +42,7 @@ it('falls back to the default timeout on a malformed value', async () => {
 // enough headroom that a real spawn under load never brushes it — unlike the other test below,
 // which deliberately wants a short bound its stand-in process will actually hit.
 const AMPLE_TIMEOUT_MS = 5000
-const SHORT_TIMEOUT_MS = 300
+const SHORT_TIMEOUT_MS = 1000
 
 let standInDirs: string[] = []
 // PATH and cwd are only ever changed around one judge call and restored whole — a stand-in
@@ -201,11 +201,11 @@ it(
     expect(existsSync(`${standIn}.ran`)).toBe(true)
     expect(existsSync(join(guards, 'pi.ran'))).toBe(false)
     expect(verdict).toEqual({ kind: 'unresolved' })
-    // Additive, not multiplicative, headroom: real spawn/kill overhead measures ~10-20ms, so
-    // +300ms leaves ~20x margin for that — but stays tight enough to catch a mutation that
-    // silently doubles or triples the configured value, which a looser multiplicative bound
-    // (e.g. 5x the configured value) would let slip through undetected.
-    expect(elapsedMs).toBeLessThan(SHORT_TIMEOUT_MS + 300)
+    // Additive, not multiplicative, headroom: the window holds the judge's own git lookup of the
+    // main checkout plus spawn and kill, which together reach a few hundred ms on a loaded
+    // machine, so +700ms leaves room for that — yet stays under twice the configured value, so a
+    // mutation that silently doubles or triples it still fails here.
+    expect(elapsedMs).toBeLessThan(SHORT_TIMEOUT_MS + 700)
   },
   10_000,
 )

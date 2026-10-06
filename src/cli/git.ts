@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
+import { dirname } from 'node:path'
 import { promisify } from 'node:util'
-import { baseBranch } from '../base-branch.ts'
 import { compareStrings } from '../order.ts'
 import type { LineRange } from '../locate/index.ts'
 
@@ -52,13 +52,15 @@ export async function readChangedFiles(options: {
   /** What to diff, as git pathspecs: a directory, or everything but one. */
   readonly paths: readonly string[]
   readonly since: string | undefined
+  /** The BASE_BRANCH's name, as the project's settings file gives it. */
+  readonly baseBranch: string
 }): Promise<DiffRead> {
   const inWorkTree = await git(options.cwd, ['rev-parse', '--is-inside-work-tree'])
   if (inWorkTree?.trim() !== 'true') return { ok: false, reason: `${options.cwd} is not a git repository` }
 
-  const named = options.since ?? (await defaultBase(options.cwd))
+  const named = options.since ?? (await defaultBase(options.cwd, options.baseBranch))
   if (named === undefined) {
-    return { ok: false, reason: `could not find where this branch left ${baseBranch()}; name a revision with --since` }
+    return { ok: false, reason: `could not find where this branch left ${options.baseBranch}; name a revision with --since` }
   }
   const base = (await git(options.cwd, ['rev-parse', '--verify', `${named}^{commit}`]))?.trim()
   if (base === undefined) return { ok: false, reason: `${named} is not a revision this repository has` }
@@ -96,8 +98,7 @@ export async function readFileAt(options: {
  * ref a fetch leaves behind. A repo with neither keeps the branch point: nothing is
  * published to measure from.
  */
-async function defaultBase(cwd: string): Promise<string | undefined> {
-  const branch = baseBranch()
+async function defaultBase(cwd: string, branch: string): Promise<string | undefined> {
   const head = (await git(cwd, ['rev-parse', 'HEAD']))?.trim()
   const branchPoint = (await git(cwd, ['merge-base', 'HEAD', branch]))?.trim()
   if (head === undefined || branchPoint === undefined) return undefined
@@ -216,6 +217,18 @@ export async function isAncestor(options: {
     if ((error as { readonly code?: number }).code === 1) return { ok: true, isAncestor: false }
     return { ok: false, reason: `git could not check whether ${options.ancestor} is an ancestor of ${options.descendant}` }
   }
+}
+
+/**
+ * The main checkout of the repository `cwd` stands in — the main working tree, the parent of
+ * git's common directory — whether `cwd` is that checkout or one of its linked worktrees,
+ * whose own `.git` is a file pointing back into the main checkout's. A directory git cannot
+ * place in any repository is its own root: there is no other checkout it could belong to.
+ */
+export async function mainCheckoutOf(cwd: string): Promise<string> {
+  const commonDir = (await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']))?.trim()
+  if (commonDir === undefined || commonDir === '') return cwd
+  return dirname(commonDir)
 }
 
 /** A revision confirmed to exist, resolved to its commit — or `undefined` when it does not. */
