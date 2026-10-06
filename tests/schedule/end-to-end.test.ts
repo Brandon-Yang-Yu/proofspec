@@ -702,12 +702,12 @@ it('dispatches a TASK the bound deferred once a session has gone', async () => {
 // Requirement: No executor session starts once the live-session bound is reached
 // Scenario: The live count is taken fresh at each dispatch decision, and each decision follows the server's own answer
 // GIVEN four ready TASKs, a bound of two, and a live count the server answers as 0, then 2, then
-//      0, then 0 — sessions appearing and going between decisions, apart from any this pass starts
+//      1, then 0 — sessions appearing and going between decisions, apart from any this pass starts
 // WHEN one scheduling pass dispatches them
 // THEN it asks the count anew before each decision and follows each answer alone: it starts the
-//      first, defers the second while the server stands at the bound, and starts the third and
-//      fourth once the server reports none — never a tally of its own starts, alone or beside the
-//      server's answer
+//      first, defers the second while the server stands at the bound, starts the third while the
+//      server stands one below it, and starts the fourth once the server reports none — never a
+//      tally of its own starts, alone or beside the server's answer
 it('takes the live count fresh at each dispatch decision within one pass', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 2 }))
@@ -715,7 +715,7 @@ it('takes the live count fresh at each dispatch decision within one pass', async
   await enterTask(repo, 'b', { edit: 'specs/cli.md' })
   await enterTask(repo, 'c', { edit: 'specs/cli.md' })
   await enterTask(repo, 'd', { edit: 'specs/cli.md' })
-  const answers = [0, 2, 0, 0]
+  const answers = [0, 2, 1, 0]
   let asked = 0
   const actions = fakeActions({
     countSessions: async () => answers[asked++] ?? 0,
@@ -723,8 +723,9 @@ it('takes the live count fresh at each dispatch decision within one pass', async
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
 
-  // A tally of its own starts would start a and b; that tally kept beside the server's answer
-  // would defer d once a and c were started.
+  // A tally of its own starts would start a and b; that tally added to the server's answer
+  // would defer c, kept as the larger of the two it would defer d; a bound read as one, or any
+  // live session read as full, would defer c.
   expect(plan.started).toEqual(['a', 'c', 'd'])
   expect(plan.deferred).toEqual(['b'])
   // One ask per decision: a pass that counted once would ask once.
