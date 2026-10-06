@@ -8,16 +8,21 @@
 // hand-off.
 
 import { execFile } from 'node:child_process'
-import { readFile, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import { touched } from '../../src/cli/index.ts'
 import type { Outcome, TouchedSummary } from '../../src/cli/index.ts'
-import { DEFAULT_JUDGE_TIMEOUT_MS } from '../../src/cli/judge.ts'
+import { DEFAULT_JUDGE_TIMEOUT_MS, judgeTimeoutMs, piJudge } from '../../src/cli/judge.ts'
+import { tmuxSessionCommands } from '../../src/cli/session.ts'
+import type { TmuxCommand } from '../../src/cli/session.ts'
 import { runCensusInFlight } from '../../src/handoff/extension.ts'
 import { runSettleTask } from '../../src/progress/extension.ts'
-import { DEFAULT_MAX_SESSIONS } from '../../src/schedule/index.ts'
+import { DEFAULT_MAX_SESSIONS, maxSessionsFrom } from '../../src/schedule/index.ts'
+import type { RelationshipJudgeInput } from '../../src/schedule/index.ts'
 import { CAPABILITY, cleanupRepos, makeGitRepo, makeRepo, specFile, testFile, TEST_PATH } from './support.ts'
 import type { GitRepo } from './support.ts'
 
@@ -90,12 +95,33 @@ function summaryOf(outcome: Outcome): TouchedSummary {
   return outcome.report
 }
 
+/** The start command's own command words are `sh <runner script path>` — the harness's whole
+ *  invocation lives in that script's content, so which executor a build chose is read from
+ *  the file those words name (the same read tests/schedule/session.test.ts makes). */
+async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
+  const scriptPath = start.args[start.args.indexOf('sh') + 1]
+  expect(scriptPath).toBeDefined()
+  return readFile(scriptPath!, 'utf8')
+}
+
+/** A minimal relationship ask for driving the real judge — the same shape
+ *  tests/schedule/judge-cli.test.ts hands it. */
+const JUDGE_INPUT: RelationshipJudgeInput = {
+  relationship: { node: { kind: 'capability', name: 'demo' }, tasks: ['a', 'b'] },
+  intents: { a: 'renames a helper', b: 'fixes a typo' },
+}
+
 /** Reads the settings at a queue root through the one module that will hold the reading.
  *  Imported at call time, not at the file's top, so the scenarios that drive real commands
  *  fail on their own assertions while this one is still unimplemented, rather than the whole
- *  file dying on one missing import. */
+ *  file dying on one missing import. The specifier rides a constant because `src/settings.ts`
+ *  does not exist yet at tests-red time: a literal would fail `pnpm typecheck` before any
+ *  behavior exists to check, while the runtime failure of this import — the reading is not
+ *  implemented — is exactly this scenario's red reason. */
+const SETTINGS_MODULE = '../../src/settings.ts'
+
 async function readSettingsAt(queueRoot: string) {
-  const { readSettings } = await import('../../src/settings.ts')
+  const { readSettings } = await import(/* @vite-ignore */ SETTINGS_MODULE)
   return readSettings(queueRoot)
 }
 
@@ -114,10 +140,17 @@ async function settingsFrom(contents: Readonly<Record<string, unknown>>) {
 //      against the named branch, the judge runs the named program and waits the named number
 //      of milliseconds, and a pass starts at most the named number of sessions
 it('answers every setting from a file holding all five keys', async () => {
-  expect(await settingsFrom({ executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
-    ok: true,
-    settings: { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 },
+  const fileSettings = { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 }
+  // One real surface under the fixture: the session start command built under a queue root
+  // holding that file starts the file's executor, not the default pi.
+  const queue = await makeRepo({
+    '.proofspec/dispatch/a/state': 'building',
+    '.proofspec/config.json': JSON.stringify(fileSettings),
   })
+  const [, start] = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
+  await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec claude\b/)
+
+  expect(await readSettingsAt(queue.root)).toEqual({ ok: true, settings: fileSettings })
 })
 
 // Requirement: Project settings are read from one file at the queue root
@@ -340,28 +373,97 @@ it('reads the settings at the queue root a session is handed, never the copy in 
 // THEN every setting is still the file's — and with no file at all, still the defaults —
 //      no setting follows any of the variables
 it('answers the file\'s settings — or the defaults — never the old environment variables', async () => {
-  process.env.PROOFSPEC_EXECUTOR = 'pi'
-  process.env.PROOFSPEC_BASE_BRANCH = 'trunk'
-  process.env.PROOFSPEC_JUDGE_BIN = 'pi'
-  process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = '30000'
-  process.env.PROOFSPEC_MAX_SESSIONS = '2'
+  // The five old variables plus the queue root the judge reads, saved whole and restored in
+  // this test's own scope: the contradiction below is this scenario's alone.
+  const variables = [
+    'PROOFSPEC_EXECUTOR',
+    'PROOFSPEC_BASE_BRANCH',
+    'PROOFSPEC_JUDGE_BIN',
+    'PROOFSPEC_JUDGE_TIMEOUT_MS',
+    'PROOFSPEC_MAX_SESSIONS',
+    'PROOFSPEC_QUEUE_ROOT',
+  ] as const
+  const saved = new Map(variables.map(name => [name, process.env[name]]))
+  const standIns = await mkdtemp(join(tmpdir(), 'proofspec-config-env-'))
+  try {
+    // A stand-in binary per side of the judge's contradiction: each records that it ran, so
+    // which side won is read off the disk — never a real harness spawned to find out.
+    const standIn = async (name: string): Promise<string> => {
+      const path = join(standIns, name)
+      await writeFile(path, `#!/bin/sh\ntouch ${JSON.stringify(`${path}.ran`)}\necho RESOLVED\n`)
+      await chmod(path, 0o755)
+      return path
+    }
+    const fileBin = await standIn('file-bin')
+    const envBin = await standIn('env-bin')
+    const fileSettings = { executor: 'claude', baseBranch: 'bDev', judgeBin: fileBin, judgeTimeoutMs: 45_000, maxSessions: 7 }
 
-  // With the file naming all five keys, every setting is the file's.
-  expect(await settingsFrom({ executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 })).toEqual({
-    ok: true,
-    settings: { executor: 'claude', baseBranch: 'bDev', judgeBin: 'claude', judgeTimeoutMs: 45_000, maxSessions: 7 },
-  })
+    // Every old variable set, each naming a value the file contradicts.
+    process.env.PROOFSPEC_EXECUTOR = 'pi'
+    process.env.PROOFSPEC_BASE_BRANCH = 'trunk'
+    process.env.PROOFSPEC_JUDGE_BIN = envBin
+    process.env.PROOFSPEC_JUDGE_TIMEOUT_MS = '30000'
+    process.env.PROOFSPEC_MAX_SESSIONS = '2'
 
-  // With no file at all, still the defaults.
-  const repo = await makeRepo({})
-  expect(await readSettingsAt(repo.root)).toEqual({
-    ok: true,
-    settings: {
-      executor: 'pi',
-      baseBranch: 'main',
-      judgeBin: 'pi',
-      judgeTimeoutMs: DEFAULT_JUDGE_TIMEOUT_MS,
-      maxSessions: DEFAULT_MAX_SESSIONS,
-    },
-  })
+    // The session start command: the file's executor runs, not the variable's pi.
+    const queue = await makeRepo({
+      '.proofspec/dispatch/a/state': 'building',
+      '.proofspec/config.json': JSON.stringify(fileSettings),
+    })
+    const [, start] = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
+    await expect(runnerScriptFrom(start)).resolves.toMatch(/^exec claude\b/)
+
+    // touched: the file's baseBranch decides where the change is measured from — the commit
+    // where the branch left bDev, never the commit it left the variable's trunk.
+    const repo = await makeGitRepo(inSync())
+    await repo.git(['checkout', '-b', 'trunk'])
+    await repo.git(['checkout', 'main'])
+    await repo.git(['checkout', '-b', 'bDev'])
+    await repo.write('docs/dev.md', 'the development branch moves past main\n')
+    await repo.git(['add', '-A'])
+    await repo.git(['commit', '-m', 'the development branch moves past main'])
+    await repo.git(['checkout', '-b', 'work'])
+    await repo.write(TEST_PATH, bodyEdited())
+    await repo.git(['add', '-A'])
+    await repo.git(['commit', '-m', 'the TASK edits'])
+    await repo.git(['checkout', 'main'])
+    await repo.git(['merge', 'work'])
+    await repo.write('.proofspec/config.json', JSON.stringify(fileSettings))
+    const leftBDev = await repo.git(['rev-parse', 'bDev'])
+    expect(summaryOf(await touched({ cwd: repo.root })).base).toBe(leftBDev)
+
+    // The judge: the file's judgeBin runs and the file's judgeTimeoutMs is the wait.
+    process.env.PROOFSPEC_QUEUE_ROOT = queue.root
+    await piJudge()(JUDGE_INPUT)
+    expect(existsSync(`${fileBin}.ran`)).toBe(true)
+    expect(existsSync(`${envBin}.ran`)).toBe(false)
+    expect(await judgeTimeoutMs(queue.root)).toBe(45_000)
+
+    // The bound: the file's maxSessions, never the variable's 2.
+    expect(await maxSessionsFrom(queue.root)).toBe(7)
+
+    // The reading every tool shares: the file's five keys — and with no file at all, still
+    // the defaults, no setting following any variable.
+    expect(await readSettingsAt(queue.root)).toEqual({ ok: true, settings: fileSettings })
+    const noFile = await makeRepo({})
+    expect(await maxSessionsFrom(noFile.root)).toBe(DEFAULT_MAX_SESSIONS)
+    expect(await judgeTimeoutMs(noFile.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+    expect(await readSettingsAt(noFile.root)).toEqual({
+      ok: true,
+      settings: {
+        executor: 'pi',
+        baseBranch: 'main',
+        judgeBin: 'pi',
+        judgeTimeoutMs: DEFAULT_JUDGE_TIMEOUT_MS,
+        maxSessions: DEFAULT_MAX_SESSIONS,
+      },
+    })
+  } finally {
+    for (const name of variables) {
+      const was = saved.get(name)
+      if (was === undefined) delete process.env[name]
+      else process.env[name] = was
+    }
+    await rm(standIns, { recursive: true, force: true })
+  }
 })

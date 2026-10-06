@@ -665,7 +665,12 @@ it('keeps a TASK the bound leaves undispatched queued exactly as it stands', asy
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   const actions = fakeActions({ countSessions: async () => 1 })
 
-  await schedule({ cwd: repo.root, schedule: actions })
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+  // The GIVEN established before the state word is read: the bound deferred this TASK and
+  // started nothing for it — a pass that ignored the bound and dispatched would leave the
+  // word untouched by the fake start and read queued all the same.
+  expect(plan.deferred).toEqual(['a'])
+  expect(plan.started).toEqual([])
 
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('queued')
 })
