@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
 import { judgeWith } from '../schedule/index.ts'
 import type { JudgeAgent, JudgeOutcome, JudgeProcess, ScheduleActions } from '../schedule/index.ts'
-import { DEFAULT_JUDGE_TIMEOUT_MS, readCommandSettings, settingsOrThrow } from '../settings.ts'
+import { DEFAULT_JUDGE_TIMEOUT_MS, settingsOrThrow } from '../settings.ts'
+import { mainCheckoutOf } from './git.ts'
 
 // Exported so a test can assert a fallback against this value instead of a duplicated literal.
 export { DEFAULT_JUDGE_TIMEOUT_MS }
@@ -41,10 +42,9 @@ export async function judgeTimeoutMs(queueRoot: string): Promise<number> {
  * running the default program instead would be the quiet run on defaults the file forbids.
  */
 async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome> {
-  const read = await readCommandSettings(process.cwd())
-  if (!read.ok) throw new Error(read.reason)
-  const binary = read.settings.judgeBin
-  const timeoutMs = read.settings.judgeTimeoutMs
+  const settingsRoot = await mainCheckoutOf(process.cwd())
+  const binary = settingsOrThrow(settingsRoot).judgeBin
+  const timeoutMs = await judgeTimeoutMs(settingsRoot)
   try {
     const stdout = await execFileWithClosedStdin(binary, judgeArgsFor(binary, judgeProcess.args), timeoutMs)
     return { kind: 'ran', code: 0, stdout }

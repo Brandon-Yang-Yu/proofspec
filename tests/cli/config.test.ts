@@ -608,6 +608,13 @@ it('refuses, naming the settings file, when it is not valid JSON', async () => {
 
   expect(settle).toEqual({ ok: false, reason: expect.stringContaining('.proofspec/config.json') })
   await expect(readFile(join(settling.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('mergeable')
+
+  // census_in_flight, from a session handed that same broken queue root, whose mergeable TASK
+  // it would otherwise census: it refuses naming the file, rather than measuring the TASK
+  // against the default base.
+  const census = await core.call('census_in_flight', {}, settling.root)
+
+  expect(census).toEqual({ ok: false, reason: expect.stringContaining('.proofspec/config.json') })
 }, 30_000)
 
 // Requirement: Project settings are read from one file at the queue root
@@ -629,16 +636,23 @@ it('measures against the branch the main checkout\'s settings file names, never 
   // answers nothing over it — only measuring from the named branch counts it.
   await repo.git(['checkout', 'main'])
   await repo.git(['merge', 'work'])
+  // Each file also names its own judge program — a stand-in that marks itself when run — so
+  // which file the judge read is read off which mark appears.
+  const judges = await standInDir()
+  const mainCheckoutJudge = await standIn(judges, 'main-checkout-judge', 'echo RESOLVED')
+  const worktreeJudge = await standIn(judges, 'worktree-judge', 'echo RESOLVED')
+  await standIn(judges, 'pi', 'exit 1')
+  await standIn(judges, 'claude', 'exit 1')
   // The worktree's own branch carries a copy naming main — the very branch that would hide
   // the change.
   await repo.git(['checkout', 'work'])
-  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main' }))
+  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: 'main', judgeBin: worktreeJudge }))
   await repo.git(['add', '-A'])
   await repo.git(['commit', '-m', 'the worktree\'s own copy names main'])
   await repo.git(['checkout', 'main'])
   // The queue root's own file names the development branch; written after the last checkout,
   // it stands only in the main checkout.
-  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: development }))
+  await repo.write('.proofspec/config.json', JSON.stringify({ baseBranch: development, judgeBin: mainCheckoutJudge }))
   const worktree = join(repo.root, '.proofspec', 'worktrees', 'diffed')
   await repo.git(['worktree', 'add', worktree, 'work'])
   const leftAt = await repo.git(['rev-parse', development])
@@ -647,7 +661,54 @@ it('measures against the branch the main checkout\'s settings file names, never 
 
   expect(summary.base).toBe(leftAt)
   expect(summary.requirements.map(one => one.scenarios)).toEqual([1])
-})
+
+  // A scheduling pass run inside the worktree: a mergeable TASK whose branch landed in the
+  // development branch alone is settled only by a pass measuring against the main checkout's
+  // bDev — measured against the worktree copy's main it would stay mergeable. Only the landed
+  // file is committed, so the untracked settings file stays the main checkout's alone.
+  // Its branch is `landed`, not `work/landed`: the worktree's own branch `work` already holds
+  // that ref prefix.
+  await repo.git(['checkout', '-b', 'landed', development])
+  await repo.write('landed.txt', 'landed in the development branch\n')
+  await repo.git(['add', 'landed.txt'])
+  await repo.git(['commit', '-m', 'the landed TASK edits'])
+  await repo.git(['checkout', development])
+  await repo.git(['merge', 'landed'])
+  await repo.git(['checkout', 'main'])
+  // The pass reads the queue where it is run, so the entry stands in the worktree.
+  const landedEntry = join(worktree, '.proofspec', 'dispatch', 'landed')
+  await mkdir(landedEntry, { recursive: true })
+  await writeFile(join(landedEntry, 'MANIFEST'), JSON.stringify({ intentRef: 'docs/x.md', branch: 'landed' }))
+  await writeFile(join(landedEntry, 'state'), 'mergeable')
+
+  const pass = await schedule({
+    cwd: worktree,
+    schedule: {
+      startSession: async () => {},
+      countSessions: async () => 0,
+      judge: async () => ({ kind: 'resolved' }),
+      notifyHuman: async () => {},
+    },
+  })
+
+  if (pass.kind !== 'scheduled') throw new Error(`expected a scheduled report, got ${pass.kind}`)
+  expect(pass.report.merged).toEqual(['landed'])
+
+  // The judge, run the way the bare CLI runs it but from inside the worktree: the main
+  // checkout's program runs, never the one the worktree's copy names. The PATH reaches only
+  // the stand-ins and guards, never a real pi or claude.
+  process.chdir(worktree)
+  process.env.PATH = guardedPath(judges)
+  try {
+    expect(await piJudge()(JUDGE_INPUT)).toEqual({ kind: 'resolved' })
+  } finally {
+    process.env.PATH = ORIGINAL_PATH
+    process.chdir(ORIGINAL_CWD)
+  }
+  expect(existsSync(`${mainCheckoutJudge}.started`)).toBe(true)
+  expect(existsSync(`${worktreeJudge}.started`)).toBe(false)
+  expect(existsSync(join(judges, 'pi.started'))).toBe(false)
+}, 30_000)
 
 // Requirement: Project settings are read from one file at the queue root
 // Scenario: A session finds the settings file through the queue root it is handed
@@ -786,7 +847,7 @@ it('answers the file\'s settings — or the defaults — never the old environme
   const envBin = await standIn(envBins, 'env-bin', 'echo RESOLVED')
 
   // With a file naming all five keys, every variable set to a value the file contradicts —
-  // pi against the file's claude, trunk against bDev, a 100ms wait against the file's 1000,
+  // pi against the file's claude, trunk against bDev, a 100ms wait against the file's FILE_TIMEOUT_MS,
   // and a bound of three against two.
   process.env.PROOFSPEC_EXECUTOR = 'pi'
   process.env.PROOFSPEC_BASE_BRANCH = 'trunk'
