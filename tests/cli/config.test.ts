@@ -262,9 +262,10 @@ async function measuringRepo(settings: SettingsFile) {
 
 /** The branch each of the three remaining places measured against, under a repo's main
  *  checkout holding these settings: the census and settle_task as a session calls them,
- *  handed the queue root in PROOFSPEC_QUEUE_ROOT, and a scheduling pass run in the main
- *  checkout — read off which requirements the census answers, and which landed TASK the
- *  settle and the pass each settle. */
+ *  handed the queue root in PROOFSPEC_QUEUE_ROOT, and a scheduling pass run in a second such
+ *  repo's main checkout the way a person runs it — with no queue root handed, so only the
+ *  settings in the pass's own main checkout can decide its answer — read off which
+ *  requirements the census answers, and which landed TASK the settle and the pass each settle. */
 async function branchesTheSessionToolsAndAPassMeasureBy(settings: SettingsFile): Promise<{ census: string; settleTask: string; pass: string }> {
   const answeredBy: Readonly<Record<string, MeasuredBranch>> = {
     'A third requirement': 'trunk',
@@ -286,6 +287,10 @@ async function branchesTheSessionToolsAndAPassMeasureBy(settings: SettingsFile):
       if (settle.ok) settledByTool.push(branch)
     }
 
+    // The pass is a command a person runs: no session hand-off stands in its environment, so
+    // the repo the session tools were handed is out of its reach.
+    delete process.env.PROOFSPEC_QUEUE_ROOT
+    delete process.env.PROOFSPEC_TASK
     const passRepo = await measuringRepo(settings)
     const pass = await schedule({
       cwd: passRepo.root,
@@ -498,7 +503,21 @@ it('answers a key\'s default when its value is unusable, keeping the file\'s oth
       settings: { ...usable, [key]: defaults[key] },
     })
   }
-})
+
+  // The same fallback on the real surfaces: an unusable executor still starts pi while the
+  // same file's bDev still decides where touched measures from, and an unusable baseBranch
+  // still measures from main while the same file's claude still decides the harness run.
+  for (const executor of ['codex', 7]) {
+    const settings = { ...usable, executor }
+    expect(await executorStartedUnder(settings), `executor holding ${JSON.stringify(executor)}`).toBe('pi')
+    expect(await branchTouchedMeasuredFrom(settings), `executor holding ${JSON.stringify(executor)}`).toBe('bDev')
+  }
+  for (const baseBranch of ['', 42]) {
+    const settings = { ...usable, baseBranch }
+    expect(await branchTouchedMeasuredFrom(settings), `baseBranch holding ${JSON.stringify(baseBranch)}`).toBe('main')
+    expect(await executorStartedUnder(settings), `baseBranch holding ${JSON.stringify(baseBranch)}`).toBe('claude')
+  }
+}, 30_000)
 
 // Requirement: Project settings are read from one file at the queue root
 // Scenario: A settings file that is not valid JSON fails the command reading it, naming the file

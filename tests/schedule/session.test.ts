@@ -349,15 +349,15 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
   return readFile(scriptPath!, 'utf8')
 }
 
+/** A base branch name only a settings file in these proofs ever names — distinctive enough
+ *  that no temp path, socket name, TASK name, or prompt text can contain it by accident. */
+const FILE_ONLY_BRANCH = 'settings-file-only-base-q7z'
+
 /** Every text the built commands hand down to the session: each command's own words, and the
  *  content of every file those words name — the runner script, the system prompt file, and
  *  the generated MCP config the claude build writes, whether named bare or as a `NAME=path`
  *  environment entry — plus every file those contents name in turn. A value handed down
  *  anywhere in that set reaches the session; a value in none of it does not. */
-/** A base branch name only a settings file in these proofs ever names — distinctive enough
- *  that no temp path, socket name, TASK name, or prompt text can contain it by accident. */
-const FILE_ONLY_BRANCH = 'settings-file-only-base-q7z'
-
 async function everythingHandedDown(commands: readonly TmuxCommand[]): Promise<readonly string[]> {
   const texts: string[] = []
   const readFilesNamedIn = async (text: string): Promise<string[]> => {
