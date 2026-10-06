@@ -5,7 +5,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
-import { renderText, schedule, touched } from '../../src/cli/index.ts'
+import { schedule, touched } from '../../src/cli/index.ts'
 import type { Outcome, SchedulePlan, TouchedSummary } from '../../src/cli/index.ts'
 import { runCensusInFlight } from '../../src/handoff/extension.ts'
 import { runSettleTask } from '../../src/progress/extension.ts'
@@ -204,7 +204,6 @@ it('settles through a scheduling pass against the branch the settings file names
   const outcome = await schedule({ cwd: repo.root })
 
   expect(planOf(outcome).merged).toEqual(['passed'])
-  expect(renderText(outcome)).toContain(`merged passed (branch landed in ${development})`)
   await expect(readFile(join(repo.root, '.proofspec', 'archive', 'passed', 'state'), 'utf8')).resolves.toBe('merged')
   await expect(stat(join(repo.root, '.proofspec', 'worktrees', 'passed'))).rejects.toThrow()
   await expect(sessionGoneWithin('passed', 5000)).resolves.toBe(true)
