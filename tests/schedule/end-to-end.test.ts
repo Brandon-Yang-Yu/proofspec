@@ -701,28 +701,28 @@ it('dispatches a TASK the bound deferred once a session has gone', async () => {
 
 // Requirement: No executor session starts once the live-session bound is reached
 // Scenario: The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK
-// GIVEN three ready TASKs, a bound of two, and a live count that grows by one each time it is asked
+// GIVEN three ready TASKs, a bound of two, and a live count the server answers as 0, then 2, then
+//      1 — sessions appearing and going between decisions, apart from any this pass starts
 // WHEN one scheduling pass dispatches them
-// THEN it starts exactly two sessions — asking the count anew before each — and defers the third,
-//      rather than counting once and dispatching all three past the bound
+// THEN it asks the count anew before each decision and follows each answer: it starts the first,
+//      defers the second while the server stands at the bound, and starts the third once a
+//      session has gone — never a tally of its own starts, which would start the first two
 it('takes the live count fresh at each dispatch decision within one pass', async () => {
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
   await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 2 }))
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   await enterTask(repo, 'b', { edit: 'specs/cli.md' })
   await enterTask(repo, 'c', { edit: 'specs/cli.md' })
+  const answers = [0, 2, 1]
   let asked = 0
   const actions = fakeActions({
-    countSessions: async () => {
-      asked += 1
-      return asked - 1
-    },
+    countSessions: async () => answers[asked++] ?? 0,
   })
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
 
-  expect(plan.started).toEqual(['a', 'b'])
-  expect(plan.deferred).toEqual(['c'])
+  expect(plan.started).toEqual(['a', 'c'])
+  expect(plan.deferred).toEqual(['b'])
   // One ask per decision: a pass that counted once and kept its own tally would ask once.
   expect(asked).toBe(3)
 })
