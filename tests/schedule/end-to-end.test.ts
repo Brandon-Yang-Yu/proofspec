@@ -723,6 +723,8 @@ it('takes the live count fresh at each dispatch decision within one pass', async
 
   expect(plan.started).toEqual(['a', 'b'])
   expect(plan.deferred).toEqual(['c'])
+  // One ask per decision: a pass that counted once and kept its own tally would ask once.
+  expect(asked).toBe(3)
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
