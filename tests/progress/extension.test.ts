@@ -453,17 +453,17 @@ it('reports the phase into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd n
 
 // Requirement: report_task_state accepts only a closed set of state words
 // Scenario: A state word outside the reportable set is refused, naming the word, and the entry's state is unchanged
-// GIVEN a queue entry whose state is queued
+// GIVEN a queue entry whose state is building
 // WHEN report_task_state is called with a word outside the reportable set
 // THEN it refuses, naming the given word, and the entry's state is unchanged
 it('refuses a state word outside the reportable set, leaving the entry unchanged', async () => {
   const repo = await makeRepo({})
-  await writeTask(repo.root, 'a', { manifest: '{}', state: 'queued' })
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
 
   const result = await runReportTaskState({ queueRoot: repo.root, task: 'a' }, 'queued')
 
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('queued') })
-  expect(await stateOf(repo.root, 'a')).toBe('queued')
+  expect(await stateOf(repo.root, 'a')).toBe('building')
 })
 
 // Requirement: report_task_state resolves PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK from the environment, refused when absent

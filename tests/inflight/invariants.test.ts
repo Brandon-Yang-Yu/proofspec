@@ -7,7 +7,8 @@ import { computeGraph } from '../../src/inflight/index.ts'
 // Scenario: The answer carries no order, no hold, no rank, and no recommendation
 // GIVEN two in-flight TASK sharing a CAPABILITY_FILE
 // WHEN the graph is computed
-// THEN neither a TASK nor a relationship carries any field beyond what names the overlap itself
+// THEN the shared CAPABILITY_FILE is reported as their relationship, and neither a TASK nor a
+//      relationship carries any field naming an order, a hold, a rank, or a recommendation
 it('carries no field naming an order, a hold, a rank, or a recommendation', () => {
   const graph = computeGraph({
     changes: [
@@ -20,6 +21,8 @@ it('carries no field naming an order, a hold, a rank, or a recommendation', () =
   })
 
   expect(Object.keys(graph).sort()).toEqual(['relationships', 'tasks'])
+  expect(graph.tasks).toHaveLength(2)
+  expect(graph.relationships).toEqual([{ node: { kind: 'capability', name: 'cli' }, tasks: ['a', 'b'] }])
   for (const task of graph.tasks) expect(Object.keys(task).sort()).toEqual(['blockedBy', 'problem', 'reopened', 'task', 'writes'])
   for (const relationship of graph.relationships) expect(Object.keys(relationship).sort()).toEqual(['node', 'tasks'])
 })

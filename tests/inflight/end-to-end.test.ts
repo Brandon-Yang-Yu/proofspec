@@ -112,9 +112,17 @@ it('measures against the BASE_BRANCH, not the merged branch, when blocked names 
 
   const graph = graphOf(await inflight({ cwd: repo.root }))
 
+  // Before a's work lands, the BASE_BRANCH does not hold it, so b is charged with it.
   const b = graph.tasks.find(one => one.task === 'b')
   expect(b?.writes).toEqual([{ kind: 'capability', name: 'a' }, { kind: 'capability', name: 'b' }])
   expect(b?.blockedBy).toEqual({ task: 'a', reason: "needs a's work" })
+
+  await repo.git(['merge', '--no-ff', '-m', 'land a', 'work/a'])
+  const landed = graphOf(await inflight({ cwd: repo.root }))
+
+  // Once the BASE_BRANCH holds a's work, b's writes no longer count it a second time.
+  const bAfterLanding = landed.tasks.find(one => one.task === 'b')
+  expect(bAfterLanding?.writes).toEqual([{ kind: 'capability', name: 'b' }])
 })
 
 // Requirement: The graph reports a reopened edge to every other CAPABILITY_FILE a changed TERM reaches

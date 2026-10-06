@@ -176,10 +176,10 @@ four real sessions on the repo's own server.
 <!-- scenarios: generated -->
 - "A TASK the bound leaves undispatched keeps its state word queued exactly as it stands" → tests/schedule/end-to-end.test.ts
 - "A later pass dispatches a TASK the bound deferred once a session has gone" → tests/schedule/end-to-end.test.ts
-- "A malformed PROOFSPEC_MAX_SESSIONS override falls back to four rather than silently disabling the bound" → tests/schedule/bound.test.ts
+- "A malformed maxSessions value falls back to four rather than silently disabling the bound" → tests/schedule/bound.test.ts
 - "A ready TASK with no countSessions action given cannot run the pass" → tests/schedule/end-to-end.test.ts
 - "A scheduling pass starts no session once the live count has reached the bound" → tests/schedule/end-to-end.test.ts
-- "A well-formed PROOFSPEC_MAX_SESSIONS override replaces the default bound" → tests/schedule/bound.test.ts
+- "A well-formed maxSessions value replaces the default bound" → tests/schedule/bound.test.ts
 - "The live count is asked of the dedicated server by its own -L socket, never the default server" → tests/schedule/session.test.ts
 - "The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK" → tests/schedule/end-to-end.test.ts
 - "The live count reads the sessions standing on the server itself, answering zero when none stand" → tests/schedule/session.test.ts
@@ -269,15 +269,15 @@ A session handed no first message never begins working its TASK, so the invocati
 one kickoff message.
 
 <!-- scenarios: generated -->
-- "A TASK whose queue entry's executor record holds claude starts the claude invocation, whatever PROOFSPEC_EXECUTOR names: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
-- "A TASK whose queue entry's executor record holds pi starts the pi invocation, even when PROOFSPEC_EXECUTOR names claude: --approve, --no-extensions, and both pinned extensions" → tests/schedule/session.test.ts
+- "A TASK whose queue entry's executor record holds claude starts the claude invocation, whatever the settings file names: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
+- "A TASK whose queue entry's executor record holds pi starts the pi invocation, even when the settings file names claude: --approve, --no-extensions, and both pinned extensions" → tests/schedule/session.test.ts
 - "A directory merely sitting at the TASK's conventional path is not reused, a worktree is created instead" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree already exists at its conventional path has it reused, not recreated" → tests/schedule/session.test.ts
 - "A ready TASK whose worktree has never been checked out gets one created at its conventional path" → tests/schedule/session.test.ts
 - "A session start that fails throws an error carrying tmux's own stderr" → tests/schedule/session.test.ts
 - "A start whose kill finds no stale session still stands one — the kill's ordinary failure stays ignored" → tests/schedule/session.test.ts
 - "A worktree creation that fails throws an error carrying git's own stderr" → tests/schedule/session.test.ts
-- "An executor record naming neither pi nor claude counts as no record, and PROOFSPEC_EXECUTOR decides either way" → tests/schedule/session.test.ts
+- "An executor record naming neither pi nor claude counts as no record, and the settings file's executor decides either way" → tests/schedule/session.test.ts
 - "PROOFSPEC_TMUX_SOCKET overrides which dedicated server the tmux commands target" → tests/schedule/session.test.ts
 - "The claude invocation carries the same environment variables and the same positional kickoff message the pi one carries" → tests/schedule/session.test.ts
 - "The default socket is derived from the queue root, so two repos never share a server" → tests/schedule/session.test.ts
@@ -286,9 +286,9 @@ one kickoff message.
 - "The pi invocation is handed one initial user message as its positional prompt argument, telling the session to begin working its TASK" → tests/schedule/session.test.ts
 - "The tmux commands kill any stale session by the TASK's name before starting a fresh one running pi" → tests/schedule/session.test.ts
 - "The tmux commands run against a dedicated server whose name is derived from the queue root, never the user's default or any other named one" → tests/schedule/session.test.ts
-- "The tmux start command carries PROOFSPEC_QUEUE_ROOT, PROOFSPEC_TASK, and PROOFSPEC_BASE_BRANCH as environment variables naming the main checkout, the TASK, and the base branch its queue measures against" → tests/schedule/session.test.ts
-- "With no executor record, PROOFSPEC_EXECUTOR naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
-- "With no executor record, and PROOFSPEC_EXECUTOR unset or naming pi, the started harness is pi" → tests/schedule/session.test.ts
+- "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, and carries no PROOFSPEC_BASE_BRANCH" → tests/schedule/session.test.ts
+- "With no executor record, and the settings file naming no executor or naming pi, the started harness is pi" → tests/schedule/session.test.ts
+- "With no executor record, the settings file's executor naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
 - "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
@@ -337,13 +337,13 @@ a setting's choice because which process asks is an operational fact, not a rule
 question and the reading stay the one shared thing.
 
 <!-- scenarios: generated -->
-- "A malformed timeout override falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
+- "A malformed timeout value falls back to the default, rather than silently disabling the timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never answers is not waited on past the configured timeout" → tests/schedule/judge-cli.test.ts
 - "A process that never closes its own stdin still returns instead of hanging, because judge closes it first" → tests/schedule/judge-cli.test.ts
-- "PROOFSPEC_JUDGE_BIN naming claude runs one headless one-shot claude process" → tests/schedule/judge-cli.test.ts
+- "The settings file's judgeBin naming claude runs one headless one-shot claude process" → tests/schedule/judge-cli.test.ts
 - "Whichever binary runs, the answer is read to the same verdict" → tests/schedule/judge-cli.test.ts
 - "Whichever binary runs, the same relationship is asked the same question" → tests/schedule/judge-cli.test.ts
-- "With PROOFSPEC_JUDGE_BIN unset, or naming pi, the judge process is the pinned one-shot pi process" → tests/schedule/judge-cli.test.ts
+- "With the settings file naming no judgeBin, or naming pi, the judge process is the pinned one-shot pi process" → tests/schedule/judge-cli.test.ts
 <!-- /scenarios -->
 
 ### Requirement: A stale LEASE is told apart from a live one by elapsed time, not by probing a process

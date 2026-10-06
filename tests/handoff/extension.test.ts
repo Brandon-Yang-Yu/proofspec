@@ -60,7 +60,7 @@ it('refuses a TASK name containing a slash before anything is written', async ()
 it('refuses a TASK name containing .. before anything is written', async () => {
   const repo = await makeRepo({})
 
-  const result = await runEnqueueTask(repo.root, { ...VALID_INPUT, task: '../etc' })
+  const result = await runEnqueueTask(repo.root, { ...VALID_INPUT, task: 'a..b' })
 
   expect(result.ok).toBe(false)
   expect(await queueDirExists(repo.root)).toBe(false)

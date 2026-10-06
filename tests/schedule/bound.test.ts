@@ -16,6 +16,11 @@ it('answers a default bound of four when nothing overrides it', async () => {
   const noFile = await makeRepo({})
   const noKey = await makeRepo({ '.proofspec/config.json': '{}' })
 
+  // Four must come from reading the queue root and finding no bound named, never from not
+  // reading it at all: a sibling queue root naming one is answered as named.
+  const named = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
+  expect(await maxSessionsFrom(named.root)).toBe(9)
+
   expect(await maxSessionsFrom(noFile.root)).toBe(DEFAULT_MAX_SESSIONS)
   expect(await maxSessionsFrom(noKey.root)).toBe(DEFAULT_MAX_SESSIONS)
   expect(DEFAULT_MAX_SESSIONS).toBe(4)
@@ -45,6 +50,11 @@ it('falls back to four on a malformed maxSessions value, rather than silently di
   const zero = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 0 }) })
   const negative = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: -2 }) })
   const word = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 'many' }) })
+
+  // Four must come from reading the file and refusing its value, never from not reading it at
+  // all: a well-formed value at a sibling queue root is answered as written.
+  const wellFormed = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 9 }) })
+  expect(await maxSessionsFrom(wellFormed.root)).toBe(9)
 
   expect(await maxSessionsFrom(zero.root)).toBe(4)
   expect(await maxSessionsFrom(negative.root)).toBe(4)

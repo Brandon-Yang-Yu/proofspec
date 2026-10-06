@@ -2,7 +2,7 @@
 
 import { createContext, runInContext } from 'node:vm'
 import { expect, it } from 'vitest'
-import { docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
+import { archiveView, docketPage, PAGE_REFRESH_MILLISECONDS } from '../../src/docket/index.ts'
 import type {
   ArchiveRecord,
   Docket,
@@ -989,24 +989,22 @@ it("shows the completed record's phase account as the live rows show theirs", as
 // WHEN the page renders it
 // THEN the last word's total is the half hour between the two moments — closed at the settled moment, not at any later now, which would spell months — and the word before it closed at the moment the last began
 it("closes every phase of a completed record's account at the settled moment", async () => {
-  const closer: readonly ArchiveRecord[] = [
+  // The record is answered by the archive view from the raw archived entry, not spelled by
+  // hand: the account's closure is computed there, and the page renders long after the
+  // 2025 settle — so an account left open to the render's own now would spell months.
+  const closer = archiveView([
     {
       task: 'closer',
-      branch: 'work/closer',
-      blocked: undefined,
-      enqueuedAt: '2025-01-01T09:00:00.000Z',
-      settledAt: '2025-01-01T10:30:00.000Z',
-      livedSeconds: 90 * 60,
-      phaseHistory: [
+      manifest: JSON.stringify({ intentRef: 'docs/x.md', branch: 'work/closer' }),
+      manifestWrittenAt: Date.UTC(2025, 0, 1, 9, 0, 0),
+      stateWrittenAt: Date.UTC(2025, 0, 1, 10, 30, 0),
+      history: [
         { phase: 'implement', round: 1, since: Date.UTC(2025, 0, 1, 9, 0, 0) },
         { phase: 'test-review', round: 1, since: Date.UTC(2025, 0, 1, 10, 0, 0) },
       ],
-      phaseAccount: [
-        { word: 'implement', totalSeconds: 3600, roundsReached: 1, live: false },
-        { word: 'test-review', totalSeconds: 1800, roundsReached: 1, live: false },
-      ],
     },
-  ]
+  ])
+  expect(Date.now() - Date.UTC(2025, 0, 1, 10, 30, 0)).toBeGreaterThan(60 * 24 * HOUR)
   const page = await renderPageWith(ANSWER, { records: closer })
 
   expect(accountCellOf(page.elements.get('archive-rows')?.innerHTML ?? '', 'closer'))

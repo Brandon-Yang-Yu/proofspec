@@ -178,8 +178,7 @@ it('measures the census against the branch the settings file names', async () =>
 })
 
 // Requirement: Every place that asks git about the BASE_BRANCH reads one name
-// Scenario: A scheduling pass settles a mergeable TASK whose branch landed in the branch the
-//           settings file names
+// Scenario: A scheduling pass settles a mergeable TASK whose branch landed in the branch the settings file names
 // GIVEN a settings file at the queue root whose baseBranch names a development branch, and a
 //      mergeable TASK whose branch is an ancestor of that branch and not of the branch named main
 // WHEN a scheduling pass runs

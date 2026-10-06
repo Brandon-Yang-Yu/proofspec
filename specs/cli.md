@@ -497,6 +497,17 @@ fails loudly, because a committed file that was quietly ignored would leave the 
 running on settings nobody chose. One project has one settings file. A worktree's copy can
 fall behind or differ, so reading it would let two places hold two different settings.
 
+<!-- scenarios: generated -->
+- "A command run in a worktree reads the main checkout's settings file, never the worktree's copy" → tests/cli/config.test.ts
+- "A key holding a value it cannot use takes its default, the other keys keep their values" → tests/cli/config.test.ts
+- "A key missing from the settings file takes its default, the others keep their values" → tests/cli/config.test.ts
+- "A session finds the settings file through the queue root it is handed" → tests/cli/config.test.ts
+- "A settings file holding all five keys decides every setting" → tests/cli/config.test.ts
+- "A settings file that is not valid JSON fails the command reading it, naming the file" → tests/cli/config.test.ts
+- "Setting the old environment variables changes nothing" → tests/cli/config.test.ts
+- "With no settings file, every key takes its default" → tests/cli/config.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Every place that asks git about the BASE_BRANCH reads one name
 
 Wherever the tools ask git about the BASE_BRANCH, they SHALL read its name from the
@@ -512,11 +523,11 @@ settings file. Two places that each spelled the name for themselves would ask ab
 different branches once the setting is made.
 
 <!-- scenarios: generated -->
-- "A scheduling pass settles a mergeable TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH" → tests/cli/base-branch.test.ts
-- "The census measures each TASK against the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
-- "The diff base touched measures from is the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
-- "Unset, every place takes main" → tests/cli/base-branch.test.ts
-- "settle_task settles a TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
+- "A scheduling pass settles a mergeable TASK whose branch landed in the branch the settings file names" → tests/cli/base-branch.test.ts
+- "Naming no branch, every place takes main" → tests/cli/base-branch.test.ts
+- "The census measures each TASK against the branch the settings file names" → tests/cli/base-branch.test.ts
+- "The diff base touched measures from is the branch the settings file names" → tests/cli/base-branch.test.ts
+- "settle_task settles a TASK whose branch landed in the branch the settings file names" → tests/cli/base-branch.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out

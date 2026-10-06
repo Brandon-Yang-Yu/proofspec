@@ -2,7 +2,7 @@
 
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, realpathSync, symlinkSync } from 'node:fs'
+import { existsSync, realpathSync, statSync, symlinkSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -19,7 +19,8 @@ afterEach(cleanupRepos)
 // Unconditional, not a manual delete at the end of the test body it belongs to — a thrown
 // assertion earlier in that body would otherwise skip the delete and leak the override into
 // every later test, exactly the kind of leaked ambient state this requirement exists to guard
-// against. The same pattern `judge-cli.test.ts` already uses for its own env overrides.
+// against. The same unconditional cleanup `judge-cli.test.ts` gives the variables and PATH its
+// stand-ins read.
 afterEach(() => {
   delete process.env.PROOFSPEC_TMUX_SOCKET
 })
@@ -348,6 +349,32 @@ async function runnerScriptFrom(start: TmuxCommand): Promise<string> {
   return readFile(scriptPath!, 'utf8')
 }
 
+/** Every text the built commands hand down to the session: each command's own words, and the
+ *  content of every file those words name — the runner script, the system prompt file, and
+ *  the generated MCP config the claude build writes, whether named bare or as a `NAME=path`
+ *  environment entry — plus every file those contents name in turn. A value handed down
+ *  anywhere in that set reaches the session; a value in none of it does not. */
+async function everythingHandedDown(commands: readonly TmuxCommand[]): Promise<readonly string[]> {
+  const texts: string[] = []
+  const readFilesNamedIn = async (text: string): Promise<string[]> => {
+    const paths = text.match(/\/[^\s"'`$()=]+/g) ?? []
+    const contents: string[] = []
+    for (const path of new Set(paths)) {
+      if (existsSync(path) && statSync(path).isFile()) contents.push(await readFile(path, 'utf8'))
+    }
+    return contents
+  }
+  for (const command of commands) {
+    texts.push(command.command, ...command.args)
+    for (const arg of command.args) {
+      for (const content of await readFilesNamedIn(arg)) {
+        texts.push(content, ...(await readFilesNamedIn(content)))
+      }
+    }
+  }
+  return texts
+}
+
 /** The socket a built tmux command reaches tmux through — the value at its `-L` flag's
  *  head. Holding the `-L`-at-the-head fact inside the read keeps every proof that names a
  *  socket honest with one line: a command on the user's default server carries no `-L` at
@@ -398,7 +425,8 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
   // file at the queue root it is handed.
   const queue = await makeRepo({})
   await writeSettings(queue.root, { baseBranch: 'bDev' })
-  const [, start] = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
+  const commands = tmuxSessionCommands('a', { worktree: `${queue.root}/.proofspec/worktrees/a`, queueRoot: queue.root, systemPrompt: '' })
+  const [, start] = commands
 
   // Pairwise scans, not a positional slice — the STANDARD and the CLAIM name the
   // variables without ordering them, and a flag appended after another -e (KICKOFF,
@@ -412,9 +440,11 @@ it('carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK as environment variables on 
   }
   expect(carries(`PROOFSPEC_QUEUE_ROOT=${queue.root}`)).toBe(true)
   expect(carries('PROOFSPEC_TASK=a')).toBe(true)
-  // The base branch rides no environment entry at all — the settings file at the queue
-  // root the session was handed is the one place the name is read from.
+  // The base branch rides no environment entry at all, nor anything the commands write for
+  // the session to run — the settings file at the queue root the session was handed is the
+  // one place the name is read from.
   expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
+  expect((await everythingHandedDown(commands)).filter(text => text.includes('PROOFSPEC_BASE_BRANCH'))).toEqual([])
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
@@ -809,7 +839,8 @@ it('carries the same environment variables and the same positional kickoff messa
   await writeSettings(queue.root, { executor: 'claude' })
   const build = () => tmuxSessionCommands('dispatch-me', { worktree: `${queue.root}/.proofspec/worktrees/dispatch-me`, queueRoot: queue.root, systemPrompt: 'you are the executor' })
 
-  const [, start] = build()
+  const commands = build()
+  const [, start] = commands
 
   // The same pairwise scans the pi scenario carries — each -e immediately precedes the value
   // it names, on the same tmux new-session command either harness runs, with no ordering
@@ -822,9 +853,11 @@ it('carries the same environment variables and the same positional kickoff messa
   }
   expect(carries(`PROOFSPEC_QUEUE_ROOT=${queue.root}`)).toBe(true)
   expect(carries('PROOFSPEC_TASK=dispatch-me')).toBe(true)
-  // The base branch rides no environment entry here either — the session reads it from
-  // the settings file at the queue root it was handed, whichever harness it runs.
+  // The base branch rides no environment entry here either, nor the claude runner script or
+  // the MCP config it is handed — the session reads it from the settings file at the queue
+  // root it was handed, whichever harness it runs.
   expect(start.args.filter(arg => arg.startsWith('PROOFSPEC_BASE_BRANCH'))).toEqual([])
+  expect((await everythingHandedDown(commands)).filter(text => text.includes('PROOFSPEC_BASE_BRANCH'))).toEqual([])
   // The kickoff rides the same environment entry the pi runner reads, and the claude runner
   // hands it to claude as the one positional prompt argument, leading every flag. An
   // unattended session handed no first message never begins working its TASK. The same
