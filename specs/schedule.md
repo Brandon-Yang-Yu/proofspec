@@ -181,7 +181,7 @@ four real sessions on the repo's own server.
 - "A scheduling pass starts no session once the live count has reached the bound" → tests/schedule/end-to-end.test.ts
 - "A well-formed maxSessions value replaces the default bound" → tests/schedule/bound.test.ts
 - "The live count is asked of the dedicated server by its own -L socket, never the default server" → tests/schedule/session.test.ts
-- "The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK" → tests/schedule/end-to-end.test.ts
+- "The live count is taken fresh at each dispatch decision, and each decision follows the server's own answer" → tests/schedule/end-to-end.test.ts
 - "The live count reads the sessions standing on the server itself, answering zero when none stand" → tests/schedule/session.test.ts
 - "The live-session bound is four by default" → tests/schedule/bound.test.ts
 <!-- /scenarios -->
