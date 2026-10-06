@@ -28,6 +28,8 @@ it('falls back to the default timeout on a malformed value', async () => {
   const zero = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: 0 }) })
   const negative = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: -500 }) })
   const word = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: 'many' }) })
+  // A string that reads as a number is still not a number: coercing it would take "45000" as such.
+  const numericString = await makeRepo({ '.proofspec/config.json': JSON.stringify({ judgeTimeoutMs: '45000' }) })
 
   // The default must come from reading the file and refusing its value, never from not
   // reading it at all: a well-formed value at a sibling queue root is answered as written.
@@ -37,6 +39,7 @@ it('falls back to the default timeout on a malformed value', async () => {
   expect(judgeTimeoutMs(zero.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
   expect(judgeTimeoutMs(negative.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
   expect(judgeTimeoutMs(word.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
+  expect(judgeTimeoutMs(numericString.root)).toBe(DEFAULT_JUDGE_TIMEOUT_MS)
 })
 
 // Generous, not tight: this bounds a process that finishes in milliseconds, so it only needs

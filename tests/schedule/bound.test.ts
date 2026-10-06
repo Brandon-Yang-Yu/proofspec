@@ -51,6 +51,8 @@ it('falls back to four on a malformed maxSessions value, rather than silently di
   const zero = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 0 }) })
   const negative = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: -2 }) })
   const word = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: 'many' }) })
+  // A string that reads as a number is still not a number: coercing it would take "9" as nine.
+  const numericString = await makeRepo({ '.proofspec/config.json': JSON.stringify({ maxSessions: '9' }) })
 
   // Four must come from reading the file and refusing its value, never from not reading it at
   // all: a well-formed value at a sibling queue root is answered as written.
@@ -60,4 +62,5 @@ it('falls back to four on a malformed maxSessions value, rather than silently di
   expect(maxSessionsFrom(zero.root)).toBe(4)
   expect(maxSessionsFrom(negative.root)).toBe(4)
   expect(maxSessionsFrom(word.root)).toBe(4)
+  expect(maxSessionsFrom(numericString.root)).toBe(4)
 })
