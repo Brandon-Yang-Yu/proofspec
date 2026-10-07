@@ -23,6 +23,6 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 LOG="$(git rev-parse --absolute-git-dir)/schedule.log"
 
 # Detach so the merge returns immediately; the pass runs on its own.
-nohup pnpm --dir "$REPO_ROOT" proofspec schedule >"$LOG" 2>&1 &
+nohup pnpm --dir "$REPO_ROOT" exec proofspec schedule >"$LOG" 2>&1 &
 
 exit 0

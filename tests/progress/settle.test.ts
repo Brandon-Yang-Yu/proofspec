@@ -4,6 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, expect, it } from 'vitest'
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent'
@@ -486,8 +487,13 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
       await repo.write(`.proofspec/dispatch/${bystander}/state`, 'building')
     }
     const judgePgidAt = join(repo.root, 'judge-pgid.txt')
+    const passCommandAt = join(repo.root, 'pass-command.txt')
     const judgeScript = join(repo.root, 'judge-pgid.sh')
-    await writeFile(judgeScript, `#!/bin/sh\nps -o pgid= -p \$\$ > ${JSON.stringify(judgePgidAt)}\n`)
+    // The judge's parent is the pass itself (the pass awaits the judge it runs), so the
+    // two records are the pass's own facts: the process group it stands in, and the
+    // command line it was started with — the one observation that names which build ran,
+    // where no package-manager spelling could hide.
+    await writeFile(judgeScript, `#!/bin/sh\nps -o pgid= -p \$\$ > ${JSON.stringify(judgePgidAt)}\nps -o command= -p \$PPID > ${JSON.stringify(passCommandAt)}\n`)
     await chmod(judgeScript, 0o755)
     await repo.write('.proofspec/config.json', `${JSON.stringify({ judgeBin: judgeScript })}\n`)
     // The stand-in must be the `pi` every session here resolves — a probe that fails means
@@ -510,7 +516,7 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
     // The queue root as the session was handed it — the physical path, because a macOS
     // temp dir sits behind the /var → /private/var symlink and the pass's own cwd reports
     // the resolved one.
-    expect(started, 'the fired pass really ran: it started the released TASK, which a pass routed through the package manager never does in a repo with no proofspec script')
+    expect(started?.trim(), 'the fired pass really ran: it started the released TASK, which a pass routed through the package manager never does in a repo with no proofspec script')
       .toBe(`started real-fire-second in ${await realpath(repo.root)}`)
     await expect(stat(join(repo.root, '.proofspec', 'dispatch', 'real-fire-second', 'LEASE'))).resolves.toBeDefined()
     // The detachment limb, read from the record the fixture's judge left: a group of its
@@ -521,6 +527,18 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
     if (judgePgid !== undefined) {
       const ownPgid = await execFileAsync('ps', ['-o', 'pgid=', '-p', String(process.pid)])
       expect(judgePgid.trim(), 'the pass\u2019s process group is not the settle host\u2019s own').not.toBe(ownPgid.stdout.trim())
+    }
+    // The same-build limb, read from the pass's own command line: the settle runs inside
+    // this suite's build, so the entry the pass was started with is this suite's own CLI
+    // entry — and a command line that names it, with `schedule`, and no package-manager
+    // spelling anywhere in it, is a pass started by running that build directly.
+    const passCommand = await readWhenWritten(passCommandAt)
+    expect(passCommand, 'the fired pass\u2019s own command line is reachable by the judge it runs').toBeDefined()
+    if (passCommand !== undefined) {
+      const ownCliEntry = fileURLToPath(new URL('../../src/cli/main.ts', import.meta.url))
+      expect(passCommand, 'the pass is started by running the settle\u2019s own build').toContain(ownCliEntry)
+      expect(passCommand, 'the pass is a schedule pass').toContain('schedule')
+      expect(passCommand, 'the pass is never started through the package manager').not.toMatch(/\b(?:pnpm|npx|npm)\b/)
     }
   } finally {
     process.env.PATH = previousPath
