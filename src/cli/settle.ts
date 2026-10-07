@@ -64,8 +64,10 @@ function cliEntryFor(): { readonly path: string; readonly nodeFlags: readonly st
 
 /** The pass a settle fires for `queueRoot`: node running this build's own CLI entry with the
  *  one argument `schedule`, the queue root as the pass's working folder, detached so the
- *  pass survives the settle's teardown. */
-export function schedulingPassFor(options: { readonly queueRoot: string; readonly task: string }): SchedulingPassPlan {
+ *  pass survives the settle's teardown. A module-internal value: the proofs observe the
+ *  pass's own behavior and the plans the injected fire is handed, so no seam needs to
+ *  reach this builder from outside. */
+function schedulingPassFor(options: { readonly queueRoot: string; readonly task: string }): SchedulingPassPlan {
   const entry = cliEntryFor()
   return {
     command: process.execPath,
