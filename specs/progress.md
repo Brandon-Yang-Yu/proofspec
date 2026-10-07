@@ -135,9 +135,13 @@ worktree, and the session stand exactly as they were. Both holding, it SHALL per
 settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its
 conventional path, kill its same-named tmux session on the dedicated server — the same
 settle a scheduling pass runs as its backstop (`specs/schedule.md`). The one scheduling
-pass a successful settle fires SHALL be started with its working folder set to the queue
-root. The plan the settle starts the pass from SHALL carry the queue root as that working
-folder — the same root the plan's `--dir` argument already names. The session kill SHALL
+pass a successful settle fires SHALL run against the queue root, with the queue root as its
+working folder. The settle SHALL start the pass detached, in a process group of its own, so
+the settle's teardown cannot take it with it. The settle SHALL start the pass by running
+the same proofspec build that is running the settle, never through the package manager.
+The pass's output, both stdout and stderr, SHALL be appended to a log file in the queue's
+own folder, `.proofspec/schedule/settle-pass.log`. Each pass SHALL first write one header
+line to that log, naming the time and the TASK whose settle fired it. The session kill SHALL
 go through a detached reaper process with a short delay, so the tool returns its result
 before the host session dies. The tool SHALL NOT prune the TASK's queue entry: pruning
 waits until no in-flight TASK's `blocked` still names it, a fact about the whole queue that
@@ -159,6 +163,12 @@ folder its caller stands in: `settle_task` is called from inside the TASK's own 
 and the settle's teardown deletes that worktree, so a pass started standing in that folder
 cannot be relied on to come up. The queue root is the folder the settle can be certain
 still exists, because the queue lives there.
+
+The settle runs its own proofspec build so that the pass starts in any repo. A repo that
+installed proofspec has no script named `proofspec`, so the pass must not depend on the
+repo or its package manager to find it. The log exists because the settle answers as soon
+as the pass has started, before the pass has done anything. A pass that starts and then
+fails must leave its reason where someone can read it without attaching to anything.
 
 <!-- scenarios: generated -->
 - "A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
