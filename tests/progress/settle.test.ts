@@ -150,6 +150,13 @@ function headerNaming(text: string, task: string): string | undefined {
   return text.split('\n').find(line => line.includes(task) && ISO_TIME.test(line))
 }
 
+/** How many lines in a stretch of the log carry one pass's header shape — the TASK and
+ *  a time on one line. The STANDARD's "one header line" is a count, so the proofs count
+ *  it, not just find it. */
+function countHeaders(text: string, task: string): number {
+  return text.split('\n').filter(line => line.includes(task) && ISO_TIME.test(line)).length
+}
+
 /** Whether a header line's timestamp falls inside the proof's own run. */
 function namesRecentTime(header: string): boolean {
   const written = header.match(ISO_TIME)
@@ -458,7 +465,7 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
       files: {
         'a.txt': 'a',
         'second.txt': 'second',
-        'specs/.keep': '',
+        'specs/demo.md': '# demo\n\n### Requirement: A demonstrated promise\n\nThe tool SHALL demonstrate.\n',
         'package.json': '{ "name": "consumer-shaped", "private": true }\n',
         '.pi/agents/executor.md': 'Placeholder executor. Do nothing.\n',
       },
@@ -467,6 +474,22 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
       edit: 'second.txt',
       blocked: { task: 'real-fire-first', reason: 'waits behind real-fire-first' },
     })
+    // Two bystander TASKs sharing one spec file hand the pass a relationship to judge, and
+    // the fixture's own judge — a script the settings file names — records the process
+    // group it runs in. The judge runs as a plain child of the pass, inheriting the pass's
+    // group, so that record is the pass's own group made readable: a pass started detached
+    // stands in a group of its own, unlike the group this test process runs in — the
+    // behavioral observation of the claim's detachment limb, independent of the command
+    // line the pass was started with.
+    for (const bystander of ['real-fire-bystander-a', 'real-fire-bystander-b']) {
+      await enterTask(repo, bystander, { edit: 'specs/demo.md' })
+      await repo.write(`.proofspec/dispatch/${bystander}/state`, 'building')
+    }
+    const judgePgidAt = join(repo.root, 'judge-pgid.txt')
+    const judgeScript = join(repo.root, 'judge-pgid.sh')
+    await writeFile(judgeScript, `#!/bin/sh\nps -o pgid= -p \$\$ > ${JSON.stringify(judgePgidAt)}\n`)
+    await chmod(judgeScript, 0o755)
+    await repo.write('.proofspec/config.json', `${JSON.stringify({ judgeBin: judgeScript })}\n`)
     // The stand-in must be the `pi` every session here resolves — a probe that fails means
     // going on could start a real agent, so the proof stops on it instead.
     const resolvedPi = await execFileAsync('sh', ['-c', 'command -v pi'])
@@ -490,6 +513,15 @@ it("fires a real scheduling pass of its own build in a repo shaped like a consum
     expect(started, 'the fired pass really ran: it started the released TASK, which a pass routed through the package manager never does in a repo with no proofspec script')
       .toBe(`started real-fire-second in ${await realpath(repo.root)}`)
     await expect(stat(join(repo.root, '.proofspec', 'dispatch', 'real-fire-second', 'LEASE'))).resolves.toBeDefined()
+    // The detachment limb, read from the record the fixture's judge left: a group of its
+    // own is a group no other process stands in, so the pass's group — the one the judge
+    // inherited — is not the group this test process (the settle's own host) stands in.
+    const judgePgid = await readWhenWritten(judgePgidAt)
+    expect(judgePgid, 'the fired pass runs in a process group of its own, reachable by the judge it runs').toBeDefined()
+    if (judgePgid !== undefined) {
+      const ownPgid = await execFileAsync('ps', ['-o', 'pgid=', '-p', String(process.pid)])
+      expect(judgePgid.trim(), 'the pass\u2019s process group is not the settle host\u2019s own').not.toBe(ownPgid.stdout.trim())
+    }
   } finally {
     process.env.PATH = previousPath
     await rm(dirname(stub.binDir), { recursive: true, force: true })
@@ -528,6 +560,7 @@ it("opens the settle-pass log with one header line, then the pass's stdout and s
   if (header === undefined) return
   expect(log.split('\n')[0]).toBe(header)
   expect(namesRecentTime(header), 'the header names the time').toBe(true)
+  expect(countHeaders(log, 'log-first-write'), 'the pass writes exactly one header line').toBe(1)
 }, 30000)
 
 // Requirement: settle_task settles a TASK only after re-verifying its landing from git
@@ -566,6 +599,10 @@ it("appends the fired pass's header and output after what an earlier pass left i
   expect(header, 'the later pass carries its own header line').toBeDefined()
   if (header === undefined) return
   expect(namesRecentTime(header), 'the later header names the time').toBe(true)
+  expect(countHeaders(appended, 'log-append'), 'the later pass writes exactly one header line').toBe(1)
+  const headerAt = appended.indexOf(header)
+  expect(headerAt, 'the later header stands before that pass\u2019s own stdout').toBeLessThan(appended.indexOf(stdoutOfThePass))
+  expect(headerAt, 'the later header stands before that pass\u2019s own stderr').toBeLessThan(appended.indexOf(stderrOfThePass))
   expect(appended).toContain(stdoutOfThePass)
   expect(appended).toContain(stderrOfThePass)
 }, 30000)
