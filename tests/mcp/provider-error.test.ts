@@ -1,6 +1,7 @@
 // Capability: mcp
 
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative as relativePath, resolve } from 'node:path'
@@ -11,11 +12,10 @@ import { cleanupRepos, enterTask, makeGitRepo, makeRepo } from '../cli/support.t
 
 afterEach(cleanupRepos)
 // Unconditional, not a manual delete at the end of a test body — the same leaked-ambient-state
-// guard the heartbeat entry's tests keep for the same three variables.
+// guard the heartbeat entry's tests keep for the same two variables.
 afterEach(() => {
   delete process.env.PROOFSPEC_QUEUE_ROOT
   delete process.env.PROOFSPEC_TASK
-  delete process.env.PROOFSPEC_EXECUTOR
 })
 
 // --- the entry and the error the hook hands it ----------------------------------------
@@ -393,7 +393,8 @@ it('runs the checkout\'s own provider-error source from the StopFailure hook whe
     '.pi/agents/executor.md': EXECUTOR_PERSONA,
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'executor', bytes: 'claude' })
 
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
 
@@ -435,7 +436,8 @@ it('runs the installed package\'s built provider-error entry from the StopFailur
     '.pi/agents/executor.md': EXECUTOR_PERSONA,
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
+  // A Claude Code session: the TASK's executor record names claude.
+  await writeEntryFile({ root: repo.root, task: 'a', name: 'executor', bytes: 'claude' })
 
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))
 
@@ -464,7 +466,7 @@ it('runs the installed package\'s built provider-error entry from the StopFailur
 
 // Requirement: A provider-error CLI entry parks the TASK, called by the Claude Code hook for a turn that stopped on a provider error
 // Scenario: A TASK moved to claude by its executor record gets the StopFailure hook on every start
-// GIVEN a TASK whose queue entry's executor record names claude, and PROOFSPEC_EXECUTOR unset
+// GIVEN a TASK whose queue entry's executor record names claude, and no settings file naming an executor
 // WHEN the TASK's session is started through the bare CLI's startSession
 // THEN the TASK's worktree's Claude Code settings wire the provider-error entry on the StopFailure event
 it('wires the provider-error entry on StopFailure for a TASK its executor record moved to claude', async () => {
@@ -474,7 +476,8 @@ it('wires the provider-error entry on StopFailure for a TASK its executor record
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
   await writeEntryFile({ root: repo.root, task: 'a', name: 'executor', bytes: 'claude' })
-  delete process.env.PROOFSPEC_EXECUTOR
+  // No .proofspec/config.json stands at the queue root, so no settings file names an executor.
+  expect(existsSync(join(repo.root, '.proofspec', 'config.json'))).toBe(false)
 
   // The bare CLI's startSession is exactly this call with the queue root as its cwd.
   await withFakeTmux(() => tmuxStartSession(repo.root, 'a'))

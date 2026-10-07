@@ -453,17 +453,17 @@ it('reports the phase into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd n
 
 // Requirement: report_task_state accepts only a closed set of state words
 // Scenario: A state word outside the reportable set is refused, naming the word, and the entry's state is unchanged
-// GIVEN a queue entry whose state is queued
+// GIVEN a queue entry whose state is building
 // WHEN report_task_state is called with a word outside the reportable set
 // THEN it refuses, naming the given word, and the entry's state is unchanged
 it('refuses a state word outside the reportable set, leaving the entry unchanged', async () => {
   const repo = await makeRepo({})
-  await writeTask(repo.root, 'a', { manifest: '{}', state: 'queued' })
+  await writeTask(repo.root, 'a', { manifest: '{}', state: 'building' })
 
   const result = await runReportTaskState({ queueRoot: repo.root, task: 'a' }, 'queued')
 
   expect(result).toEqual({ ok: false, reason: expect.stringContaining('queued') })
-  expect(await stateOf(repo.root, 'a')).toBe('queued')
+  expect(await stateOf(repo.root, 'a')).toBe('building')
 })
 
 // Requirement: report_task_state resolves PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK from the environment, refused when absent
@@ -882,8 +882,7 @@ async function isGone(pid: number): Promise<boolean> {
  *  path, the executor persona startSession reads, and a fake `claude` first on PATH that
  *  records the arguments it was handed and the folder it was started in, and then parks —
  *  never the real claude: an unattended start in a test has no business running it. Hands
- *  back what a proof reads, and a restore that puts PATH and PROOFSPEC_EXECUTOR back as they
- *  were. */
+ *  back what a proof reads, and a restore that puts PATH back as it was. */
 async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
   readonly repo: GitRepo
   readonly worktree: string
@@ -918,10 +917,10 @@ async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
   const worktree = join(repo.root, '.proofspec', 'worktrees', task)
   await repo.git(['worktree', 'add', worktree, `work/${task}`])
 
-  // The restart must reach claude through the TASK's own record, never through a variable
-  // this process happens to carry, so the variable is taken away for the proof's length.
-  const previousExecutor = process.env.PROOFSPEC_EXECUTOR
-  delete process.env.PROOFSPEC_EXECUTOR
+  // The restart must reach claude only through the executor record it writes for the TASK:
+  // the queue root holds no settings file, so its executor is the default pi, and a start
+  // that ran claude anyway can only have read the record.
+  expect(existsSync(join(repo.root, '.proofspec', 'config.json'))).toBe(false)
   const previousPath = process.env.PATH
   process.env.PATH = `${bin}:${previousPath ?? ''}`
   // A server started earlier would answer with its older PATH, which holds no fake claude.
@@ -931,8 +930,6 @@ async function makeBuildingTaskWithFakeClaude(task: string): Promise<{
     await execFileAsync('tmux', ['-L', RESTART_SOCKET, 'kill-server']).catch(() => {})
     if (previousPath === undefined) delete process.env.PATH
     else process.env.PATH = previousPath
-    if (previousExecutor === undefined) delete process.env.PROOFSPEC_EXECUTOR
-    else process.env.PROOFSPEC_EXECUTOR = previousExecutor
     await rm(bin, { recursive: true, force: true })
   }
   return { repo, worktree, claudeRanIn, claudeArgv, bin, restore }

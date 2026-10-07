@@ -60,8 +60,8 @@ their lines.
 ### Term: BASE_BRANCH
 
 The branch every TASK's work is built on, measured against, and settled into. It is the
-branch the `PROOFSPEC_BASE_BRANCH` environment variable names, or `main` when that
-variable is unset.
+branch named by the `baseBranch` key of the project's settings file,
+`.proofspec/config.json`. It is `main` when that file names no branch.
 
 It is the base a repo chooses to build on, not the main branch under another name. A
 TASK's branch landing in the BASE_BRANCH ends the TASK's life in the queue; where the

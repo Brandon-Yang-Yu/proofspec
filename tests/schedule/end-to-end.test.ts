@@ -18,12 +18,6 @@ const execFileAsync = promisify(execFile)
 const MAIN = fileURLToPath(new URL('../../src/cli/main.ts', import.meta.url))
 
 afterEach(cleanupRepos)
-// The bound tests below set PROOFSPEC_MAX_SESSIONS per test; a leaked value would hold every
-// later test to some earlier test's bound, the same ambient leak the socket override keeps
-// its own cleanup for.
-afterEach(() => {
-  delete process.env.PROOFSPEC_MAX_SESSIONS
-})
 
 // A pass settles a mergeable TASK by tearing down its session — killing a tmux session by the
 // TASK's name and removing its worktree. Pointing the whole suite at a throwaway socket keeps
@@ -647,8 +641,8 @@ it('cannot run a pass with a ready TASK and no startSession action', async () =>
 // WHEN a scheduling pass runs
 // THEN no session starts for it and the pass reports it deferred — never dispatched past the bound
 it('starts no session once the live count has reached the bound', async () => {
-  process.env.PROOFSPEC_MAX_SESSIONS = '1'
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 1 }))
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   const actions = fakeActions({ countSessions: async () => 1 })
 
@@ -666,12 +660,17 @@ it('starts no session once the live count has reached the bound', async () => {
 // THEN its state file still reads queued exactly as it stood — only the machine's capacity
 //      changed, and capacity is no state of the TASK's own
 it('keeps a TASK the bound leaves undispatched queued exactly as it stands', async () => {
-  process.env.PROOFSPEC_MAX_SESSIONS = '1'
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 1 }))
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   const actions = fakeActions({ countSessions: async () => 1 })
 
-  await schedule({ cwd: repo.root, schedule: actions })
+  const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
+  // The GIVEN established before the state word is read: the bound deferred this TASK and
+  // started nothing for it — a pass that ignored the bound and dispatched would leave the
+  // word untouched by the fake start and read queued all the same.
+  expect(plan.deferred).toEqual(['a'])
+  expect(plan.started).toEqual([])
 
   await expect(readFile(join(repo.root, '.proofspec', 'dispatch', 'a', 'state'), 'utf8')).resolves.toBe('queued')
 })
@@ -683,8 +682,8 @@ it('keeps a TASK the bound leaves undispatched queued exactly as it stands', asy
 // THEN that pass dispatches it — the deferral took no LEASE, so nothing of the earlier pass
 //      stands in the later one's way
 it('dispatches a TASK the bound deferred once a session has gone', async () => {
-  process.env.PROOFSPEC_MAX_SESSIONS = '1'
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 1 }))
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   let live = 1
   const actions = fakeActions({ countSessions: async () => live })
@@ -701,29 +700,36 @@ it('dispatches a TASK the bound deferred once a session has gone', async () => {
 })
 
 // Requirement: No executor session starts once the live-session bound is reached
-// Scenario: The live count is taken fresh at each dispatch decision, so one pass fills the bound TASK by TASK
-// GIVEN three ready TASKs, a bound of two, and a live count that grows by one each time it is asked
+// Scenario: The live count is taken fresh at each dispatch decision, and each decision follows the server's own answer
+// GIVEN four ready TASKs, a bound of two, and a live count the server answers as 0, then 2, then
+//      1, then 0 — sessions appearing and going between decisions, apart from any this pass starts
 // WHEN one scheduling pass dispatches them
-// THEN it starts exactly two sessions — asking the count anew before each — and defers the third,
-//      rather than counting once and dispatching all three past the bound
+// THEN it asks the count anew before each decision and follows each answer alone: it starts the
+//      first, defers the second while the server stands at the bound, starts the third while the
+//      server stands one below it, and starts the fourth once the server reports none — never a
+//      tally of its own starts, alone or beside the server's answer
 it('takes the live count fresh at each dispatch decision within one pass', async () => {
-  process.env.PROOFSPEC_MAX_SESSIONS = '2'
   const repo = await makeGitRepo({ 'specs/cli.md': '# cli\n' })
+  await repo.write('.proofspec/config.json', JSON.stringify({ maxSessions: 2 }))
   await enterTask(repo, 'a', { edit: 'specs/cli.md' })
   await enterTask(repo, 'b', { edit: 'specs/cli.md' })
   await enterTask(repo, 'c', { edit: 'specs/cli.md' })
+  await enterTask(repo, 'd', { edit: 'specs/cli.md' })
+  const answers = [0, 2, 1, 0]
   let asked = 0
   const actions = fakeActions({
-    countSessions: async () => {
-      asked += 1
-      return asked - 1
-    },
+    countSessions: async () => answers[asked++] ?? 0,
   })
 
   const plan = planOf(await schedule({ cwd: repo.root, schedule: actions }))
 
-  expect(plan.started).toEqual(['a', 'b'])
-  expect(plan.deferred).toEqual(['c'])
+  // A tally of its own starts would start a and b; that tally added to the server's answer
+  // would defer c, kept as the larger of the two it would defer d; a bound read as one, or any
+  // live session read as full, would defer c.
+  expect(plan.started).toEqual(['a', 'c', 'd'])
+  expect(plan.deferred).toEqual(['b'])
+  // One ask per decision: a pass that counted once would ask once.
+  expect(asked).toBe(4)
 })
 
 // Requirement: No executor session starts once the live-session bound is reached

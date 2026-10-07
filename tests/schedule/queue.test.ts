@@ -77,15 +77,18 @@ it('creates a new queue entry with its MANIFEST and an initial queued state', as
 // THEN it answers ok:false naming the collision, and the existing MANIFEST/state are unchanged
 it('refuses a TASK name already in the queue, leaving its entry untouched', async () => {
   const repo = await makeRepo({})
-  await enqueue(repo.root, 'a', MANIFEST)
-  await writeState(repo.root, 'a', 'building')
-  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/a-2' }
+  await enqueue(repo.root, 'duplicate-widget', MANIFEST)
+  await writeState(repo.root, 'duplicate-widget', 'building')
+  const attempted: Manifest = { intentRef: 'docs/y.md', branch: 'work/duplicate-widget-2' }
 
-  const result = await enqueue(repo.root, 'a', attempted)
+  const result = await enqueue(repo.root, 'duplicate-widget', attempted)
 
-  expect(result).toEqual({ ok: false, reason: expect.stringContaining('a') })
-  expect(await manifestOf(repo.root, 'a')).toEqual(MANIFEST)
-  expect(await stateOf(repo.root, 'a')).toBe('building')
+  expect(result.ok).toBe(false)
+  if (result.ok) return
+  expect(result.reason).toContain('duplicate-widget')
+  expect(result.reason).toContain('already in the queue')
+  expect(await manifestOf(repo.root, 'duplicate-widget')).toEqual(MANIFEST)
+  expect(await stateOf(repo.root, 'duplicate-widget')).toBe('building')
 })
 
 // Requirement: enqueue creates a queue entry once, and refuses rather than overwrite one already there

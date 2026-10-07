@@ -101,9 +101,9 @@ queue and its worktrees are ignored — `.proofspec/reviews.jsonl`, the committe
 of recorded reviews, stays committable. The personas ship as this repo runs them —
 written against its own conventions (pnpm scripts, a codebase-memory index, its agent
 rules); your copies in `.pi/agents/` are yours to edit. The `.claude/agents/` copies
-are the same personas for Claude Code executor sessions (`PROOFSPEC_EXECUTOR=claude`):
-Claude Code reads its subagents from `.claude/agents/` the way `pi` reads them from
-`.pi/agents/`. `.claude/agents/` is generated — do not edit it by hand. Edit only
+are the same personas for Claude Code executor sessions (`"executor": "claude"` in
+`.proofspec/config.json`): Claude Code reads its subagents from `.claude/agents/` the way
+`pi` reads them from `.pi/agents/`. `.claude/agents/` is generated — do not edit it by hand. Edit only
 `.pi/agents/`, then run `pnpm personas:write` to regenerate `.claude/agents/`, which
 translates each persona's `tools:` line to Claude Code's tool names;
 `pnpm personas:check` fails, naming the file, when a copy is out of step.

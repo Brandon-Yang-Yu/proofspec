@@ -1,21 +1,24 @@
 import { execFile } from 'node:child_process'
 import { judgeWith } from '../schedule/index.ts'
 import type { JudgeAgent, JudgeOutcome, JudgeProcess, ScheduleActions } from '../schedule/index.ts'
+import { settingsOf } from '../settings.ts'
+import type { SettingsSource } from '../settings.ts'
+import { readCommandSettings } from './command-settings.ts'
 
-// Exported so a test can assert a fallback against this value instead of a duplicated literal.
-export const DEFAULT_JUDGE_TIMEOUT_MS = 60_000
 // A reasoning reply is short; this only avoids ever truncating a real one.
 const MAX_JUDGE_OUTPUT = 1024 * 1024
 
-// The live vendor/model choice, an operational knob owned here beside `PROOFSPEC_JUDGE_BIN` —
-// `schedule/judge.ts` stays domain rules only, with no default agent of its own.
+// The live vendor/model choice, an operational knob owned here beside the settings
+// file's `judgeBin` — `schedule/judge.ts` stays domain rules only, with no default agent
+// of its own.
 const DEFAULT_JUDGE_AGENT: JudgeAgent = { model: 'zai/glm-5.3:low' }
 
 /**
  * The real one-shot agent run: a fresh process per relationship — `pi` by default,
- * `claude` headless under `PROOFSPEC_JUDGE_BIN` — saving no session. The pure rules of
- * asking and reading live in `schedule/judge.ts`; this is the one thing that actually
- * spawns a process, the same boundary `graph.ts` keeps for the codebase-memory CLI.
+ * `claude` headless when the settings file's `judgeBin` names it — saving no session.
+ * The pure rules of asking and reading live in `schedule/judge.ts`; this is the one thing
+ * that actually spawns a process, the same boundary `graph.ts` keeps for the
+ * codebase-memory CLI.
  */
 export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<ScheduleActions['judge']> {
   return judgeWith(runJudgeProcess, agent)
@@ -23,22 +26,31 @@ export function piJudge(agent: JudgeAgent = DEFAULT_JUDGE_AGENT): NonNullable<Sc
 
 /**
  * A hung agent must not hang a whole scheduling pass, which awaits one judge call at a time —
- * `raw` is `PROOFSPEC_JUDGE_TIMEOUT_MS`, read fresh by the caller on every call the same as
- * `PROOFSPEC_JUDGE_BIN` below, since a module-level constant would freeze whatever the env
- * held at first import, before a test ever gets to set it. Anything short of a positive number
- * falls back to the default rather than silently disabling the timeout: `execFile`'s own
- * `timeout` option only arms when it is greater than zero, so a malformed override would
- * otherwise reintroduce the exact hang this exists to prevent.
+ * the timeout is the settings file's `judgeTimeoutMs`, read fresh on every call given a queue
+ * root, since a module-level constant would freeze whatever the file held at first import;
+ * the judge's own run hands the settings it already read, so a run reads the file once.
+ * Anything short of a positive number falls back to the default rather than silently
+ * disabling the timeout (`src/settings.ts`): `execFile`'s own `timeout` option only arms when
+ * it is greater than zero.
  */
-export function judgeTimeoutMs(raw: string | undefined): number {
-  if (raw === undefined) return DEFAULT_JUDGE_TIMEOUT_MS
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_JUDGE_TIMEOUT_MS
+export function judgeTimeoutMs(source: SettingsSource): number {
+  return settingsOf(source).judgeTimeoutMs
 }
 
+/**
+ * The judge runs inside the bare CLI's scheduling pass, which stands in the queue's checkout,
+ * so its settings are the ones a command a person runs reads there. A settings file that
+ * cannot be read throws naming the file rather than answering `cannot-run`: `verdictFrom`
+ * turns `cannot-run` into an unresolved verdict, so a broken settings file would surface as
+ * one more ordinary unresolved relationship instead of a loud failure — and running the
+ * default program instead would be the quiet run on defaults the file forbids.
+ */
 async function runJudgeProcess(judgeProcess: JudgeProcess): Promise<JudgeOutcome> {
-  const binary = process.env.PROOFSPEC_JUDGE_BIN ?? 'pi'
-  const timeoutMs = judgeTimeoutMs(process.env.PROOFSPEC_JUDGE_TIMEOUT_MS)
+  const read = await readCommandSettings(process.cwd())
+  if (!read.ok) throw new Error(read.reason)
+  const settings = read.settings
+  const binary = settings.judgeBin
+  const timeoutMs = judgeTimeoutMs(settings)
   try {
     const stdout = await execFileWithClosedStdin(binary, judgeArgsFor(binary, judgeProcess.args), timeoutMs)
     return { kind: 'ran', code: 0, stdout }

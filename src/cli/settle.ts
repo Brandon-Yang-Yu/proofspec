@@ -1,4 +1,3 @@
-import { baseBranch } from '../base-branch.ts'
 import { MERGEABLE } from '../schedule/types.ts'
 import { isAncestor } from './git.ts'
 import { manifestFor, readState, writeState } from './queue.ts'
@@ -65,7 +64,13 @@ export type FireSchedulingPass = (plan: SchedulingPassPlan) => void | Promise<vo
  * residue — the session killed by the reaper inside `teardownTask`, a short delay after this
  * call has already answered.
  */
-export async function settleTask(options: { readonly queueRoot: string; readonly task: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<SettleResult> {
+export async function settleTask(options: {
+  readonly queueRoot: string
+  readonly task: string
+  /** The BASE_BRANCH's name, as the settings file each caller reads gives it. */
+  readonly baseBranch: string
+  readonly fireSchedulingPass?: FireSchedulingPass
+}): Promise<SettleResult> {
   const manifest = await manifestFor(options.queueRoot, options.task)
   if (manifest === undefined) {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its queue entry has no readable MANIFEST` }
@@ -74,7 +79,7 @@ export async function settleTask(options: { readonly queueRoot: string; readonly
   if (word !== MERGEABLE) {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its state word is ${describe(word)}, not mergeable` }
   }
-  const base = baseBranch()
+  const base = options.baseBranch
   const landed = await isAncestor({ cwd: options.queueRoot, ancestor: manifest.branch, descendant: base })
   if (!landed.ok) {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: git could not answer whether its branch ${manifest.branch} landed in ${base} — ${landed.reason}` }

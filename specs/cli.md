@@ -460,26 +460,74 @@ page is a dialect of its own.
 - "The listener answers the loopback interface only" → tests/cli/docket-serve.test.ts
 <!-- /scenarios -->
 
+### Requirement: Project settings are read from one file at the queue root
+
+The tools SHALL read their project settings from one file, `.proofspec/config.json`, at the
+queue root. The queue root is the main checkout. A session working in a TASK's worktree
+SHALL find the file at the queue root it is handed in `PROOFSPEC_QUEUE_ROOT`. A command a
+person runs SHALL ask git for the main checkout of the repository it stands in, and SHALL
+find the file there. This holds whether the command runs in the main checkout or in a
+TASK's worktree. The copy of `.proofspec/config.json` that a worktree's own branch carries
+SHALL NOT be read.
+
+The file SHALL be a JSON object with five keys, each optional:
+
+- `executor`: the agent a session runs, `pi` or `claude`. The default is `pi`.
+- `baseBranch`: the name of the BASE_BRANCH. The default is `main`.
+- `judgeBin`: the program the judge runs. The default is `pi`.
+- `judgeTimeoutMs`: how many milliseconds the judge waits for an answer. The default is
+  60000.
+- `maxSessions`: how many executor sessions may run at once. The default is 4.
+
+When the file is missing, every key SHALL take its default. When a key is missing, that
+key SHALL take its default. When a key holds a value it cannot use, that one key SHALL
+take its default and the other keys SHALL keep their values. An `executor` naming neither
+`pi` nor `claude` is such a value. So is a `baseBranch` that is not a non-empty string. So
+is a `maxSessions` or a `judgeTimeoutMs` that is not a positive number. When the file is
+present but is not valid JSON, the command reading it SHALL fail with an error that names
+the file.
+
+The tools SHALL NOT read the environment variables `PROOFSPEC_EXECUTOR`,
+`PROOFSPEC_BASE_BRANCH`, `PROOFSPEC_JUDGE_BIN`, `PROOFSPEC_JUDGE_TIMEOUT_MS`, or
+`PROOFSPEC_MAX_SESSIONS`. Setting any of them changes nothing.
+
+These settings belong to the project, so they live in a file the project commits. Every
+person and every shell that starts the tools then gets the same settings. A broken file
+fails loudly, because a committed file that was quietly ignored would leave the project
+running on settings nobody chose. One project has one settings file. A worktree's copy can
+fall behind or differ, so reading it would let two places hold two different settings.
+
+<!-- scenarios: generated -->
+- "A command run in a worktree reads the main checkout's settings file, never the worktree's copy" → tests/cli/config.test.ts
+- "A key holding a value it cannot use takes its default, the other keys keep their values" → tests/cli/config.test.ts
+- "A key missing from the settings file takes its default, the others keep their values" → tests/cli/config.test.ts
+- "A session finds the settings file through the queue root it is handed" → tests/cli/config.test.ts
+- "A settings file holding all five keys decides every setting" → tests/cli/config.test.ts
+- "A settings file that is not valid JSON fails the command reading it, naming the file" → tests/cli/config.test.ts
+- "Setting the old environment variables changes nothing" → tests/cli/config.test.ts
+- "With no settings file, every key takes its default" → tests/cli/config.test.ts
+<!-- /scenarios -->
+
 ### Requirement: Every place that asks git about the BASE_BRANCH reads one name
 
 Wherever the tools ask git about the BASE_BRANCH, they SHALL read its name from the
-`PROOFSPEC_BASE_BRANCH` environment variable, taking `main` when that variable is unset.
-The diff base `touched` measures a change from, the branch the inflight graph's census
-measures each TASK against, the landed check a scheduling pass runs, and the landed check
-`settle_task` runs SHALL all read one resolution of the name, so no two of them measure
+`baseBranch` key of the settings file at the queue root, taking `main` when the key is
+absent. The diff base `touched` measures a change from, the branch the inflight graph's
+census measures each TASK against, the landed check a scheduling pass runs, and the landed
+check `settle_task` runs SHALL all read one resolution of the name. No two of them measure
 against different branches.
 
 The name of the branch a repo builds its work on is a fact about the repo, not about the
-tool: a repo whose development branch carries another name sets the variable. Two places
-that each spelled the name for themselves would ask about two different branches once the
-variable is set.
+tool. A repo whose development branch carries another name sets `baseBranch` in its
+settings file. Two places that each spelled the name for themselves would ask about two
+different branches once the setting is made.
 
 <!-- scenarios: generated -->
-- "A scheduling pass settles a mergeable TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH" → tests/cli/base-branch.test.ts
-- "The census measures each TASK against the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
-- "The diff base touched measures from is the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
-- "Unset, every place takes main" → tests/cli/base-branch.test.ts
-- "settle_task settles a TASK whose branch landed in the branch PROOFSPEC_BASE_BRANCH names" → tests/cli/base-branch.test.ts
+- "A scheduling pass settles a mergeable TASK whose branch landed in the branch the settings file names" → tests/cli/base-branch.test.ts
+- "Naming no branch, every place takes main" → tests/cli/base-branch.test.ts
+- "The census measures each TASK against the branch the settings file names" → tests/cli/base-branch.test.ts
+- "The diff base touched measures from is the branch the settings file names" → tests/cli/base-branch.test.ts
+- "settle_task settles a TASK whose branch landed in the branch the settings file names" → tests/cli/base-branch.test.ts
 <!-- /scenarios -->
 
 ### Requirement: Two revisions can be compared without checking either one out

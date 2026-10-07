@@ -1,7 +1,6 @@
 export { holdStatusFor } from './holds.ts'
 export { entriesToPrune } from './prune.ts'
 export { tasksToMerge } from './merge.ts'
-export { DEFAULT_MAX_SESSIONS, maxSessionsFrom } from './bound.ts'
 export { leaseDecision, LEASE_GRACE_MS, readyToDispatch } from './lease.ts'
 export { relationshipKey, rulingCommandFor, toRaise } from './relationships.ts'
 export { alreadyRaised, formatRaised, readRaised } from './raised.ts'

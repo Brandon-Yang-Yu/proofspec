@@ -1,5 +1,4 @@
 import { assertNever } from '../assert-never.ts'
-import { baseBranch } from '../base-branch.ts'
 import type { Graph, Node, Relationship, TaskEntry } from '../inflight/index.ts'
 import type { Docket, DocketRow, OutstandingRuling } from '../docket/index.ts'
 import { describeFinding, severityOf, type Finding } from '../guard/index.ts'
@@ -437,7 +436,7 @@ function renderScheduled(plan: SchedulePlan): string {
   const parts = [plan.merged, plan.pruned, plan.started, plan.blocked, plan.deferred, plan.raised]
   if (parts.every(list => list.length === 0)) return 'nothing to do'
   const lines = [
-    ...plan.merged.map(task => `merged ${task} (branch landed in ${baseBranch()})`),
+    ...plan.merged.map(task => `merged ${task} (branch landed in ${plan.baseBranch})`),
     ...plan.pruned.map(task => `pruned ${task}`),
     ...plan.started.map(task => `started ${task}`),
     ...plan.blocked.map(task => `blocked ${task} (a LEASE already stands)`),

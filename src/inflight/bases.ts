@@ -1,4 +1,3 @@
-import { baseBranch } from '../base-branch.ts'
 import type { Manifest, TaskState } from './types.ts'
 
 /** One TASK with its MANIFEST already standing and its state already read. */
@@ -26,9 +25,12 @@ export type TaskBasis = {
  * A `blocked` naming a TASK the queue does not hold changes none of that: the TASK's own
  * branch is real and readable, so it is measured like any other, and the dangling name
  * surfaces as that TASK's problem when the graph is drawn.
+ *
+ * `baseBranch` is the name the project's settings file gives the BASE_BRANCH, read by the
+ * caller where the settings live.
  */
-export function basesFor(tasks: readonly TaskRecord[]): readonly TaskBasis[] {
+export function basesFor(tasks: readonly TaskRecord[], baseBranch: string): readonly TaskBasis[] {
   return tasks
     .filter(one => one.state === 'in-flight')
-    .map(one => ({ task: one.task, manifest: one.manifest, against: baseBranch() }))
+    .map(one => ({ task: one.task, manifest: one.manifest, against: baseBranch }))
 }

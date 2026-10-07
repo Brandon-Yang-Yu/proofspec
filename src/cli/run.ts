@@ -1,6 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { baseBranch } from '../base-branch.ts'
 import { changedTerms, definitionsFor, reopenedByTerms, standardTexts } from '../glossary/index.ts'
 import type { TermChange } from '../glossary/index.ts'
 import { guard } from '../guard/index.ts'
@@ -31,8 +30,10 @@ import { basesFor, computeGraph, GLOSSARY_CAPABILITY } from '../inflight/index.t
 import type { Graph, Relationship, TaskBasis, TaskChange, TaskFailure, TaskRecord, Vocabulary } from '../inflight/index.ts'
 import { docketView } from '../docket/index.ts'
 import type { QueueEntryRead, TaskPhase, TaskTimes } from '../docket/index.ts'
-import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, maxSessionsFrom, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
+import { alreadyRaised, entriesToPrune, holdStatusFor, leaseDecision, readyToDispatch, relationshipKey, tasksToMerge, toRaise } from '../schedule/index.ts'
 import type { JudgeVerdict, MergeCandidate, RaisedEntry, SchedulePlan } from '../schedule/index.ts'
+import { maxSessionsFrom } from './bound.ts'
+import { readCommandSettings } from './command-settings.ts'
 import { changedSpecPaths, isAncestor, readChangedFiles, readFileAt } from './git.ts'
 import type { ChangedFile } from './git.ts'
 import { readTestRuns } from './coverage.ts'
@@ -373,6 +374,9 @@ type ReachedGroup = {
 async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly ok: false; readonly reason: string }> {
   const inputs = await gather(options)
   if (!inputs.ok) return inputs
+  const settings = await readCommandSettings(options.cwd)
+  if (!settings.ok) return settings
+  const baseBranch = settings.settings.baseBranch
 
   const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
   // A test the scan could not read may hold the very proof the change touched, so the answer
@@ -387,6 +391,7 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
     // tests/ is where this branch's test changes would otherwise hide from the work list.
     paths: options.tests?.roots ?? [options.testsDir ?? DEFAULT_TESTS_DIR],
     since: options.since,
+    baseBranch,
   })
   if (!diff.ok) return diff
 
@@ -433,6 +438,7 @@ async function reachedBy(options: RunOptions): Promise<ReachedNow | { readonly o
     cwd: options.cwd,
     paths: [options.specsDir ?? DEFAULT_SPECS_DIR],
     since: options.since,
+    baseBranch,
   })
   if (!specDiff.ok) return specDiff
   const changed = await changedTermsSince({
@@ -747,6 +753,8 @@ export async function impact(options: RunOptions): Promise<Outcome> {
   const scans = inputs.tests.map(file => scanSource(file.source, { file: file.path }))
   const unreadable = scans.flatMap(scan => scan.errors)
   if (unreadable.length > 0) return { kind: 'cannot-run', reason: reasonFor(unreadable, 'impact') }
+  const settings = await readCommandSettings(options.cwd)
+  if (!settings.ok) return { kind: 'cannot-run', reason: settings.reason }
 
   const testsDir = options.testsDir ?? DEFAULT_TESTS_DIR
   const diff = await readChangedFiles({
@@ -754,6 +762,7 @@ export async function impact(options: RunOptions): Promise<Outcome> {
     // Everything but the tests: a changed test is `touched`'s question, not this one's.
     paths: ['.', `:(exclude)${testsDir}`],
     since: options.since,
+    baseBranch: settings.settings.baseBranch,
   })
   if (!diff.ok) return { kind: 'cannot-run', reason: diff.reason }
 
@@ -1073,7 +1082,9 @@ const EMPTY_VOCABULARY: Vocabulary = { terms: [], capabilities: [] }
  * same way every other command's inputs can.
  */
 export async function inflight(options: RunOptions): Promise<Outcome> {
-  const gathered = await gatherQueue(options)
+  const settings = await readCommandSettings(options.cwd)
+  if (!settings.ok) return { kind: 'cannot-run', reason: settings.reason }
+  const gathered = await gatherQueue(options, settings.settings.baseBranch)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
   return { kind: 'inflight', report: graphFrom(gathered) }
 }
@@ -1153,7 +1164,7 @@ type QueueGatheredOk = {
 
 type QueueGathered = QueueGatheredOk | { readonly ok: false; readonly reason: string }
 
-async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
+async function gatherQueue(options: RunOptions, baseBranch: string): Promise<QueueGathered> {
   const queue = await readQueue(options.cwd)
   if (!queue.ok) return { ok: false, reason: queue.reason }
   // No TASK in flight needs no vocabulary to check anything against — a bare repo with no
@@ -1171,7 +1182,7 @@ async function gatherQueue(options: RunOptions): Promise<QueueGathered> {
   const failures: TaskFailure[] = [...recordFailures]
 
   const changes: TaskChange[] = []
-  for (const basis of basesFor(records)) {
+  for (const basis of basesFor(records, baseBranch)) {
     const measured = await measure(options.cwd, basis)
     if (!measured.ok) {
       failures.push({ task: basis.task, reason: measured.reason })
@@ -1214,7 +1225,15 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
     return { kind: 'ruled', entry }
   }
 
-  let gathered = await gatherQueue(options)
+  // Read before anything else so a settings file that cannot be read refuses the whole pass
+  // before it settles, prunes, or starts anything under defaults the project never chose.
+  // A pass is a command a person runs, so its settings are the main checkout's file even when
+  // it is run from inside a TASK's worktree.
+  const read = await readCommandSettings(options.cwd)
+  if (!read.ok) return { kind: 'cannot-run', reason: read.reason }
+  const settings = read.settings
+
+  let gathered = await gatherQueue(options, settings.baseBranch)
   if (!gathered.ok) return { kind: 'cannot-run', reason: gathered.reason }
 
   // The merged-state producer runs ahead of everything else the pass decides: the queue first
@@ -1222,9 +1241,9 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   // pruner, dispatch — reads the states this pass just settled, not the ones it found. It
   // needs no action from the caller and each settle is complete on its own terms, which is
   // why it stands ahead of the cannot-run guards those steps keep.
-  const merged = await settleMergedStates(options, gathered)
+  const merged = await settleMergedStates(options, { gathered, baseBranch: settings.baseBranch })
   if (merged.length > 0) {
-    const regathered = await gatherQueue(options)
+    const regathered = await gatherQueue(options, settings.baseBranch)
     if (!regathered.ok) return { kind: 'cannot-run', reason: regathered.reason }
     gathered = regathered
   }
@@ -1264,9 +1283,10 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const started: string[] = []
   const blocked: string[] = []
   const deferred: string[] = []
-  // The bound is read once per pass; the count it is compared against below is asked of the
-  // server fresh at every dispatch decision, never kept from one decision to the next.
-  const bound = maxSessionsFrom(process.env.PROOFSPEC_MAX_SESSIONS)
+  // The bound comes from the settings this pass already read; the count it is compared
+  // against below is asked of the server fresh at every dispatch decision, never kept from
+  // one decision to the next.
+  const bound = maxSessionsFrom(settings)
   for (const task of ready) {
     // Unreachable: the guard above already returned when a ready TASK existed without both
     // actions in hand, so `ready` is only ever non-empty here with both.
@@ -1307,7 +1327,7 @@ export async function schedule(options: RunOptions): Promise<Outcome> {
   const raised = await raiseRelationships(options, graph.relationships, gathered.records)
   if (!raised.ok) return { kind: 'cannot-run', reason: raised.reason }
 
-  const plan: SchedulePlan = { merged, pruned, started, blocked, deferred, raised: raised.raised }
+  const plan: SchedulePlan = { baseBranch: settings.baseBranch, merged, pruned, started, blocked, deferred, raised: raised.raised }
   return { kind: 'scheduled', report: plan }
 }
 
@@ -1330,19 +1350,23 @@ function now(options: RunOptions): string {
  */
 async function settleMergedStates(
   options: RunOptions,
-  gathered: { readonly records: readonly TaskRecord[]; readonly words: ReadonlyMap<string, string> },
+  pass: {
+    readonly gathered: { readonly records: readonly TaskRecord[]; readonly words: ReadonlyMap<string, string> }
+    readonly baseBranch: string
+  },
 ): Promise<readonly string[]> {
+  const { gathered, baseBranch } = pass
   const branches = new Map(gathered.records.map(record => [record.task, record.manifest.branch]))
   const candidates: readonly MergeCandidate[] = [...gathered.words]
     .map(([task, word]) => ({ task, word, branch: branches.get(task) }))
     .filter((one): one is MergeCandidate => one.branch !== undefined)
   const named = await tasksToMerge(candidates, async branch => {
-    const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: baseBranch() })
+    const answer = await isAncestor({ cwd: options.cwd, ancestor: branch, descendant: baseBranch })
     return answer.ok && answer.isAncestor
   })
   const settled: string[] = []
   for (const task of named) {
-    const result = await settleTask({ queueRoot: options.cwd, task })
+    const result = await settleTask({ queueRoot: options.cwd, task, baseBranch })
     if (result.ok) settled.push(task)
   }
   return settled

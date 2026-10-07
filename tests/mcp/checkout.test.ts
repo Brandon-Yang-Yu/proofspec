@@ -9,12 +9,6 @@ import type { TmuxCommand } from '../../src/cli/session.ts'
 import { cleanupRepos, enterTask, makeGitRepo } from '../cli/support.ts'
 
 afterEach(cleanupRepos)
-// PROOFSPEC_EXECUTOR is this change's own new override — deleted unconditionally, the same
-// guard `session.test.ts` keeps for PROOFSPEC_TMUX_SOCKET, so an assertion thrown mid-body
-// cannot leak the claude choice into any later test's ambient environment.
-afterEach(() => {
-  delete process.env.PROOFSPEC_EXECUTOR
-})
 
 /** What the queue root's own copy of the tool surface answers, and what the TASK's
  *  worktree's differing copy answers. Two different strings, because against two identical
@@ -172,10 +166,12 @@ it('runs the session\'s MCP server from the queue root\'s own checkout, never th
     'src/mcp/serve.ts': standIn(FROM_WORKTREE),
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
+  // A Claude Code session: the TASK's executor record names claude — the settings file is the
+  // project's, the record the TASK's own, and the record decides first.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
   const queueRoot = repo.root
   const worktree = await resolveSessionWorktree(queueRoot, 'a')
   await repo.write('src/mcp/serve.ts', standIn(FROM_QUEUE_ROOT))
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
 
   const [, start] = tmuxSessionCommands('a', { worktree, queueRoot, systemPrompt: 'you are the executor' })
   const servers = await readMcpServers(start, queueRoot)
@@ -222,10 +218,12 @@ it('runs the session\'s MCP server from the installed package\'s built server, n
     'package.json': `${JSON.stringify({ name: 'acme-app' }, null, 2)}\n`,
   })
   await enterTask(repo, 'a', { edit: 'a.txt' })
+  // A Claude Code session: the TASK's executor record names claude — the settings file is the
+  // project's, the record the TASK's own, and the record decides first.
+  await repo.write('.proofspec/dispatch/a/executor', 'claude')
   const queueRoot = repo.root
   const worktree = await resolveSessionWorktree(queueRoot, 'a')
   await plant(join(queueRoot, 'node_modules', 'proofspec', 'dist', 'mcp', 'serve.js'), FROM_QUEUE_ROOT)
-  process.env.PROOFSPEC_EXECUTOR = 'claude'
 
   const [, start] = tmuxSessionCommands('a', { worktree, queueRoot, systemPrompt: 'you are the executor' })
   const servers = await readMcpServers(start, queueRoot)

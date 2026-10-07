@@ -18,7 +18,12 @@ export type CensusRead = { readonly ok: true; readonly census: Census } | { read
  * `inflight`'s own graph does; one TASK whose branch or MANIFEST cannot be read is a named
  * problem for that TASK alone, never a reason to refuse the rest.
  */
-export async function readCensus(cwd: string, specsDir: string = DEFAULT_SPECS_DIR): Promise<CensusRead> {
+export async function readCensus(
+  cwd: string,
+  /** The BASE_BRANCH's name, as the settings file the caller reads gives it. */
+  baseBranch: string,
+  specsDir: string = DEFAULT_SPECS_DIR,
+): Promise<CensusRead> {
   const queue = await readQueue(cwd)
   if (!queue.ok) return { ok: false, reason: queue.reason }
   if (queue.tasks.length === 0) return { ok: true, census: { tasks: [], failures: [] } }
@@ -27,7 +32,7 @@ export async function readCensus(cwd: string, specsDir: string = DEFAULT_SPECS_D
   const failures: TaskFailure[] = [...recordFailures]
 
   const reads: TaskCapabilityReads[] = []
-  for (const basis of basesFor(records)) {
+  for (const basis of basesFor(records, baseBranch)) {
     const read = await readTaskCapabilities(cwd, basis, specsDir)
     if (!read.ok) {
       failures.push({ task: basis.task, reason: read.reason })

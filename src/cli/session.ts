@@ -3,16 +3,16 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { baseBranch } from '../base-branch.ts'
+import { settingsOrThrow } from '../settings.ts'
+import type { ExecutorName } from '../settings.ts'
 import { queueRootDigest } from './digest.ts'
 import { runGit } from './git.ts'
 import { executorRecordPath, manifestFor } from './queue.ts'
-import type { ExecutorName } from './queue.ts'
 
 /**
  * The real `startSession` action: a headed,
  * interactive executor session in the TASK's harness — the one its queue entry's executor
- * record names, else the one `PROOFSPEC_EXECUTOR` names — started in the TASK's own
+ * record names, else the one the settings file names — started in the TASK's own
  * worktree. `schedule`'s own core never starts one itself (see its tests) — this
  * is the one place that actually does, using tmux as the one thing on this machine that can
  * hand a real pty to a human without taking over the terminal the scheduling pass itself is
@@ -79,8 +79,8 @@ export function promptBodyFrom(fileContents: string): string {
 /**
  * Reads the executor's own persona from this tool's own checkout (`cwd`), never from the
  * TASK's own worktree or branch — the executor's instructions are an operational convention
- * this repo's tooling keeps, the same as `DEFAULT_JUDGE_AGENT` or `PROOFSPEC_JUDGE_BIN`
- * (`cli/judge.ts`), not something a TASK's own branch gets to redefine for itself.
+ * this repo's tooling keeps, the same as `DEFAULT_JUDGE_AGENT` (`cli/judge.ts`), not
+ * something a TASK's own branch gets to redefine for itself.
  */
 async function executorSystemPrompt(cwd: string): Promise<string> {
   const raw = await readFile(join(cwd, ...EXECUTOR_PERSONA_PATH), 'utf8')
@@ -94,8 +94,8 @@ async function executorSystemPrompt(cwd: string): Promise<string> {
  * whatever real session already has that name, whoever it belongs to. The default name is
  * derived from the queue root — `proofspec-` plus the first 8 hex digits of the root's
  * SHA-256 digest — so every repo on the machine gets a server of its own while the same
- * repo always reaches the same one, and no two checkouts share a fixed name. Overridable the
- * same way `PROOFSPEC_JUDGE_BIN` is, so a test (or a future acceptance check) can point at a
+ * repo always reaches the same one, and no two checkouts share a fixed name. Overridable by
+ * `PROOFSPEC_TMUX_SOCKET`, so a test (or a future acceptance check) can point at a
  * throwaway, per-run socket instead of ever touching the repo's own production one, let
  * alone the user's.
  */
@@ -143,12 +143,12 @@ function recordedExecutor(queueRoot: string, task: string): ExecutorName | undef
 
 /** Which harness a TASK's executor session runs in: the TASK's own record first — a TASK
  *  moved to claude stays there through every later start, a start by hand included — then
- *  `PROOFSPEC_EXECUTOR`, where anything but `claude` names `pi`, since an unrecognized value
- *  must not silently start nothing. */
+ *  the `executor` the settings file at the queue root names, `pi` when it names none. The
+ *  file is read even when a record decides, so a broken settings file stops every start
+ *  loudly, naming the file, rather than only the starts that happen to consult it. */
 function executorFor(queueRoot: string, task: string): ExecutorName {
-  const recorded = recordedExecutor(queueRoot, task)
-  if (recorded !== undefined) return recorded
-  return process.env.PROOFSPEC_EXECUTOR === 'claude' ? 'claude' : 'pi'
+  const settings = settingsOrThrow(queueRoot)
+  return recordedExecutor(queueRoot, task) ?? settings.executor
 }
 
 /** The one initial user message `pi` is handed as its positional prompt argument. Its exact
@@ -379,11 +379,11 @@ function writeSessionHandoff(executor: ExecutorName, start: SessionStart): Sessi
  * payload instead reaches the session through a channel no shell parses as syntax: the `-e`
  * flags set their values verbatim in the session environment (`PROOFSPEC_QUEUE_ROOT` and
  * `PROOFSPEC_TASK` are also how the session later addresses the queue from inside its own
- * worktree, `specs/progress.md`; `PROOFSPEC_BASE_BRANCH` hands down the base branch the queue
- * measures against, so a session that settles reads the same name its queue was built on),
- * and the runner script assembles the harness's argv from them, reading the system prompt
- * from its file — so the harness is handed the persona and the kickoff exactly as passed,
- * one argument each, same bytes.
+ * worktree, `specs/progress.md` — and the queue root is where the session's tools find the
+ * project's settings file, so no setting rides the environment), and the runner script
+ * assembles the harness's argv from them, reading the system prompt from its file — so the
+ * harness is handed the persona and the kickoff exactly as passed, one argument each, same
+ * bytes.
  */
 export function tmuxSessionCommands(task: string, start: SessionStart): readonly [kill: TmuxCommand, start: TmuxCommand] {
   return sessionCommandsFor(task, { start, executor: executorFor(start.queueRoot, task) })
@@ -414,7 +414,6 @@ function sessionCommandsFor(
       args: [
         '-L', socket, 'new-session', '-d', '-s', task, '-c', start.worktree,
         '-e', `PROOFSPEC_QUEUE_ROOT=${start.queueRoot}`, '-e', `PROOFSPEC_TASK=${task}`,
-        '-e', `PROOFSPEC_BASE_BRANCH=${baseBranch()}`,
         '-e', `PROOFSPEC_KICKOFF=${kickoffFor(task)}`,
         '-e', `PROOFSPEC_SYSTEM_PROMPT_FILE=${handoff.promptFile}`,
         ...harnessEnv,
