@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { mkdir, open } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { readCensus } from '../cli/census.ts'
 import type { CensusRead } from '../cli/census.ts'
 import { readCommandSettings } from '../cli/command-settings.ts'
@@ -291,18 +293,38 @@ function realScheduleActions(cwd: string): ScheduleActions {
   }
 }
 
-/** The real fire a successful settle runs when nothing else is given: starts the pass the
- *  plan names the way the reaper is started (`reapSession`, `src/cli/session.ts`) — detached
- *  and unref'd, in a process group of its own — so the pass survives the settle's own
- *  teardown. The settle awaits only whether the pass *started* (never its exit): a start
- *  that cannot even happen surfaces as the ok limb's finding, never a failed settle. */
-function realFireSchedulingPass(plan: SchedulingPassPlan): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(plan.command, [...plan.args], { cwd: plan.cwd, detached: true, stdio: 'ignore' })
-    child.once('error', reject)
-    child.once('spawn', () => resolve())
-    child.unref()
-  })
+/** The settle-pass log's conventional place in the queue root (`specs/progress.md`): every
+ *  pass a settle fires appends one header line naming the time and the TASK, then its stdout
+ *  and stderr, so a pass that starts and then fails leaves its reason where someone can read
+ *  it without attaching to anything. */
+const SETTLE_PASS_LOG_PATH = ['.proofspec', 'schedule', 'settle-pass.log'] as const
+
+/** The real fire a successful settle runs when nothing else is given: writes the pass's own
+ *  header line to the settle-pass log, then starts the pass the plan names the way the reaper
+ *  is started (`reapSession`, `src/cli/session.ts`) — detached and unref'd, in a process
+ *  group of its own — with its stdout and stderr appending to that same log, so the pass
+ *  survives the settle's own teardown and its output survives with it. The settle awaits
+ *  only whether the pass *started* (never its exit); a start that cannot even happen rejects,
+ *  and the settle's own fire swallows it — never a failed settle. */
+async function realFireSchedulingPass(plan: SchedulingPassPlan): Promise<void> {
+  const logPath = join(plan.cwd, ...SETTLE_PASS_LOG_PATH)
+  await mkdir(dirname(logPath), { recursive: true })
+  const log = await open(logPath, 'a')
+  try {
+    // The header rides the same open file the pass then appends to, ordered ahead of it by
+    // this write, so each pass's section always opens with its own line.
+    await log.write(`--- ${new Date().toISOString()} settle ${plan.task} ---\n`)
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(plan.command, [...plan.args], { cwd: plan.cwd, detached: true, stdio: ['ignore', log.fd, log.fd] })
+      child.once('error', reject)
+      child.once('spawn', () => resolve())
+      child.unref()
+    })
+  } finally {
+    // The spawned child holds its own duplicate of the descriptor, so closing this copy only
+    // keeps the long-lived host process from holding one descriptor per settle.
+    await log.close()
+  }
 }
 
 /**

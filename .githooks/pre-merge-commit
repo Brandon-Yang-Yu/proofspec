@@ -35,7 +35,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 BASE="$(git rev-parse HEAD)"
 
 status=0
-pnpm --dir "$ROOT" proofspec touched --since "$BASE" --format text || status=$?
+pnpm --dir "$ROOT" exec proofspec touched --since "$BASE" --format text || status=$?
 
 if [ "$status" -eq 0 ]; then
   exit 0

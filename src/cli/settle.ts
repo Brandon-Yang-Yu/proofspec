@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { MERGEABLE } from '../schedule/types.ts'
 import { isAncestor } from './git.ts'
 import { manifestFor, readState, writeState } from './queue.ts'
@@ -18,41 +20,68 @@ import { teardownTask } from './session.ts'
  * session cannot answer, and it stays the pass's own move.
  */
 
-/** What a settle answers its caller: it happened — carrying a finding only when the
- *  scheduling pass a successful settle fires could not even be started — or the reason it
- *  refused — never a throw. */
+/** What a settle answers its caller: it happened, or the reason it refused — never a throw. */
 export type SettleResult =
-  | { readonly ok: true; readonly task: string; readonly finding?: string }
+  | { readonly ok: true; readonly task: string }
   | { readonly ok: false; readonly reason: string }
 
-/** The one scheduling pass a successful settle fires against the queue root: the same
- *  command the merge hooks run — `pnpm --dir <queue root> proofspec schedule`
- *  (`.githooks/post-merge`) — carried as a pure plan value the way the reaper's is
- *  (`reaperFor`/`ReaperPlan`, `src/cli/session.ts`), so a proof can check which command a
+/** The one scheduling pass a successful settle fires against the queue root: this very
+ *  build's own CLI entry run by node itself (`process.execPath`) — never through the package
+ *  manager, because a repo that installed proofspec has no script named `proofspec`, and a
+ *  pass routed through one dies there. Carried as a pure plan value the way the reaper's is
+ *  (`reaperFor`/`ReaperPlan`, `src/cli/session.ts`), so a proof can observe which pass a
  *  settle fires, and how it is started, without ever starting it. */
 export type SchedulingPassPlan = {
-  readonly command: 'pnpm'
-  readonly args: readonly ['--dir', string, 'proofspec', 'schedule']
-  /** The pass's working folder: the queue root itself, the same root the `--dir` argument
-   *  names — never the settle's own current folder, which its teardown removes right after
-   *  the pass starts. */
+  /** The node binary running this very settle (`process.execPath`), so the pass is the same
+   *  proofspec build as the settle that fired it. */
+  readonly command: string
+  /** Node's own flags, the CLI entry they run, and the one argument `schedule`. */
+  readonly args: readonly string[]
+  /** The pass's working folder: the queue root itself — never the settle's own current
+   *  folder, which its teardown removes right after the pass starts. */
   readonly cwd: string
+  /** The TASK whose settle fired the pass — the one fact the settle-pass log's header line
+   *  names (`realFireSchedulingPass`, `src/mcp/core.ts`). */
+  readonly task: string
   /** The process-group escape: the pass is started detached, in a process group of its
    *  own, so the delayed reaper's group-kill — the one that takes the settle's own session
    *  — cannot reach it. The escape is the point, not spawn syntax. */
   readonly detached: true
 }
 
-/** The pass a settle fires for `queueRoot`: the merge hooks' own scheduling command, run
- *  against that root, detached so it survives the settle's teardown. */
-export function schedulingPassFor(queueRoot: string): SchedulingPassPlan {
-  return { command: 'pnpm', args: ['--dir', queueRoot, 'proofspec', 'schedule'], cwd: queueRoot, detached: true }
+/** The CLI entry of the very build running this settle, as node runs it: `main.ts` beside
+ *  this module when proofspec runs from its own source (the repo's `pnpm proofspec` script),
+ *  `main.js` beside it when it runs from the built package (what a consumer's node_modules
+ *  holds). Resolved against the running module itself — not the working folder, not the
+ *  queue root — so wherever the settle was reached from, the pass it fires is the same
+ *  build. The source entry carries the transform flag the repo's own script carries, so a
+ *  from-source pass starts exactly the way that script starts it. */
+function cliEntryFor(): { readonly path: string; readonly nodeFlags: readonly string[] } {
+  const fromSource = fileURLToPath(new URL('./main.ts', import.meta.url))
+  if (existsSync(fromSource)) return { path: fromSource, nodeFlags: ['--experimental-transform-types'] }
+  return { path: fileURLToPath(new URL('./main.js', import.meta.url)), nodeFlags: [] }
+}
+
+/** The pass a settle fires for `queueRoot`: node running this build's own CLI entry with the
+ *  one argument `schedule`, the queue root as the pass's working folder, detached so the
+ *  pass survives the settle's teardown. A module-internal value: the proofs observe the
+ *  pass's own behavior and the plans the injected fire is handed, so no seam needs to
+ *  reach this builder from outside. */
+function schedulingPassFor(options: { readonly queueRoot: string; readonly task: string }): SchedulingPassPlan {
+  const entry = cliEntryFor()
+  return {
+    command: process.execPath,
+    args: [...entry.nodeFlags, entry.path, 'schedule'],
+    cwd: options.queueRoot,
+    task: options.task,
+    detached: true,
+  }
 }
 
 /** The action that starts the pass, handed the plan it is to run. Injectable — the house
  *  `RunOptions` pattern — so a proof can observe or refuse the fire without a real pass
- *  ever being started; the failure the real action can meet (a pass that cannot even be
- *  started) is a reported finding, never a failed settle. */
+ *  ever being started; a fire that fails can never fail the settle (see
+ *  `fireTheSchedulingPass`). */
 export type FireSchedulingPass = (plan: SchedulingPassPlan) => void | Promise<void>
 
 /**
@@ -88,33 +117,29 @@ export async function settleTask(options: {
     return { ok: false, reason: `TASK ${options.task} cannot be settled: its branch ${manifest.branch} has not landed in ${base}` }
   }
   await writeState(options.queueRoot, options.task, 'merged')
-  const finding = await fireTheSchedulingPass(options)
+  await fireTheSchedulingPass(options)
   await teardownTask(options.queueRoot, options.task)
-  return finding === undefined ? { ok: true, task: options.task } : { ok: true, task: options.task, finding }
+  return { ok: true, task: options.task }
 }
 
-/** Fires the settle's one scheduling pass and answers what it reported: nothing when the
- *  pass was started, the failure as a finding when it could not even be started — sync or
- *  async. The fire is best-effort by contract (a later pass repairs the queue), so a failure
- *  is caught and carried, never thrown: the landing is already settled, and a pass that
- *  cannot start must not un-settle it. With no action given, nothing fires — the shared
- *  settle also serves the pass's own backstop caller, and a pass firing a pass from inside
- *  a pass serves nothing. Named for the act, distinct from the injected action it reads. */
-async function fireTheSchedulingPass(options: { readonly queueRoot: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<string | undefined> {
-  if (options.fireSchedulingPass === undefined) return undefined
+/** Fires the settle's one scheduling pass, swallowing a failure to start it — sync or async.
+ *  The fire is best-effort by contract (a later pass repairs the queue): the landing is
+ *  already settled, a pass that cannot even be started must not un-settle it, and nothing
+ *  proven asks the settle's answer to report one. With no action given, nothing fires — the
+ *  shared settle also serves the pass's own backstop caller, and a pass firing a pass from
+ *  inside a pass serves nothing. Named for the act, distinct from the injected action it
+ *  reads. */
+async function fireTheSchedulingPass(options: { readonly queueRoot: string; readonly task: string; readonly fireSchedulingPass?: FireSchedulingPass }): Promise<void> {
+  if (options.fireSchedulingPass === undefined) return
   try {
-    await options.fireSchedulingPass(schedulingPassFor(options.queueRoot))
-    return undefined
-  } catch (error) {
-    return `the scheduling pass could not be started: ${messageOf(error)}`
+    await options.fireSchedulingPass(schedulingPassFor(options))
+  } catch {
+    // Swallowed on purpose: the landing is already settled, and a fire that could not start
+    // its pass is repaired by whatever fires the next pass — never by failing this settle.
   }
 }
 
 /** The state word as a refusal names it — a word in quotes, and a missing file named as missing. */
 function describe(word: string | undefined): string {
   return word === undefined ? 'missing' : `"${word}"`
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

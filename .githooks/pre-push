@@ -37,7 +37,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     *) base="$(git rev-list --max-parents=0 "$local_sha" | tail -n 1)" ;;
   esac
   gated=true
-  pnpm --dir "$ROOT" proofspec touched --since "$base" --format text || status=$?
+  pnpm --dir "$ROOT" exec proofspec touched --since "$base" --format text || status=$?
 done
 
 if [ "$gated" != true ]; then

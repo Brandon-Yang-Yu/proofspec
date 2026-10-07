@@ -135,9 +135,13 @@ worktree, and the session stand exactly as they were. Both holding, it SHALL per
 settle in order: rewrite the state file to `merged`, remove the TASK's worktree at its
 conventional path, kill its same-named tmux session on the dedicated server — the same
 settle a scheduling pass runs as its backstop (`specs/schedule.md`). The one scheduling
-pass a successful settle fires SHALL be started with its working folder set to the queue
-root. The plan the settle starts the pass from SHALL carry the queue root as that working
-folder — the same root the plan's `--dir` argument already names. The session kill SHALL
+pass a successful settle fires SHALL run against the queue root, with the queue root as its
+working folder. The settle SHALL start the pass detached, in a process group of its own, so
+the settle's teardown cannot take it with it. The settle SHALL start the pass by running
+the same proofspec build that is running the settle, never through the package manager.
+The pass's output, both stdout and stderr, SHALL be appended to a log file in the queue's
+own folder, `.proofspec/schedule/settle-pass.log`. Each pass SHALL first write one header
+line to that log, naming the time and the TASK whose settle fired it. The session kill SHALL
 go through a detached reaper process with a short delay, so the tool returns its result
 before the host session dies. The tool SHALL NOT prune the TASK's queue entry: pruning
 waits until no in-flight TASK's `blocked` still names it, a fact about the whole queue that
@@ -160,19 +164,26 @@ and the settle's teardown deletes that worktree, so a pass started standing in t
 cannot be relied on to come up. The queue root is the folder the settle can be certain
 still exists, because the queue lives there.
 
+The settle runs its own proofspec build so that the pass starts in any repo. A repo that
+installed proofspec has no script named `proofspec`, so the pass must not depend on the
+repo or its package manager to find it. The log exists because the settle answers as soon
+as the pass has started, before the pass has done anything. A pass that starts and then
+fails must leave its reason where someone can read it without attaching to anything.
+
 <!-- scenarios: generated -->
 - "A settle for a TASK whose branch has not landed in the BASE_BRANCH is refused, naming the branch, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a TASK whose state word is not mergeable is refused, naming the word, and the state, the worktree, and the session stand exactly as they were" → tests/progress/settle.test.ts
 - "A settle for a mergeable TASK whose branch has landed in the BASE_BRANCH rewrites the state to merged and removes the TASK's worktree" → tests/progress/settle.test.ts
 - "A settle never prunes the TASK's queue entry" → tests/progress/settle.test.ts
+- "A settle starts the scheduling pass with its working folder at the queue root" → tests/progress/settle.test.ts
 - "A settle whose own current folder is removed right after the pass starts still starts the pass with its working folder set to the queue root, and the pass survives that removal" → tests/progress/settle.test.ts
-- "A settle whose scheduling pass cannot even be started still succeeds, reporting the failure as a finding" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_QUEUE_ROOT set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
 - "A settle with no PROOFSPEC_TASK set is refused, naming the missing variable, and nothing is written" → tests/progress/settle.test.ts
-- "A successful settle fires one scheduling pass against the queue root, after the state word is rewritten and before the teardown" → tests/progress/settle.test.ts
+- "A settle's fired pass appends its own header line and its stdout and stderr to a standing .proofspec/schedule/settle-pass.log, after what an earlier pass left there" → tests/progress/settle.test.ts
+- "A successful settle fires exactly one scheduling pass against the queue root" → tests/progress/settle.test.ts
 - "No refusal ever fires a scheduling pass" → tests/progress/settle.test.ts
-- "The pass a settle fires is the merge hooks' own scheduling command, started so the settle's teardown cannot take it with it" → tests/progress/settle.test.ts
-- "The plan the settle starts sets the queue root as the pass's working folder" → tests/progress/settle.test.ts
+- "The first pass a settle fires opens .proofspec/schedule/settle-pass.log with one header line naming the time and the TASK, followed by its stdout and stderr" → tests/progress/settle.test.ts
+- "The pass a settle fires is a real scheduling pass of the settle's own proofspec build, run against the queue root and from the queue root, started detached in a process group of its own" → tests/progress/settle.test.ts
 - "The registered settle tool settles the TASK named by PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, never the session's own working directory" → tests/progress/settle.test.ts
 - "The settle's session kill is handed to a detached reaper with a short delay, so the settle answers while the session still stands and the kill lands only after the delay" → tests/progress/settle.test.ts
 <!-- /scenarios -->

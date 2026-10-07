@@ -38,7 +38,7 @@ fi
 # HEAD^2 exists only when the commit just made has a second parent.
 if [ "$(git branch --show-current)" = "main" ] && git rev-parse --verify -q HEAD^2 >/dev/null; then
   # Detach so the commit returns immediately; the pass runs on its own.
-  nohup pnpm --dir "$REPO_ROOT" proofspec schedule >"$GIT_DIR_ABS/schedule.log" 2>&1 &
+  nohup pnpm --dir "$REPO_ROOT" exec proofspec schedule >"$GIT_DIR_ABS/schedule.log" 2>&1 &
 fi
 
 exit 0
