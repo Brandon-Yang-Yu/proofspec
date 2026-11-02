@@ -505,11 +505,11 @@ it('disables extension auto-discovery so the worktree\'s own progress.ts never l
 })
 
 // Requirement: The bare CLI's startSession opens the TASK's own worktree and starts the TASK's harness there, headed
-// Scenario: pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry
+// Scenario: pi receives the kickoff exactly as passed and the system prompt as a file holding its exact bytes, never as text on its command line
 // GIVEN a system prompt at the executor persona's own scale, whose text carries shell metacharacters
 // WHEN the tmux start command runs on a real tmux server and the session's pi starts
-// THEN pi is handed the system prompt and the kickoff exactly as passed — one argument each, same bytes, no substitution, no redirection, no word-splitting
-it('hands pi the system prompt and kickoff exactly as passed, whatever shell metacharacters they carry', async () => {
+// THEN pi is handed the kickoff exactly as passed — one argument, same bytes, no substitution, no redirection, no word-splitting — and an `--append-system-prompt` naming a file that holds the system prompt's exact bytes, with no argument holding that prompt's text
+it('hands pi the kickoff exactly as passed and the system prompt only as a file holding its exact bytes', async () => {
   // A pi of this test's own on a throwaway PATH slot: it answers the one question this scenario
   // turns on — the exact argv pi itself was handed — and nothing else. The path is baked into the
   // script rather than passed by environment: the whole point is to observe what survives the
@@ -554,12 +554,20 @@ writeFileSync(${JSON.stringify(argvFile)}, JSON.stringify(process.argv.slice(2))
       await new Promise(resolve => setTimeout(resolve, 100))
     }
     expect(existsSync(argvFile), `pi never ran (${tmuxFailure || 'tmux exited 0 without starting it'})`).toBe(true)
-    expect(JSON.parse(await readFile(argvFile, 'utf8'))).toEqual([
+    const argv = JSON.parse(await readFile(argvFile, 'utf8')) as string[]
+    const promptPath = argv[7] ?? ''
+    expect(argv).toEqual([
       '--approve', '--no-extensions', '--extension', join(base, '.pi', 'extensions', 'progress.ts'),
       '--extension', join(base, 'node_modules', '@earendil-works', 'pi-coding-agent', 'examples', 'extensions', 'subagent', 'index.ts'),
-      '--append-system-prompt', systemPrompt,
+      '--append-system-prompt', promptPath,
       "Begin: work your TASK a now - read the MANIFEST's intentRef (the reserved name INTENT names the TASK's own queue entry file .proofspec/dispatch/a/INTENT; any other value names a file on this branch), then run the full pipeline through to merge.",
     ])
+    // pi reads the value as a file when it names one, so the file must hold the persona
+    // byte for byte — a path to anything else starts pi with the wrong persona.
+    await expect(readFile(promptPath, 'utf8')).resolves.toBe(systemPrompt)
+    // The persona's first line is checked, not the whole text: any piece of it on the
+    // command line is enough for a `pkill -f` on one of its words to reach the session.
+    expect(argv.some(arg => arg.includes('You are the executor.')), 'the persona text rides pi\'s command line').toBe(false)
   } finally {
     await tmux(['kill-server']).catch(() => {})
     await rm(base, { recursive: true, force: true })
@@ -601,9 +609,9 @@ it('starts the pi invocation for a TASK with no executor record when the setting
 // GIVEN a TASK whose queue entry holds no executor record, a settings file at the queue
 //       root whose executor names claude, the TASK's worktree, and the queue root
 // WHEN the tmux start command is built
-// THEN the agent it starts is claude, run with `--append-system-prompt` carrying the
-//      executor's own system prompt, with `--dangerously-skip-permissions`, and with a
-//      generated MCP config naming the queue root's own MCP server
+// THEN the agent it starts is claude, run with `--append-system-prompt-file` naming a file
+//      that holds the executor's own system prompt, with `--dangerously-skip-permissions`,
+//      and with a generated MCP config naming the queue root's own MCP server
 it('starts the claude invocation for a TASK with no executor record when the settings file names claude', async () => {
   // A real queue entry standing for the TASK, holding everything but an executor record —
   // the settings file names the harness because the entry is silent.
@@ -619,12 +627,11 @@ it('starts the claude invocation for a TASK with no executor record when the set
   expect(script).toMatch(/^exec claude\b/)
   // Permissions skipped: an unattended session has nobody attached to answer an approval.
   expect(script).toContain('--dangerously-skip-permissions')
-  // The persona rides the same prompt file the pi runner reads — same bytes, one argument,
-  // whatever metacharacters the persona carries (the scenario above proves the trip). The
-  // start command must carry the file's path beside it, and the file must hold the persona
-  // itself: without either, the runner's $(cat …) expands to nothing and claude starts with
-  // an empty persona while every other check stays green.
-  expect(script).toContain('--append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")"')
+  // The persona rides the same prompt file the pi runner names, and claude is handed the
+  // file's path, never its text. The start command must carry the path beside it, and the
+  // file must hold the persona itself: without either, claude starts with no persona while
+  // every other check stays green.
+  expect(script).toContain('--append-system-prompt-file "$PROOFSPEC_SYSTEM_PROMPT_FILE"')
   const promptEnvIndex = start.args.findIndex(arg => arg.startsWith('PROOFSPEC_SYSTEM_PROMPT_FILE='))
   expect(promptEnvIndex, 'the start command carries no prompt file path in its environment').toBeGreaterThan(-1)
   expect(start.args[promptEnvIndex - 1]).toBe('-e')
@@ -738,9 +745,10 @@ async function readyTask(executorRecord: string | undefined): Promise<GitRepo> {
  *  no `package.json` naming ProofSpec's own checkout. */
 async function expectClaudeInvocation(run: AgentRun, queueRoot: string): Promise<void> {
   expect(run.agent).toBe('claude')
-  const promptIndex = run.argv.indexOf('--append-system-prompt')
-  expect(promptIndex, 'claude was handed no --append-system-prompt').toBeGreaterThan(-1)
-  expect(run.argv[promptIndex + 1]).toBe('You are the executor.')
+  const promptIndex = run.argv.indexOf('--append-system-prompt-file')
+  expect(promptIndex, 'claude was handed no --append-system-prompt-file').toBeGreaterThan(-1)
+  await expect(readFile(run.argv[promptIndex + 1]!, 'utf8')).resolves.toBe('You are the executor.')
+  expect(run.argv.some(arg => arg.includes('You are the executor.')), 'the persona text rides claude\'s command line').toBe(false)
   expect(run.argv).toContain('--dangerously-skip-permissions')
   const configIndex = run.argv.indexOf('--mcp-config')
   expect(configIndex, 'claude was handed no --mcp-config').toBeGreaterThan(-1)
@@ -770,7 +778,8 @@ function expectPiInvocation(run: AgentRun, queueRoot: string): void {
 //       executor key
 // WHEN the TASK's session is started through the bare CLI's startSession
 // THEN each time the agent started in the TASK's worktree is claude, never pi, run with
-//      `--append-system-prompt` carrying the executor's own system prompt, with
+//      `--append-system-prompt-file` naming a file that holds the executor's own system
+//      prompt, with no argument holding that prompt's text, with
 //      `--dangerously-skip-permissions`, and with a generated MCP config naming the queue
 //      root's own MCP server
 it('starts the claude invocation for a TASK whose executor record holds claude, whatever the settings file names', async () => {

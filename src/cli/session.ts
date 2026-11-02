@@ -278,9 +278,10 @@ export type SessionStart = {
  *  that can vary — the extension paths, the system prompt, the kickoff — taken from the
  *  session environment rather than spelled out inside it, because a script file is a channel
  *  a shell parses, and only quoted variable references keep arbitrary bytes intact through
- *  it. The system prompt arrives through `$(cat ...)` inside double quotes, where command
- *  substitution output is never word-split or re-parsed, so the persona's backticks,
- *  quotes, `$()`, and redirections reach `pi` as one argument, same bytes. `--approve` and
+ *  it. The system prompt reaches `pi` as its file's path, never its text: `pi` reads
+ *  `--append-system-prompt` as a file when the value names one. A persona on the command line
+ *  is visible to every process match on the machine, and one session's `pkill -f <word>`
+ *  once killed every executor whose persona held that word. `--approve` and
  *  the pinned `--extension`s are what let the executor actually load the tools it works
  *  with — `--approve` because a freshly created worktree is an unknown path to `pi`'s own
  *  project trust; the `progress.ts` pin because `.pi/` being tracked in git means the
@@ -296,10 +297,10 @@ export type SessionStart = {
  *  last argument after every flag/value pair, which is exactly how `pi` reads a first
  *  prompt. */
 const RUNNER_SCRIPT =
-  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --extension "$PROOFSPEC_SUBAGENT_EXTENSION" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" "$PROOFSPEC_KICKOFF"'
+  'exec pi --approve --no-extensions --extension "$PROOFSPEC_PROGRESS_EXTENSION" --extension "$PROOFSPEC_SUBAGENT_EXTENSION" --append-system-prompt "$PROOFSPEC_SYSTEM_PROMPT_FILE" "$PROOFSPEC_KICKOFF"'
 
-/** The same one line for the `claude` harness: the same executor persona
- *  (`--append-system-prompt`, read from the same prompt file), `--dangerously-skip-permissions`
+/** The same one line for the `claude` harness: the same executor persona, handed as the same
+ *  prompt file's path (`--append-system-prompt-file`) for the same reason, `--dangerously-skip-permissions`
  *  because an unattended session has nobody attached to answer an approval, and a generated
  *  MCP config naming the MCP server the queue root holds — the transport that puts the five
  *  tools in the session's hands. The config rides a file for the same size reason every
@@ -308,7 +309,7 @@ const RUNNER_SCRIPT =
  *  so a trailing positional after it is read as one more config path and the session dies
  *  before it ever starts. */
 const CLAUDE_RUNNER_SCRIPT =
-  'exec claude "$PROOFSPEC_KICKOFF" --append-system-prompt "$(cat "$PROOFSPEC_SYSTEM_PROMPT_FILE")" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG"'
+  'exec claude "$PROOFSPEC_KICKOFF" --append-system-prompt-file "$PROOFSPEC_SYSTEM_PROMPT_FILE" --dangerously-skip-permissions --mcp-config "$PROOFSPEC_MCP_CONFIG"'
 
 /** Whether the queue root is ProofSpec's own checkout rather than a project that installed
  *  ProofSpec — read off the root's `package.json` name, the one fact that names the checkout

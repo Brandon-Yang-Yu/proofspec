@@ -946,9 +946,9 @@ async function readArgv(path: string): Promise<readonly string[]> {
  *  generated MCP config naming exactly one server, under the queue root — never a bare
  *  `claude` some other path could have started. */
 async function expectStartSessionClaude(argv: readonly string[], queueRoot: string): Promise<void> {
-  const promptIndex = argv.indexOf('--append-system-prompt')
-  expect(promptIndex, 'claude was handed no --append-system-prompt').toBeGreaterThan(-1)
-  expect(argv[promptIndex + 1]).toContain('You are the executor.')
+  const promptIndex = argv.indexOf('--append-system-prompt-file')
+  expect(promptIndex, 'claude was handed no --append-system-prompt-file').toBeGreaterThan(-1)
+  await expect(readFile(argv[promptIndex + 1] ?? '', 'utf8')).resolves.toContain('You are the executor.')
   expect(argv).toContain('--dangerously-skip-permissions')
   const configIndex = argv.indexOf('--mcp-config')
   expect(configIndex, 'claude was handed no --mcp-config').toBeGreaterThan(-1)

@@ -208,12 +208,17 @@ environment variables on the tmux `new-session` command. It SHALL NOT carry
 argument — a message telling the session to begin working its TASK, whose exact words
 are the implementation's to choose. The `pi` invocation SHALL be run with `--approve`,
 `--no-extensions`, `--extension <cwd>/.pi/extensions/progress.ts`, and `--extension
-<cwd>/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts`.
-The `claude`
-invocation SHALL be run with `--append-system-prompt` carrying the executor's own
-system prompt, with `--dangerously-skip-permissions`, and with a generated MCP config
+<cwd>/node_modules/@earendil-works/pi-coding-agent/examples/extensions/subagent/index.ts`,
+and with `--append-system-prompt` naming a file that holds the executor's own system
+prompt. The `claude`
+invocation SHALL be run with `--append-system-prompt-file` naming a file that holds the
+executor's own system prompt, with `--dangerously-skip-permissions`, and with a generated MCP config
 naming the queue root's own MCP server (`specs/mcp.md`); where that generated config
-file is written is the implementation's choice, and which server it names is not. Every
+file is written is the implementation's choice, and which server it names is not. Neither
+invocation SHALL carry the system prompt's own text on its command line. Every program on
+the machine can read a command line, and a command such as `pkill -f <word>` stops every
+process whose command line holds that word. One session once ran it to stop its own
+helper, and it stopped every executor whose system prompt held the word. Every
 tmux command this action runs SHALL reach tmux through a dedicated, isolated server,
 named by tmux's own `-L <socket>` flag rather than the default server — never the user's
 own default tmux server, and never any other named server — and its default socket name
@@ -289,7 +294,7 @@ one kickoff message.
 - "The tmux start command carries PROOFSPEC_QUEUE_ROOT and PROOFSPEC_TASK, and carries no PROOFSPEC_BASE_BRANCH" → tests/schedule/session.test.ts
 - "With no executor record, and the settings file naming no executor or naming pi, the started harness is pi" → tests/schedule/session.test.ts
 - "With no executor record, the settings file's executor naming claude starts the claude invocation: the executor's own system prompt appended, permissions skipped, and a generated MCP config naming the queue root's own MCP server" → tests/schedule/session.test.ts
-- "pi receives the system prompt and kickoff exactly as passed, whatever shell metacharacters their texts carry" → tests/schedule/session.test.ts
+- "pi receives the kickoff exactly as passed and the system prompt as a file holding its exact bytes, never as text on its command line" → tests/schedule/session.test.ts
 - "startSession's own cwd becomes the SessionStart's queueRoot, distinct from the TASK's worktree" → tests/schedule/session.test.ts
 <!-- /scenarios -->
 
