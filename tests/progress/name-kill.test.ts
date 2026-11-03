@@ -52,6 +52,7 @@ it('refuses a bash call that kills processes by name, before it runs', async () 
     const answer = await preflight(runner, 'bash', { command })
     expect(answer?.block, `not blocked: ${command}`).toBe(true)
     expect(answer?.reason ?? '').toContain('kill <pid>')
+    expect(answer?.reason ?? '').toContain('Stop only what you started')
   }
 })
 
