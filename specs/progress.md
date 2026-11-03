@@ -298,6 +298,26 @@ by standing, and the docket answers them from this one (`specs/docket.md`).
 - "The registered phase tool reports into PROOFSPEC_QUEUE_ROOT even when ExtensionContext.cwd names a different directory" → tests/progress/extension.test.ts
 <!-- /scenarios -->
 
+### Requirement: A pi session refuses a bash call that kills processes by name
+
+The `pi` transport SHALL refuse, before it runs, any bash call that kills processes by
+name or by a match against their command lines: `pkill`, `killall`, and `pgrep` whose
+output is piped or substituted into `kill`. The refusal SHALL tell the session to stop
+only what it started, by PID. A bash call that kills by PID SHALL run as asked. So SHALL
+a call that only names one of these commands as text, such as `grep pkill notes.md`.
+The guard SHALL also load on its own as a `pi` extension, so a `pi` session that is not an
+executor can use the same rule.
+
+Many sessions share one machine. A kill by name reaches every matching process on it, not
+only the caller's. One session ran `pkill -f "spec:review"` to stop its own helper, and it
+stopped three other executors whose command lines held that word.
+
+<!-- scenarios: generated -->
+- "A bash call that kills by PID, or only names a kill command as text, runs as asked" → tests/progress/name-kill.test.ts
+- "A bash call that kills processes by name is refused before it runs, and told to kill by PID instead" → tests/progress/name-kill.test.ts
+- "The guard loads on its own as a pi extension, outside the executor's pinned one" → tests/progress/name-kill.test.ts
+<!-- /scenarios -->
+
 ### Requirement: A pi executor session that stops on a provider error while its TASK is building restarts the TASK in the claude harness
 
 The `pi` transport SHALL watch for the moment the session stops and will not go on by

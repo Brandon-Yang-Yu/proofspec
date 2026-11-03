@@ -7,6 +7,7 @@ import type { FireSchedulingPass } from '../cli/settle.ts'
 import { createToolCore, isToolCore, piExecute, registrationsFor, resolveCore, resolveReportEnv, refreshHeartbeat } from '../mcp/core.ts'
 import type { CoreOptions, PiToolResult, ReportEnv, ToolCore, ToolName } from '../mcp/core.ts'
 import { BUILDING } from '../schedule/types.ts'
+import guardNameKill from './name-kill.ts'
 
 /**
  * The `pi` adapter for the progress tools (`specs/progress.md`, `specs/mcp.md`). Every rule —
@@ -173,9 +174,11 @@ async function restartInClaude(fireRestart: FireRestart): Promise<void> {
  * move) — so a session tells the queue where it stands without ever needing to know where
  * its own worktree sits relative to the main checkout. An injected core (the MCP server's
  * own, say) makes the two transports answer from one core. Beside them it subscribes the
- * provider-error watch (`restartInClaude`).
+ * provider-error watch (`restartInClaude`) and the name-kill guard (`./name-kill.ts`).
  */
 export default function progressExtension(pi: ExtensionAPI, injection?: ProgressInjection): void {
+  guardNameKill(pi)
+
   // The heartbeat limb: the same zero-argument step subscribed to every move a session can be
   //  seen making — the six events the requirement pins and no others. A function of no
   //  parameters fits each handler signature, so no casts are needed.
